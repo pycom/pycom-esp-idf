@@ -17,6 +17,8 @@
 #include <stddef.h>
 #include <string.h>
 #include "esp_attr.h"
+#include "soc/soc.h"
+#include "soc/rtc.h"
 #include "esp_clk.h"
 #include "soc/wdev_reg.h"
 #include "freertos/FreeRTOSConfig.h"

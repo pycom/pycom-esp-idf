@@ -18,7 +18,6 @@
 #include "esp_attr.h"
 #include "esp_sleep.h"
 #include "esp_log.h"
-#include "esp_clk.h"
 #include "esp_newlib.h"
 #include "esp_spi_flash.h"
 #include "rom/cache.h"
@@ -26,6 +25,7 @@
 #include "rom/uart.h"
 #include "soc/cpu.h"
 #include "soc/rtc.h"
+#include "esp_clk.h"
 #include "soc/rtc_cntl_reg.h"
 #include "soc/rtc_io_reg.h"
 #include "soc/spi_reg.h"
@@ -246,10 +246,12 @@ esp_err_t esp_light_sleep_start()
 
     // Don't power down VDD_SDIO if pSRAM is used.
 #ifndef CONFIG_SPIRAM_SUPPORT
-    if (s_config.sleep_duration > FLASH_PD_MIN_SLEEP_TIME_US &&
-            s_config.sleep_duration > flash_enable_time_us) {
-        pd_flags |= RTC_SLEEP_PD_VDDSDIO;
-        s_config.sleep_duration -= flash_enable_time_us;
+    if (esp_get_revision() > 0) {
+        if (s_config.sleep_duration > FLASH_PD_MIN_SLEEP_TIME_US &&
+                s_config.sleep_duration > flash_enable_time_us) {
+            pd_flags |= RTC_SLEEP_PD_VDDSDIO;
+            s_config.sleep_duration -= flash_enable_time_us;
+        }
     }
 #endif //CONFIG_SPIRAM_SUPPORT
     rtc_vddsdio_config_t vddsdio_config = rtc_vddsdio_get_config();

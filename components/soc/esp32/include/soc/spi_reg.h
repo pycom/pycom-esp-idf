@@ -132,6 +132,13 @@
 #define SPI_FLASH_PER_V  0x1
 #define SPI_FLASH_PER_S  16
 
+/* SPI_USR_ADDR_VALUE : R/W ;bitpos:[31:0] ;default: 32'h0 ; */
+/*description: [31:8]:address to slave [7:0]:Reserved.*/
+#define SPI_USR_ADDR_VALUE  0xFFFFFFFF
+#define SPI_USR_ADDR_VALUE_M  ((SPI_USR_ADDR_VALUE_V)<<(SPI_USR_ADDR_VALUE_S))
+#define SPI_USR_ADDR_VALUE_V  0xFFFFFFFF
+#define SPI_USR_ADDR_VALUE_S  0
+
 #define SPI_ADDR_REG(i)          (REG_SPI_BASE(i) + 0x4)
 //The CSV actually is wrong here. It indicates that the lower 8 bits of this register are reserved. This is not true,
 //all 32 bits of SPI_ADDR_REG are usable/used.

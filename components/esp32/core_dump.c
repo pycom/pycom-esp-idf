@@ -23,6 +23,8 @@
 
 #include "esp_panic.h"
 #include "esp_partition.h"
+#include "soc/soc.h"
+#include "soc/rtc.h"
 #include "esp_clk.h"
 
 #if CONFIG_ESP32_ENABLE_COREDUMP

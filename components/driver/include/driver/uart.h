@@ -519,8 +519,9 @@ esp_err_t uart_intr_config(uart_port_t uart_num, const uart_intr_config_t *intr_
  *     - ESP_OK   Success
  *     - ESP_FAIL Parameter error
  */
-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags);
+typedef void (*uart_rx_callback_t)(int uart_id, int rx_byte);
 
+esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback);
 /**
  * @brief Uninstall UART driver.
  *
@@ -670,6 +671,8 @@ esp_err_t uart_disable_pattern_det_intr(uart_port_t uart_num);
  *     - ESP_FAIL Parameter error
  */
 esp_err_t uart_enable_pattern_det_intr(uart_port_t uart_num, char pattern_chr, uint8_t chr_num, int chr_tout, int post_idle, int pre_idle);
+
+bool uart_tx_done(uart_port_t uart_num);
 
 #ifdef __cplusplus
 }

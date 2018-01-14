@@ -19,13 +19,13 @@
 #include "sdkconfig.h"
 #include "esp_attr.h"
 #include "esp_log.h"
-#include "esp_clk.h"
 #include "esp_clk_internal.h"
 #include "rom/ets_sys.h"
 #include "rom/uart.h"
 #include "rom/rtc.h"
 #include "soc/soc.h"
 #include "soc/rtc.h"
+#include "esp_clk.h"
 #include "soc/rtc_cntl_reg.h"
 #include "soc/i2s_reg.h"
 #include "driver/periph_ctrl.h"
@@ -41,7 +41,7 @@
 
 #define MHZ (1000000)
 
-static void select_rtc_slow_clk(rtc_slow_freq_t slow_clk);
+void select_rtc_slow_clk(rtc_slow_freq_t slow_clk);
 
 // g_ticks_us defined in ROMs for PRO and APP CPU
 extern uint32_t g_ticks_per_us_pro;
@@ -125,7 +125,7 @@ void IRAM_ATTR ets_update_cpu_frequency(uint32_t ticks_per_us)
     g_ticks_per_us_app = ticks_per_us;
 }
 
-static void select_rtc_slow_clk(rtc_slow_freq_t slow_clk)
+void select_rtc_slow_clk(rtc_slow_freq_t slow_clk)
 {
     if (slow_clk == RTC_SLOW_FREQ_32K_XTAL) {
         /* 32k XTAL oscillator needs to be enabled and running before it can
