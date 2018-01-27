@@ -780,9 +780,13 @@ esp_err_t uart_wait_tx_done(uart_port_t uart_num, TickType_t ticks_to_wait)
     if(res == pdFALSE) {
         return ESP_ERR_TIMEOUT;
     }
-    ticks_to_wait = ticks_end - xTaskGetTickCount();
     xSemaphoreTake(p_uart_obj[uart_num]->tx_done_sem, 0);
-    ticks_to_wait = ticks_end - xTaskGetTickCount();
+    portTickType curr_ticks = xTaskGetTickCount();
+    if (ticks_end > curr_ticks) {
+        ticks_to_wait = ticks_end - curr_ticks;
+    } else {
+        ticks_to_wait = 0;
+    }
     if(UART[uart_num]->status.txfifo_cnt == 0) {
         xSemaphoreGive(p_uart_obj[uart_num]->tx_mux);
         return ESP_OK;
@@ -1160,12 +1164,4 @@ esp_err_t uart_driver_delete(uart_port_t uart_num)
        }
     }
     return ESP_OK;
-}
-
-bool uart_tx_done(uart_port_t uart_num) {
-    if (xSemaphoreTake(p_uart_obj[uart_num]->tx_done_sem, 0)) {
-        xSemaphoreGive(p_uart_obj[uart_num]->tx_done_sem);
-        return (UART[uart_num]->status.txfifo_cnt == 0);
-    }
-    return false;
 }
