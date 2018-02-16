@@ -18,6 +18,7 @@
 #include <soc/cpu.h>
 #include <esp_image_format.h>
 #include <esp_secure_boot.h>
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include <esp_log.h>
 #include <bootloader_flash.h>
 #include <bootloader_random.h>
@@ -100,11 +101,13 @@ esp_err_t esp_image_load(esp_image_load_mode_t mode, const esp_partition_pos_t *
     }
 
     // Calculate SHA-256 of image if secure boot is on, or if image has a hash appended
-#ifdef CONFIG_SECURE_BOOT_ENABLED
+/*#ifdef CONFIG_SECURE_BOOT_ENABLED
     if (1) {
 #else
     if (data->image.hash_appended) {
 #endif
+*/
+    if (esp_secure_boot_enabled() || data->image.hash_appended) {
         sha_handle = bootloader_sha256_start();
         if (sha_handle == NULL) {
             return ESP_ERR_NO_MEM;
@@ -166,15 +169,18 @@ goto err;
        rewritten the header - rely on esptool.py having verified the bootloader at flashing time, instead.
     */
     if (!is_bootloader) {
-#ifdef CONFIG_SECURE_BOOT_ENABLED
-        // secure boot images have a signature appended
-        err = verify_secure_boot_signature(sha_handle, data);
-#else
-        // No secure boot, but SHA-256 can be appended for basic corruption detection
-        if (sha_handle != NULL) {
-            err = verify_simple_hash(sha_handle, data);
+//#ifdef CONFIG_SECURE_BOOT_ENABLED
+        if (esp_secure_boot_enabled()) {
+          // secure boot images have a signature appended
+          err = verify_secure_boot_signature(sha_handle, data);
+//#else
+        } else {
+          // No secure boot, but SHA-256 can be appended for basic corruption detection
+          if (sha_handle != NULL) {
+              err = verify_simple_hash(sha_handle, data);
+          }
         }
-#endif // CONFIG_SECURE_BOOT_ENABLED
+//#endif // CONFIG_SECURE_BOOT_ENABLED
     } else { // is_bootloader
         // bootloader may still have a sha256 digest handle open
         if (sha_handle != NULL) {
