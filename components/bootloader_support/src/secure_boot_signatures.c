@@ -15,7 +15,6 @@
 
 #include "bootloader_flash.h"
 #include "bootloader_sha.h"
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 #include "esp_image_format.h"
 #include "esp_secure_boot.h"

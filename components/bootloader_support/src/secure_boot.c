@@ -16,7 +16,6 @@
 
 #include "esp_attr.h"
 #include "esp_types.h"
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 
 #include "rom/cache.h"
