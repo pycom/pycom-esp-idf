@@ -537,7 +537,7 @@ esp_err_t uart_intr_config(uart_port_t uart_num, const uart_intr_config_t *intr_
     return ESP_OK;
 }
 
-static uart_rx_callback_t uart_rx_callback = NULL;
+static uart_rx_callback_t uart_rx_callback[3] = { NULL };
 
 //internal isr handler for default driver code.
 static void uart_rx_intr_handler_default(void *param)
@@ -667,8 +667,8 @@ static void uart_rx_intr_handler_default(void *param)
                 while(buf_idx < rx_fifo_len) {
                     uint8_t rx_data = uart_reg->fifo.rw_byte;
                     p_uart->rx_data_buf[buf_idx++] = rx_data;
-                    if (uart_rx_callback) {
-                        uart_rx_callback(uart_num, rx_data);
+                    if (uart_rx_callback[uart_num]) {
+                        uart_rx_callback[uart_num](uart_num, rx_data);
                     }
                 }
                 //After Copying the Data From FIFO ,Clear intr_status
@@ -1085,7 +1085,7 @@ esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_b
         return ESP_FAIL;
     }
 
-    uart_rx_callback = rx_callback;
+    uart_rx_callback[uart_num] = rx_callback;
     r=uart_isr_register(uart_num, uart_rx_intr_handler_default, p_uart_obj[uart_num], intr_alloc_flags, &p_uart_obj[uart_num]->intr_handle);
     if (r!=ESP_OK) goto err;
     uart_intr_config_t uart_intr = {
