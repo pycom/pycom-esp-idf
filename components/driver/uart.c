@@ -273,8 +273,12 @@ esp_err_t uart_get_hw_flow_ctrl(uart_port_t uart_num, uart_hw_flowcontrol_t* flo
 static esp_err_t uart_reset_rx_fifo(uart_port_t uart_num)
 {
     UART_CHECK((uart_num < UART_NUM_MAX), "uart_num error", ESP_FAIL);
-    // Read all data from the FIFO
-    while (UART[uart_num]->status.rxfifo_cnt) {
+    //Due to hardware issue, we can not use fifo_rst to reset uart fifo.
+    //See description about UART_TXFIFO_RST and UART_RXFIFO_RST in <<esp32_technical_reference_manual>> v2.6 or later.
+
+    // we read the data out and make `fifo_len == 0 && rd_addr == wr_addr`.
+    while(UART[uart_num]->status.rxfifo_cnt != 0 || (UART[uart_num]->mem_rx_status.wr_addr != UART[uart_num]->mem_rx_status.rd_addr)) {
+
         READ_PERI_REG(UART_FIFO_REG(uart_num));
     }
     return ESP_OK;
@@ -533,7 +537,7 @@ esp_err_t uart_intr_config(uart_port_t uart_num, const uart_intr_config_t *intr_
     return ESP_OK;
 }
 
-static uart_rx_callback_t uart_rx_callback = NULL;
+static uart_rx_callback_t uart_rx_callback[3] = { NULL };
 
 //internal isr handler for default driver code.
 static void uart_rx_intr_handler_default(void *param)
@@ -663,8 +667,8 @@ static void uart_rx_intr_handler_default(void *param)
                 while(buf_idx < rx_fifo_len) {
                     uint8_t rx_data = uart_reg->fifo.rw_byte;
                     p_uart->rx_data_buf[buf_idx++] = rx_data;
-                    if (uart_rx_callback) {
-                        uart_rx_callback(uart_num, rx_data);
+                    if (uart_rx_callback[uart_num]) {
+                        uart_rx_callback[uart_num](uart_num, rx_data);
                     }
                 }
                 //After Copying the Data From FIFO ,Clear intr_status
@@ -698,14 +702,12 @@ static void uart_rx_intr_handler_default(void *param)
                 uart_reg->int_clr.val = UART_RXFIFO_FULL_INT_CLR_M | UART_RXFIFO_TOUT_INT_CLR_M;
                 UART_EXIT_CRITICAL_ISR(&uart_spinlock[uart_num]);
                 uart_event.type = UART_BUFFER_FULL;
-            }
-        } else if(uart_intr_status & UART_RXFIFO_OVF_INT_ST_M) {
+            }   
+        }
+        // When fifo overflows, we reset the fifo.
+        else if(uart_intr_status & UART_RXFIFO_OVF_INT_ST_M) {
             UART_ENTER_CRITICAL_ISR(&uart_spinlock[uart_num]);
-            // Read all data from the FIFO
-            rx_fifo_len = uart_reg->status.rxfifo_cnt;
-            for (int i = 0; i < rx_fifo_len; i++) {
-                READ_PERI_REG(UART_FIFO_REG(uart_num));
-            }
+            uart_reset_rx_fifo(uart_num);
             uart_reg->int_clr.rxfifo_ovf = 1;
             UART_EXIT_CRITICAL_ISR(&uart_spinlock[uart_num]);
             uart_event.type = UART_FIFO_OVF;
@@ -780,9 +782,13 @@ esp_err_t uart_wait_tx_done(uart_port_t uart_num, TickType_t ticks_to_wait)
     if(res == pdFALSE) {
         return ESP_ERR_TIMEOUT;
     }
-    ticks_to_wait = ticks_end - xTaskGetTickCount();
     xSemaphoreTake(p_uart_obj[uart_num]->tx_done_sem, 0);
-    ticks_to_wait = ticks_end - xTaskGetTickCount();
+    portTickType curr_ticks = xTaskGetTickCount();
+    if (ticks_end > curr_ticks) {
+        ticks_to_wait = ticks_end - curr_ticks;
+    } else {
+        ticks_to_wait = 0;
+    }
     if(UART[uart_num]->status.txfifo_cnt == 0) {
         xSemaphoreGive(p_uart_obj[uart_num]->tx_mux);
         return ESP_OK;
@@ -1079,7 +1085,7 @@ esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_b
         return ESP_FAIL;
     }
 
-    uart_rx_callback = rx_callback;
+    uart_rx_callback[uart_num] = rx_callback;
     r=uart_isr_register(uart_num, uart_rx_intr_handler_default, p_uart_obj[uart_num], intr_alloc_flags, &p_uart_obj[uart_num]->intr_handle);
     if (r!=ESP_OK) goto err;
     uart_intr_config_t uart_intr = {
@@ -1160,12 +1166,4 @@ esp_err_t uart_driver_delete(uart_port_t uart_num)
        }
     }
     return ESP_OK;
-}
-
-bool uart_tx_done(uart_port_t uart_num) {
-    if (xSemaphoreTake(p_uart_obj[uart_num]->tx_done_sem, 0)) {
-        xSemaphoreGive(p_uart_obj[uart_num]->tx_done_sem);
-        return (UART[uart_num]->status.txfifo_cnt == 0);
-    }
-    return false;
 }
