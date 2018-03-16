@@ -167,18 +167,17 @@ goto err;
        rewritten the header - rely on esptool.py having verified the bootloader at flashing time, instead.
     */
     if (!is_bootloader) {
-//#ifdef CONFIG_SECURE_BOOT_ENABLED
         if (esp_secure_boot_enabled()) {
+#ifdef CONFIG_SECURE_BOOT_ENABLED
           // secure boot images have a signature appended
           err = verify_secure_boot_signature(sha_handle, data);
-//#else
+#endif // CONFIG_SECURE_BOOT_ENABLED
         } else {
           // No secure boot, but SHA-256 can be appended for basic corruption detection
           if (sha_handle != NULL) {
               err = verify_simple_hash(sha_handle, data);
           }
         }
-//#endif // CONFIG_SECURE_BOOT_ENABLED
     } else { // is_bootloader
         // bootloader may still have a sha256 digest handle open
         if (sha_handle != NULL) {
