@@ -18,6 +18,7 @@
 #include <soc/cpu.h>
 #include <esp_image_format.h>
 #include <esp_secure_boot.h>
+#define LOG_LOCAL_LEVEL ESP_LOG_ERROR
 #include <esp_log.h>
 #include <esp_spi_flash.h>
 #include <bootloader_flash.h>
@@ -174,15 +175,17 @@ goto err;
        rewritten the header - rely on esptool.py having verified the bootloader at flashing time, instead.
     */
     if (!is_bootloader) {
+        if (esp_secure_boot_enabled()) {
 #ifdef CONFIG_SECURE_BOOT_ENABLED
-        // secure boot images have a signature appended
-        err = verify_secure_boot_signature(sha_handle, data);
-#else
-        // No secure boot, but SHA-256 can be appended for basic corruption detection
-        if (sha_handle != NULL && !esp_cpu_in_ocd_debug_mode()) {
-            err = verify_simple_hash(sha_handle, data);
-        }
+          // secure boot images have a signature appended
+          err = verify_secure_boot_signature(sha_handle, data);
 #endif // CONFIG_SECURE_BOOT_ENABLED
+        } else {
+          // No secure boot, but SHA-256 can be appended for basic corruption detection
+        if (sha_handle != NULL && !esp_cpu_in_ocd_debug_mode()) {
+              err = verify_simple_hash(sha_handle, data);
+          }
+        }
     } else { // is_bootloader
         // bootloader may still have a sha256 digest handle open
         if (sha_handle != NULL) {

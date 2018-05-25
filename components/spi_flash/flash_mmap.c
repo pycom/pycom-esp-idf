@@ -242,7 +242,9 @@ esp_err_t IRAM_ATTR spi_flash_mmap_pages(int *pages, size_t page_count, spi_flas
     */
     if (!did_flush && need_flush) {
 #if CONFIG_SPIRAM_SUPPORT
-        esp_spiram_writeback_cache();
+        if (esp_get_revision() > 0) {
+            esp_spiram_writeback_cache();
+        }
 #endif
         Cache_Flush(0);
         Cache_Flush(1);
@@ -368,7 +370,9 @@ static inline IRAM_ATTR bool update_written_pages(size_t start_addr, size_t leng
                cores, or the pointer passed between CPUs.
             */
 #if CONFIG_SPIRAM_SUPPORT
-            esp_spiram_writeback_cache();
+            if (esp_get_revision() > 0) {
+                esp_spiram_writeback_cache();
+            }
 #endif
             Cache_Flush(0);
 #ifndef CONFIG_FREERTOS_UNICORE

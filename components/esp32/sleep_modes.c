@@ -301,13 +301,15 @@ esp_err_t esp_light_sleep_start()
                                           + CONFIG_ESP32_DEEP_SLEEP_WAKEUP_DELAY;
 
 #ifndef CONFIG_SPIRAM_SUPPORT
-    const uint32_t vddsdio_pd_sleep_duration = MAX(FLASH_PD_MIN_SLEEP_TIME_US,
-            flash_enable_time_us + LIGHT_SLEEP_TIME_OVERHEAD_US + LIGHT_SLEEP_MIN_TIME_US);
+	if (esp_get_revision() > 0) {
+		const uint32_t vddsdio_pd_sleep_duration = MAX(FLASH_PD_MIN_SLEEP_TIME_US,
+				flash_enable_time_us + LIGHT_SLEEP_TIME_OVERHEAD_US + LIGHT_SLEEP_MIN_TIME_US);
 
-    if (s_config.sleep_duration > vddsdio_pd_sleep_duration) {
-        pd_flags |= RTC_SLEEP_PD_VDDSDIO;
-        s_config.sleep_time_adjustment += flash_enable_time_us;
-    }
+		if (s_config.sleep_duration > vddsdio_pd_sleep_duration) {
+			pd_flags |= RTC_SLEEP_PD_VDDSDIO;
+			s_config.sleep_time_adjustment += flash_enable_time_us;
+		}
+	}
 #endif //CONFIG_SPIRAM_SUPPORT
 
     rtc_vddsdio_config_t vddsdio_config = rtc_vddsdio_get_config();

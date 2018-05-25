@@ -698,6 +698,8 @@ static int uart_find_pattern_from_last(uint8_t* buf, int length, uint8_t pat_chr
     return len;
 }
 
+static uart_rx_callback_t uart_rx_callback[3] = { NULL };
+
 //internal isr handler for default driver code.
 static void uart_rx_intr_handler_default(void *param)
 {
@@ -824,7 +826,11 @@ static void uart_rx_intr_handler_default(void *param)
             if (p_uart->rx_buffer_full_flg == false) {
                 //We have to read out all data in RX FIFO to clear the interrupt signal
                 while (buf_idx < rx_fifo_len) {
-                    p_uart->rx_data_buf[buf_idx++] = uart_reg->fifo.rw_byte;
+                    uint8_t rx_data = uart_reg->fifo.rw_byte;
+                    p_uart->rx_data_buf[buf_idx++] = rx_data;
+                    if (uart_rx_callback[uart_num]) {
+                        uart_rx_callback[uart_num](uart_num, rx_data);
+                    }
                 }
                 uint8_t pat_chr = uart_reg->at_cmd_char.data;
                 int pat_num = uart_reg->at_cmd_char.char_num;
@@ -988,9 +994,13 @@ esp_err_t uart_wait_tx_done(uart_port_t uart_num, TickType_t ticks_to_wait)
     if(res == pdFALSE) {
         return ESP_ERR_TIMEOUT;
     }
-    ticks_to_wait = ticks_end - xTaskGetTickCount();
     xSemaphoreTake(p_uart_obj[uart_num]->tx_done_sem, 0);
-    ticks_to_wait = ticks_end - xTaskGetTickCount();
+    portTickType curr_ticks = xTaskGetTickCount();
+    if (ticks_end > curr_ticks) {
+        ticks_to_wait = ticks_end - curr_ticks;
+    } else {
+        ticks_to_wait = 0;
+    }
     if(UART[uart_num]->status.txfifo_cnt == 0) {
         xSemaphoreGive(p_uart_obj[uart_num]->tx_mux);
         return ESP_OK;
@@ -1041,6 +1051,7 @@ int uart_tx_chars(uart_port_t uart_num, const char* buffer, uint32_t len)
         return 0;
     }
     xSemaphoreTake(p_uart_obj[uart_num]->tx_mux, (portTickType)portMAX_DELAY);
+    xSemaphoreTake(p_uart_obj[uart_num]->tx_done_sem, 0);
     int tx_len = uart_fill_fifo(uart_num, (const char*) buffer, len);
     xSemaphoreGive(p_uart_obj[uart_num]->tx_mux);
     return tx_len;
@@ -1242,7 +1253,7 @@ esp_err_t uart_flush_input(uart_port_t uart_num)
     return ESP_OK;
 }
 
-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags)
+esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback)
 {
     esp_err_t r;
     UART_CHECK((uart_num < UART_NUM_MAX), "uart_num error", ESP_FAIL);
@@ -1299,6 +1310,7 @@ esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_b
         return ESP_FAIL;
     }
 
+    uart_rx_callback[uart_num] = rx_callback;
     r=uart_isr_register(uart_num, uart_rx_intr_handler_default, p_uart_obj[uart_num], intr_alloc_flags, &p_uart_obj[uart_num]->intr_handle);
     if (r!=ESP_OK) goto err;
     uart_intr_config_t uart_intr = {

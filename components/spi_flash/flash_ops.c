@@ -113,14 +113,6 @@ static __attribute__((unused)) bool is_safe_write_address(size_t addr, size_t si
         UNSAFE_WRITE_ADDRESS;
     }
 
-    const esp_partition_t *p = esp_ota_get_running_partition();
-    if (addr >= p->address && addr < p->address + p->size) {
-        UNSAFE_WRITE_ADDRESS;
-    }
-    if (addr < p->address && addr + size > p->address) {
-        UNSAFE_WRITE_ADDRESS;
-    }
-
     return result;
 }
 

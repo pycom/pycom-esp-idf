@@ -148,16 +148,18 @@ void IRAM_ATTR call_start_cpu0()
     }
 
 #if CONFIG_SPIRAM_BOOT_INIT
-    esp_spiram_init_cache();
-    if (esp_spiram_init() != ESP_OK) {
+    if (esp_get_revision() > 0) {
+    	esp_spiram_init_cache();
+    	if (esp_spiram_init() != ESP_OK) {
 #if CONFIG_SPIRAM_IGNORE_NOTFOUND
-        ESP_EARLY_LOGI(TAG, "Failed to init external RAM; continuing without it.");
-        s_spiram_okay = false;
+        	ESP_EARLY_LOGI(TAG, "Failed to init external RAM; continuing without it.");
+        	s_spiram_okay = false;
 #else
-        ESP_EARLY_LOGE(TAG, "Failed to init external RAM!");
-        abort();
+        	ESP_EARLY_LOGE(TAG, "Failed to init external RAM!");
+        	abort();
 #endif
-    }
+		}
+	}
 #endif
 
     ESP_EARLY_LOGI(TAG, "Pro cpu up.");
@@ -190,13 +192,15 @@ void IRAM_ATTR call_start_cpu0()
 
 
 #if CONFIG_SPIRAM_MEMTEST
-    if (s_spiram_okay) {
-        bool ext_ram_ok=esp_spiram_test();
-        if (!ext_ram_ok) {
-            ESP_EARLY_LOGE(TAG, "External RAM failed memory test!");
-            abort();
-        }
-    }
+	if (esp_get_revision() > 0) {
+		if (s_spiram_okay) {
+			bool ext_ram_ok=esp_spiram_test();
+			if (!ext_ram_ok) {
+				ESP_EARLY_LOGE(TAG, "External RAM failed memory test!");
+				abort();
+			}
+		}
+	}
 #endif
 
     /* Initialize heap allocator. WARNING: This *needs* to happen *after* the app cpu has booted.
@@ -262,25 +266,27 @@ void start_cpu0_default(void)
     esp_err_t err;
     esp_setup_syscall_table();
 
-    if (s_spiram_okay) {
-#if CONFIG_SPIRAM_BOOT_INIT && (CONFIG_SPIRAM_USE_CAPS_ALLOC || CONFIG_SPIRAM_USE_MALLOC)
-        esp_err_t r=esp_spiram_add_to_heapalloc();
-        if (r != ESP_OK) {
-            ESP_EARLY_LOGE(TAG, "External RAM could not be added to heap!");
-            abort();
-        }
-#if CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL
-        r=esp_spiram_reserve_dma_pool(CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL);
-        if (r != ESP_OK) {
-            ESP_EARLY_LOGE(TAG, "Could not reserve internal/DMA pool!");
-            abort();
-        }
-#endif
-#if CONFIG_SPIRAM_USE_MALLOC
-        heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
-#endif
-#endif
-    }
+	if (esp_get_revision() > 0) {
+		if (s_spiram_okay) {
+		#if CONFIG_SPIRAM_BOOT_INIT && (CONFIG_SPIRAM_USE_CAPS_ALLOC || CONFIG_SPIRAM_USE_MALLOC)
+			esp_err_t r=esp_spiram_add_to_heapalloc();
+			if (r != ESP_OK) {
+				ESP_EARLY_LOGE(TAG, "External RAM could not be added to heap!");
+				abort();
+			}
+		#if CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL
+			r=esp_spiram_reserve_dma_pool(CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL);
+			if (r != ESP_OK) {
+				ESP_EARLY_LOGE(TAG, "Could not reserve internal/DMA pool!");
+				abort();
+			}
+		#endif
+		#if CONFIG_SPIRAM_USE_MALLOC
+			heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
+		#endif
+		#endif
+		}
+	}
 
 //Enable trace memory and immediately start trace.
 #if CONFIG_ESP32_TRAX
