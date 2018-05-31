@@ -23,24 +23,24 @@
  *
  ******************************************************************************/
 
-#include "bt_target.h"
+#include "common/bt_target.h"
 #if defined(BTA_AV_INCLUDED) && (BTA_AV_INCLUDED == TRUE)
 
 #include <string.h>
-#include "bta_av_api.h"
+#include "bta/bta_av_api.h"
 #include "bta_av_int.h"
-#include "avdt_api.h"
-#include "utl.h"
-#include "l2c_api.h"
-#include "allocator.h"
-#include "list.h"
+#include "stack/avdt_api.h"
+#include "bta/utl.h"
+#include "stack/l2c_api.h"
+#include "osi/allocator.h"
+#include "osi/list.h"
 #if( defined BTA_AR_INCLUDED ) && (BTA_AR_INCLUDED == TRUE)
-#include "bta_ar_api.h"
+#include "bta/bta_ar_api.h"
 #endif
 
 #define LOG_TAG "bt_bta_av"
 // #include "osi/include/log.h"
-#include "bt_trace.h"
+#include "common/bt_trace.h"
 
 /*****************************************************************************
 **  Constants
@@ -474,7 +474,7 @@ void bta_av_rc_opened(tBTA_AV_CB *p_cb, tBTA_AV_DATA *p_data)
             p_scb->rc_handle = p_data->rc_conn_chg.handle;
             APPL_TRACE_DEBUG("bta_av_rc_opened shdl:%d, srch %d", i + 1, p_scb->rc_handle);
             shdl = i + 1;
-            LOG_INFO("%s allow incoming AVRCP connections:%d", __func__, p_scb->use_rc);
+            APPL_TRACE_EVENT("%s allow incoming AVRCP connections:%d", __func__, p_scb->use_rc);
             bta_sys_stop_timer(&p_scb->timer);
             disc = p_scb->hndl;
             break;
@@ -506,7 +506,7 @@ void bta_av_rc_opened(tBTA_AV_CB *p_cb, tBTA_AV_DATA *p_data)
 
     p_cb->rcb[i].shdl = shdl;
     rc_open.rc_handle = i;
-    APPL_TRACE_ERROR("bta_av_rc_opened rcb[%d] shdl:%d lidx:%d/%d",
+    APPL_TRACE_EVENT("bta_av_rc_opened rcb[%d] shdl:%d lidx:%d/%d",
                      i, shdl, p_cb->rcb[i].lidx, p_cb->lcb[BTA_AV_NUM_LINKS].lidx);
     p_cb->rcb[i].status |= BTA_AV_RC_CONN_MASK;
 
@@ -1063,7 +1063,7 @@ void bta_av_stream_chg(tBTA_AV_SCB *p_scb, BOOLEAN started)
 **
 ** Function         bta_av_conn_chg
 **
-** Description      connetion status changed.
+** Description      connection status changed.
 **                  Open an AVRCP acceptor channel, if new conn.
 **
 ** Returns          void
@@ -1268,6 +1268,11 @@ void bta_av_disable(tBTA_AV_CB *p_cb, tBTA_AV_DATA *p_data)
         hdr.layer_specific = xx + 1;
         bta_av_api_deregister((tBTA_AV_DATA *)&hdr);
     }
+
+    bta_sys_free_timer(&p_cb->sig_tmr);
+    memset(&p_cb->sig_tmr, 0, sizeof(TIMER_LIST_ENT));
+    bta_sys_free_timer(&p_cb->acp_sig_tmr);
+    memset(&p_cb->acp_sig_tmr, 0, sizeof(TIMER_LIST_ENT));
 }
 
 /*******************************************************************************
@@ -1842,6 +1847,8 @@ void bta_av_dereg_comp(tBTA_AV_DATA *p_data)
 
         /* make sure that the timer is not active */
         bta_sys_stop_timer(&p_scb->timer);
+        list_free(p_scb->a2d_list);
+        p_scb->a2d_list = NULL;
         utl_freebuf((void **)&p_cb->p_scb[p_scb->hdi]);
     }
 

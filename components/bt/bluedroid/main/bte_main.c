@@ -25,18 +25,18 @@
  ******************************************************************************/
 
 
-#include "bt_defs.h"
-#include "bt_common_types.h"
-#include "bte.h"
-#include "btu.h"
-#include "bt_trace.h"
-#include "osi.h"
-#include "alarm.h"
-#include "hash_map.h"
-#include "hash_functions.h"
-#include "controller.h"
-#include "hci_layer.h"
-#include "bta_api.h"
+#include "common/bt_defs.h"
+#include "common/bt_common_types.h"
+#include "common/bte.h"
+#include "stack/btu.h"
+#include "common/bt_trace.h"
+#include "osi/osi.h"
+#include "osi/alarm.h"
+#include "osi/hash_map.h"
+#include "osi/hash_functions.h"
+#include "device/controller.h"
+#include "hci/hci_layer.h"
+#include "bta/bta_api.h"
 
 /*******************************************************************************
 **  Constants & Macros
@@ -77,7 +77,7 @@ int bte_main_boot_entry(bluedroid_init_done_cb_t cb)
 {
     hci = hci_layer_get_interface();
     if (!hci) {
-        LOG_ERROR("%s could not get hci layer interface.\n", __func__);
+        APPL_TRACE_ERROR("%s could not get hci layer interface.\n", __func__);
         return -2;
     }
 
@@ -122,9 +122,9 @@ void bte_main_shutdown(void)
 ******************************************************************************/
 static void bte_main_enable(void)
 {
-    LOG_DEBUG("Enable HCI\n");
+    APPL_TRACE_DEBUG("Enable HCI\n");
     if (hci_start_up()) {
-        LOG_ERROR("Start HCI Host Layer Failure\n");
+        APPL_TRACE_ERROR("Start HCI Host Layer Failure\n");
         return;
     }
 

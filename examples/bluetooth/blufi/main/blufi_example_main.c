@@ -1,16 +1,18 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+/*
+   This example code is in the Public Domain (or CC0 licensed, at your option.)
 
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+   Unless required by applicable law or agreed to in writing, this
+   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied.
+*/
+
+
+/****************************************************************************
+* This is a demo for bluetooth config wifi connection to ap. You can config ESP32 to connect a softap
+* or config ESP32 as a softap to be connected by other device. APP can be downloaded from github 
+* android source code: https://github.com/EspressifApp/EspBlufi
+* iOS source code: https://github.com/EspressifApp/EspBlufiForiOS
+****************************************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -139,6 +141,38 @@ static esp_err_t example_net_event_handler(void *ctx, system_event_t *event)
             esp_blufi_send_wifi_conn_report(mode, ESP_BLUFI_STA_CONN_FAIL, 0, NULL);
         }
         break;
+    case SYSTEM_EVENT_SCAN_DONE: {
+        uint16_t apCount = 0;
+        esp_wifi_scan_get_ap_num(&apCount);
+        if (apCount == 0) {
+            BLUFI_INFO("Nothing AP found");
+            break;
+        }
+        wifi_ap_record_t *ap_list = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * apCount);
+        if (!ap_list) {
+            BLUFI_ERROR("malloc error, ap_list is NULL");
+            break;
+        }
+        ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&apCount, ap_list));
+        esp_blufi_ap_record_t * blufi_ap_list = (esp_blufi_ap_record_t *)malloc(apCount * sizeof(esp_blufi_ap_record_t));
+        if (!blufi_ap_list) {
+            if (ap_list) {
+                free(ap_list);
+            }
+            BLUFI_ERROR("malloc error, blufi_ap_list is NULL");
+            break;
+        }
+        for (int i = 0; i < apCount; ++i)
+        {
+            blufi_ap_list[i].rssi = ap_list[i].rssi;
+            memcpy(blufi_ap_list[i].ssid, ap_list[i].ssid, sizeof(ap_list[i].ssid));
+        }
+        esp_blufi_send_wifi_list(apCount, blufi_ap_list);
+        esp_wifi_scan_stop();
+        free(ap_list);
+        free(blufi_ap_list);
+        break;
+    }
     default:
         break;
     }
@@ -181,8 +215,8 @@ static void example_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_para
         break;
     case ESP_BLUFI_EVENT_BLE_CONNECT:
         BLUFI_INFO("BLUFI ble connect\n");
-        server_if=param->connect.server_if;
-        conn_id=param->connect.conn_id;
+        server_if = param->connect.server_if;
+        conn_id = param->connect.conn_id;
         esp_ble_gap_stop_advertising();
         blufi_security_init();
         break;
@@ -197,11 +231,19 @@ static void example_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_para
         break;
     case ESP_BLUFI_EVENT_REQ_CONNECT_TO_AP:
         BLUFI_INFO("BLUFI requset wifi connect to AP\n");
+        /* there is no wifi callback when the device has already connected to this wifi
+        so disconnect wifi before connection.
+        */
+        esp_wifi_disconnect();
         esp_wifi_connect();
         break;
     case ESP_BLUFI_EVENT_REQ_DISCONNECT_FROM_AP:
         BLUFI_INFO("BLUFI requset wifi disconnect from AP\n");
         esp_wifi_disconnect();
+        break;
+    case ESP_BLUFI_EVENT_REPORT_ERROR:
+        BLUFI_ERROR("BLUFI report error, error code %d\n", param->report_error.state);
+        esp_blufi_send_error_info(param->report_error.state);
         break;
     case ESP_BLUFI_EVENT_GET_WIFI_STATUS: {
         wifi_mode_t mode;
@@ -225,7 +267,7 @@ static void example_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_para
     }
     case ESP_BLUFI_EVENT_RECV_SLAVE_DISCONNECT_BLE:
         BLUFI_INFO("blufi close a gatt connection");
-        esp_blufi_close(server_if,conn_id);
+        esp_blufi_close(server_if, conn_id);
         break;
     case ESP_BLUFI_EVENT_DEAUTHENTICATE_STA:
         /* TODO */
@@ -250,14 +292,16 @@ static void example_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_para
         break;
 	case ESP_BLUFI_EVENT_RECV_SOFTAP_SSID:
         strncpy((char *)ap_config.ap.ssid, (char *)param->softap_ssid.ssid, param->softap_ssid.ssid_len);
+        ap_config.ap.ssid[param->softap_ssid.ssid_len] = '\0';
         ap_config.ap.ssid_len = param->softap_ssid.ssid_len;
         esp_wifi_set_config(WIFI_IF_AP, &ap_config);
         BLUFI_INFO("Recv SOFTAP SSID %s, ssid len %d\n", ap_config.ap.ssid, ap_config.ap.ssid_len);
         break;
 	case ESP_BLUFI_EVENT_RECV_SOFTAP_PASSWD:
         strncpy((char *)ap_config.ap.password, (char *)param->softap_passwd.passwd, param->softap_passwd.passwd_len);
+        ap_config.ap.password[param->softap_passwd.passwd_len] = '\0';
         esp_wifi_set_config(WIFI_IF_AP, &ap_config);
-        BLUFI_INFO("Recv SOFTAP PASSWORD %s\n", ap_config.ap.password);
+        BLUFI_INFO("Recv SOFTAP PASSWORD %s len = %d\n", ap_config.ap.password, param->softap_passwd.passwd_len);
         break;
 	case ESP_BLUFI_EVENT_RECV_SOFTAP_MAX_CONN_NUM:
         if (param->softap_max_conn_num.max_conn_num > 4) {
@@ -282,6 +326,20 @@ static void example_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_para
         ap_config.ap.channel = param->softap_channel.channel;
         esp_wifi_set_config(WIFI_IF_AP, &ap_config);
         BLUFI_INFO("Recv SOFTAP CHANNEL %d\n", ap_config.ap.channel);
+        break;
+    case ESP_BLUFI_EVENT_GET_WIFI_LIST:{
+        wifi_scan_config_t scanConf = {
+            .ssid = NULL,
+            .bssid = NULL,
+            .channel = 0,
+            .show_hidden = false
+        };
+        ESP_ERROR_CHECK(esp_wifi_scan_start(&scanConf, true));
+        break;
+    }
+    case ESP_BLUFI_EVENT_RECV_CUSTOM_DATA:
+        BLUFI_INFO("Recv Custom Data %d\n", param->custom_data.data_len);
+        esp_log_buffer_hex("Custom Data", param->custom_data.data, param->custom_data.data_len);
         break;
 	case ESP_BLUFI_EVENT_RECV_USERNAME:
         /* Not handle currently */
@@ -336,24 +394,24 @@ void app_main()
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     ret = esp_bt_controller_init(&bt_cfg);
     if (ret) {
-        BLUFI_ERROR("%s initialize bt controller failed\n", __func__);
+        BLUFI_ERROR("%s initialize bt controller failed: %s\n", __func__, esp_err_to_name(ret));
     }
 
     ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
     if (ret) {
-        BLUFI_ERROR("%s enable bt controller failed\n", __func__);
+        BLUFI_ERROR("%s enable bt controller failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
     ret = esp_bluedroid_init();
     if (ret) {
-        BLUFI_ERROR("%s init bluedroid failed\n", __func__);
+        BLUFI_ERROR("%s init bluedroid failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
     ret = esp_bluedroid_enable();
     if (ret) {
-        BLUFI_ERROR("%s init bluedroid failed\n", __func__);
+        BLUFI_ERROR("%s init bluedroid failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
@@ -361,9 +419,17 @@ void app_main()
 
     BLUFI_INFO("BLUFI VERSION %04x\n", esp_blufi_get_version());
 
-    blufi_security_init();
-    esp_ble_gap_register_callback(example_gap_event_handler);
+    ret = esp_ble_gap_register_callback(example_gap_event_handler);
+    if(ret){
+        BLUFI_ERROR("%s gap register failed, error code = %x\n", __func__, ret);
+        return;
+    }
 
-    esp_blufi_register_callbacks(&example_callbacks);
+    ret = esp_blufi_register_callbacks(&example_callbacks);
+    if(ret){
+        BLUFI_ERROR("%s blufi register failed, error code = %x\n", __func__, ret);
+        return;
+    }
+
     esp_blufi_profile_init();
 }

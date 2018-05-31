@@ -18,6 +18,8 @@
 #include "argtable3/argtable3.h"
 #include "cmd_decl.h"
 #include "esp_vfs_fat.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 
 static const char* TAG = "example";
 
@@ -39,11 +41,21 @@ static void initialize_filesystem()
     };
     esp_err_t err = esp_vfs_fat_spiflash_mount(MOUNT_PATH, "storage", &mount_config, &wl_handle);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to mount FATFS (0x%x)", err);
+        ESP_LOGE(TAG, "Failed to mount FATFS (%s)", esp_err_to_name(err));
         return;
     }
 }
 #endif // CONFIG_STORE_HISTORY
+
+static void initialize_nvs()
+{
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+        ESP_ERROR_CHECK( nvs_flash_erase() );
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
+}
 
 static void initialize_console()
 {
@@ -94,6 +106,8 @@ static void initialize_console()
 
 void app_main()
 {
+    initialize_nvs();
+
 #if CONFIG_STORE_HISTORY
     initialize_filesystem();
 #endif
@@ -156,9 +170,9 @@ void app_main()
         } else if (err == ESP_ERR_INVALID_ARG) {
             // command was empty
         } else if (err == ESP_OK && ret != ESP_OK) {
-            printf("Command returned non-zero error code: 0x%x\n", ret);
+            printf("Command returned non-zero error code: 0x%x (%s)\n", ret, esp_err_to_name(err));
         } else if (err != ESP_OK) {
-            printf("Internal error: 0x%x\n", err);
+            printf("Internal error: %s\n", esp_err_to_name(err));
         }
         /* linenoise allocates line buffer on the heap, so need to free it */
         linenoiseFree(line);

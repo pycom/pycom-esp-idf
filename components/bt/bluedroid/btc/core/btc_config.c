@@ -16,27 +16,27 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "bt_defs.h"
-#include "bt_trace.h"
-#include "alarm.h"
-#include "allocator.h"
-#include "bdaddr.h"
-#include "btc_config.h"
-#include "btc_util.h"
-#include "config.h"
-#include "osi.h"
-#include "mutex.h"
+#include "common/bt_defs.h"
+#include "common/bt_trace.h"
+#include "osi/alarm.h"
+#include "osi/allocator.h"
+#include "device/bdaddr.h"
+#include "btc/btc_config.h"
+#include "btc/btc_util.h"
+#include "osi/config.h"
+#include "osi/osi.h"
+#include "osi/mutex.h"
 
-#include "bt_types.h"
+#include "stack/bt_types.h"
 
 static const char *CONFIG_FILE_PATH = "bt_config.conf";
 static const period_ms_t CONFIG_SETTLE_PERIOD_MS = 3000;
 
-static void btc_key_value_to_string(uint8_t *key_vaule, char *value_str, int key_length);
+static void btc_key_value_to_string(uint8_t *key_value, char *value_str, int key_length);
 static osi_mutex_t lock;  // protects operations on |config|.
 static config_t *config;
 
-bool btc_compare_address_key_value(const char *section, char *key_type, void *key_value, int key_length)
+bool btc_compare_address_key_value(const char *section, const char *key_type, void *key_value, int key_length)
 {
     assert(key_value != NULL);
     bool status = false;
@@ -51,16 +51,16 @@ bool btc_compare_address_key_value(const char *section, char *key_type, void *ke
     return status;
 }
 
-static void btc_key_value_to_string(uint8_t *key_vaule, char *value_str, int key_length)
+static void btc_key_value_to_string(uint8_t *key_value, char *value_str, int key_length)
 {
     const char *lookup = "0123456789abcdef";
 
-    assert(key_vaule != NULL);
+    assert(key_value != NULL);
     assert(value_str != NULL);
 
     for (size_t i = 0; i < key_length; ++i) {
-        value_str[(i * 2) + 0] = lookup[(key_vaule[i] >> 4) & 0x0F];
-        value_str[(i * 2) + 1] = lookup[key_vaule[i] & 0x0F];
+        value_str[(i * 2) + 0] = lookup[(key_value[i] >> 4) & 0x0F];
+        value_str[(i * 2) + 1] = lookup[key_value[i] & 0x0F];
     }
 
     return;
@@ -73,10 +73,10 @@ bool btc_config_init(void)
     osi_mutex_new(&lock);
     config = config_new(CONFIG_FILE_PATH);
     if (!config) {
-        LOG_WARN("%s unable to load config file; starting unconfigured.\n", __func__);
+        BTC_TRACE_WARNING("%s unable to load config file; starting unconfigured.\n", __func__);
         config = config_new_empty();
         if (!config) {
-            LOG_ERROR("%s unable to allocate a config object.\n", __func__);
+            BTC_TRACE_ERROR("%s unable to allocate a config object.\n", __func__);
             goto error;
         }
     }
@@ -90,7 +90,7 @@ error:;
     config_free(config);
     osi_mutex_free(&lock);
     config = NULL;
-    LOG_ERROR("%s failed\n", __func__);
+    BTC_TRACE_ERROR("%s failed\n", __func__);
     return false;
 }
 

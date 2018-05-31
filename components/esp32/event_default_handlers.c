@@ -41,7 +41,7 @@ static const char* TAG = "event";
 do{\
     esp_err_t __err = (api_call);\
     if ((ret) != __err) {\
-        ESP_LOGE(TAG, "%s %d %s ret=%d", __FUNCTION__, __LINE__, (info), __err);\
+        ESP_LOGE(TAG, "%s %d %s ret=0x%X", __FUNCTION__, __LINE__, (info), __err);\
         return __err;\
     }\
 } while(0)
@@ -332,6 +332,10 @@ static esp_err_t esp_system_event_debug(system_event_t *event)
         system_event_ap_stadisconnected_t *stadisconnected = &event->event_info.sta_disconnected;
         ESP_LOGD(TAG, "SYSTEM_EVENT_AP_STADISCONNECTED, mac:" MACSTR ", aid:%d", \
                    MAC2STR(stadisconnected->mac), stadisconnected->aid);
+        break;
+    }
+    case SYSTEM_EVENT_AP_STAIPASSIGNED: {
+        ESP_LOGD(TAG, "SYSTEM_EVENT_AP_STAIPASSIGNED");
         break;
     }
     case SYSTEM_EVENT_AP_PROBEREQRECVED: {

@@ -24,13 +24,13 @@
  ******************************************************************************/
 
 #include <string.h>
-#include "bt_types.h"
-#include "bt_target.h"
-#include "bt_utils.h"
-#include "avdt_api.h"
-#include "avdtc_api.h"
+#include "stack/bt_types.h"
+#include "common/bt_target.h"
+#include "common/bt_defs.h"
+#include "stack/avdt_api.h"
+#include "stack/avdtc_api.h"
 #include "avdt_int.h"
-#include "btu.h"
+#include "stack/btu.h"
 
 #if (defined(AVDT_INCLUDED) && AVDT_INCLUDED == TRUE)
 
@@ -407,7 +407,7 @@ void avdt_ccb_dealloc(tAVDT_CCB *p_ccb, tAVDT_CCB_EVT *p_data)
     UNUSED(p_data);
 
     AVDT_TRACE_DEBUG("avdt_ccb_dealloc %d\n", avdt_ccb_to_idx(p_ccb));
-    btu_stop_timer(&p_ccb->timer_entry);
+    btu_free_timer(&p_ccb->timer_entry);
     fixed_queue_free(p_ccb->cmd_q, NULL);
     fixed_queue_free(p_ccb->rsp_q, NULL);
     memset(p_ccb, 0, sizeof(tAVDT_CCB));

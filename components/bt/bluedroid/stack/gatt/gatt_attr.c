@@ -23,12 +23,12 @@
  *
  ******************************************************************************/
 
-#include "bt_target.h"
+#include "common/bt_target.h"
 //#include "bt_utils.h"
 
-#include "gatt_api.h"
+#include "stack/gatt_api.h"
 #include "gatt_int.h"
-#include "sdpdefs.h"
+#include "stack/sdpdefs.h"
 
 #if (BLE_INCLUDED == TRUE && GATTS_INCLUDED == TRUE)
 
@@ -494,7 +494,7 @@ void GATT_ConfigServiceChangeCCC (BD_ADDR remote_bda, BOOLEAN enable, tBT_TRANSP
         p_clcb->connected = TRUE;
     }
     /* hold the link here */
-    GATT_Connect(gatt_cb.gatt_if, remote_bda, TRUE, transport);
+    GATT_Connect(gatt_cb.gatt_if, remote_bda, BLE_ADDR_UNKNOWN_TYPE, TRUE, transport);
     p_clcb->ccc_stage = GATT_SVC_CHANGED_CONNECTING;
 
     if (!p_clcb->connected) {

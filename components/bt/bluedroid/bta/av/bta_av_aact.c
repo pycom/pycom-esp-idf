@@ -24,22 +24,22 @@
  *
  ******************************************************************************/
 
-#include "bt_target.h"
+#include "common/bt_target.h"
 #if defined(BTA_AV_INCLUDED) && (BTA_AV_INCLUDED == TRUE)
 
 // #include <assert.h>
-#include "bt_trace.h"
+#include "common/bt_trace.h"
 #include <string.h>
 
-#include "allocator.h"
+#include "osi/allocator.h"
 
 #include "bta_av_int.h"
-#include "avdt_api.h"
-#include "utl.h"
-#include "l2c_api.h"
-#include "l2cdefs.h"
+#include "stack/avdt_api.h"
+#include "bta/utl.h"
+#include "stack/l2c_api.h"
+#include "stack/l2cdefs.h"
 #if( defined BTA_AR_INCLUDED ) && (BTA_AR_INCLUDED == TRUE)
-#include "bta_ar_api.h"
+#include "bta/bta_ar_api.h"
 #endif
 
 /*****************************************************************************
@@ -514,6 +514,9 @@ static void bta_av_proc_stream_evt(UINT8 handle, BD_ADDR bd_addr, UINT8 event, t
             p_msg->disc_rsn = p_data->hdr.err_param;
             break;
             */
+            case AVDT_DISCONNECT_IND_EVT:
+                p_msg->hdr.offset = p_data->hdr.err_param;
+                break;
             default:
                 break;
             }
@@ -546,7 +549,7 @@ static void bta_av_proc_stream_evt(UINT8 handle, BD_ADDR bd_addr, UINT8 event, t
     if (p_data) {
         bta_av_conn_cback(handle, bd_addr, event, p_data);
     } else {
-        APPL_TRACE_ERROR("%s: p_data is null", __func__);
+        APPL_TRACE_EVENT("%s: p_data is null", __func__);
     }
 }
 

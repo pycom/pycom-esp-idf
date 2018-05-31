@@ -22,9 +22,9 @@
  *
  ******************************************************************************/
 #include <stddef.h>
-#include "utl.h"
-#include "btm_api.h"
-#include "allocator.h"
+#include "bta/utl.h"
+#include "stack/btm_api.h"
+#include "osi/allocator.h"
 
 /*******************************************************************************
 **
@@ -233,6 +233,37 @@ BOOLEAN utl_set_device_class(tBTA_UTL_COD *p_cod, UINT8 cmd)
     }
 
     return FALSE;
+}
+
+/*******************************************************************************
+**
+** Function         utl_get_device_class
+**
+** Description      This function get the local Device Class.
+**
+** Parameters:
+**                  p_cod   - Pointer to the device class to get to
+**
+**
+** Returns          TRUE if successful, Otherwise FALSE
+**
+*******************************************************************************/
+BOOLEAN utl_get_device_class(tBTA_UTL_COD *p_cod)
+{
+    UINT8 *dev;
+    UINT16 service;
+    UINT8  minor, major;
+
+    dev = BTM_ReadDeviceClass();
+    BTM_COD_SERVICE_CLASS( service, dev );
+    BTM_COD_MINOR_CLASS(minor, dev );
+    BTM_COD_MAJOR_CLASS(major, dev );
+
+    p_cod->minor = minor;
+    p_cod->major = major;
+    p_cod->service = service;
+
+    return TRUE;
 }
 
 /*******************************************************************************

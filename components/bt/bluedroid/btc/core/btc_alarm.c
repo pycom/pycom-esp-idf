@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "btc_task.h"
-#include "btc_alarm.h"
+#include "btc/btc_task.h"
+#include "btc/btc_alarm.h"
 
 void btc_alarm_handler(btc_msg_t *msg)
 {
     btc_alarm_args_t *arg = (btc_alarm_args_t *)msg->arg;
 
-    LOG_DEBUG("%s act %d\n", __FUNCTION__, msg->act);
+    BTC_TRACE_DEBUG("%s act %d\n", __FUNCTION__, msg->act);
 
     if (arg->cb) {
         arg->cb(arg->cb_data);

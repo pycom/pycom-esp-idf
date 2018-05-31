@@ -77,7 +77,7 @@ esp_err_t heap_trace_start(heap_trace_mode_t mode_param)
     if (buffer == NULL || total_records == 0) {
         return ESP_ERR_INVALID_STATE;
     }
-    taskENTER_CRITICAL(&trace_mux);
+    portENTER_CRITICAL(&trace_mux);
 
     tracing = false;
     mode = mode_param;
@@ -87,7 +87,7 @@ esp_err_t heap_trace_start(heap_trace_mode_t mode_param)
     has_overflowed = false;
     heap_trace_resume();
 
-    taskEXIT_CRITICAL(&trace_mux);
+    portEXIT_CRITICAL(&trace_mux);
     return ESP_OK;
 }
 
@@ -128,13 +128,13 @@ esp_err_t heap_trace_get(size_t index, heap_trace_record_t *record)
     }
     esp_err_t result = ESP_OK;
 
-    taskENTER_CRITICAL(&trace_mux);
+    portENTER_CRITICAL(&trace_mux);
     if (index >= count) {
         result = ESP_ERR_INVALID_ARG; /* out of range for 'count' */
     } else {
         memcpy(record, &buffer[index], sizeof(heap_trace_record_t));
     }
-    taskEXIT_CRITICAL(&trace_mux);
+    portEXIT_CRITICAL(&trace_mux);
     return result;
 }
 
@@ -192,7 +192,7 @@ void heap_trace_dump(void)
 /* Add a new allocation to the heap trace records */
 static IRAM_ATTR void record_allocation(const heap_trace_record_t *record)
 {
-    taskENTER_CRITICAL(&trace_mux);
+    portENTER_CRITICAL(&trace_mux);
     if (tracing) {
         if (count == total_records) {
             has_overflowed = true;
@@ -211,7 +211,7 @@ static IRAM_ATTR void record_allocation(const heap_trace_record_t *record)
         count++;
         total_allocations++;
     }
-    taskEXIT_CRITICAL(&trace_mux);
+    portEXIT_CRITICAL(&trace_mux);
 }
 
 // remove a record, used when freeing
@@ -224,7 +224,7 @@ static void remove_record(int index);
 */
 static IRAM_ATTR void record_free(void *p, void **callers)
 {
-    taskENTER_CRITICAL(&trace_mux);
+    portENTER_CRITICAL(&trace_mux);
     if (tracing && count > 0) {
         total_frees++;
         /* search backwards for the allocation record matching this free */
@@ -244,7 +244,7 @@ static IRAM_ATTR void record_free(void *p, void **callers)
             }
         }
     }
-    taskEXIT_CRITICAL(&trace_mux);
+    portEXIT_CRITICAL(&trace_mux);
 }
 
 /* remove the entry at 'index' from the ringbuffer of saved records */
@@ -312,6 +312,8 @@ typedef enum {
 
 
 void *__real_heap_caps_malloc(size_t size, uint32_t caps);
+void *__real_heap_caps_malloc_default( size_t size );
+void *__real_heap_caps_realloc_default( void *ptr, size_t size );
 
 /* trace any 'malloc' event */
 static IRAM_ATTR __attribute__((noinline)) void *trace_malloc(size_t size, uint32_t caps, trace_malloc_mode_t mode)
@@ -321,7 +323,7 @@ static IRAM_ATTR __attribute__((noinline)) void *trace_malloc(size_t size, uint3
     if ( mode == TRACE_MALLOC_CAPS ) {
         p = __real_heap_caps_malloc(size, caps);
     } else { //TRACE_MALLOC_DEFAULT
-        p = heap_caps_malloc_default(size);
+        p = __real_heap_caps_malloc_default(size);
     }
 
     if (tracing && p != NULL) {
@@ -364,7 +366,7 @@ static IRAM_ATTR __attribute__((noinline)) void *trace_realloc(void *p, size_t s
     if (mode == TRACE_MALLOC_CAPS ) {
         r = __real_heap_caps_realloc(p, size, caps);
     } else { //TRACE_MALLOC_DEFAULT
-        r = heap_caps_realloc_default(p, size);
+        r = __real_heap_caps_realloc_default(p, size);
     }
     if (tracing && r != NULL) {
         get_call_stack(callers);
@@ -422,4 +424,14 @@ IRAM_ATTR void __wrap_heap_caps_free(void *p) __attribute__((alias("__wrap_free"
 IRAM_ATTR void *__wrap_heap_caps_realloc(void *p, size_t size, uint32_t caps)
 {
     return trace_realloc(p, size, caps, TRACE_MALLOC_CAPS);
+}
+
+IRAM_ATTR void *__wrap_heap_caps_malloc_default( size_t size )
+{
+    return trace_malloc(size, 0, TRACE_MALLOC_DEFAULT);
+}
+
+IRAM_ATTR void *__wrap_heap_caps_realloc_default( void *ptr, size_t size )
+{
+    return trace_realloc(ptr, size, 0, TRACE_MALLOC_DEFAULT);
 }

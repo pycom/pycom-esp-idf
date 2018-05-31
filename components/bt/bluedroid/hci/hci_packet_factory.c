@@ -16,16 +16,16 @@
  *
  ******************************************************************************/
 
-#include "bt_defs.h"
+#include "common/bt_defs.h"
 
-#include "allocator.h"
-#include "bt_types.h"
-#include "buffer_allocator.h"
-#include "hcidefs.h"
-#include "hcimsgs.h"
-#include "hci_internals.h"
-#include "hci_layer.h"
-#include "hci_packet_factory.h"
+#include "osi/allocator.h"
+#include "stack/bt_types.h"
+#include "hci/buffer_allocator.h"
+#include "stack/hcidefs.h"
+#include "stack/hcimsgs.h"
+#include "hci/hci_internals.h"
+#include "hci/hci_layer.h"
+#include "hci/hci_packet_factory.h"
 
 static const allocator_t *buffer_allocator;
 
@@ -175,6 +175,15 @@ static BT_HDR *make_ble_set_event_mask(const bt_event_mask_t *event_mask)
     return packet;
 }
 
+static BT_HDR *make_write_sync_flow_control_enable(uint8_t enable)
+{
+    uint8_t *stream;
+    const uint8_t parameter_size = 1;
+    BT_HDR *packet = make_command(HCI_WRITE_SCO_FLOW_CTRL_ENABLE, parameter_size, &stream);
+
+    UINT8_TO_STREAM(stream, enable);
+    return packet;
+}
 // Internal functions
 
 static BT_HDR *make_command_no_params(uint16_t opcode)
@@ -227,7 +236,8 @@ static const hci_packet_factory_t interface = {
     make_ble_read_resolving_list_size,
     make_ble_read_suggested_default_data_length,
     make_ble_write_suggested_default_data_length,
-    make_ble_set_event_mask
+    make_ble_set_event_mask,
+    make_write_sync_flow_control_enable
 };
 
 const hci_packet_factory_t *hci_packet_factory_get_interface()

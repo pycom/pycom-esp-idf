@@ -26,25 +26,25 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-#include "allocator.h"
-#include "bt_types.h"
-#include "utl.h"
-#include "bta_sys.h"
-#include "bta_api.h"
-#include "bta_jv_api.h"
+#include "osi/allocator.h"
+#include "stack/bt_types.h"
+#include "bta/utl.h"
+#include "bta/bta_sys.h"
+#include "bta/bta_api.h"
+#include "bta/bta_jv_api.h"
 #include "bta_jv_int.h"
-#include "bta_jv_co.h"
-#include "btm_api.h"
+#include "bta/bta_jv_co.h"
+#include "stack/btm_api.h"
 #include "btm_int.h"
-#include "sdp_api.h"
-#include "l2c_api.h"
-#include "port_api.h"
+#include "stack/sdp_api.h"
+#include "stack/l2c_api.h"
+#include "stack/port_api.h"
 #include <string.h>
-#include "rfcdefs.h"
-#include "avct_api.h"
-#include "avdt_api.h"
-#include "gap_api.h"
-#include "l2c_api.h"
+#include "stack/rfcdefs.h"
+#include "stack/avct_api.h"
+#include "stack/avdt_api.h"
+#include "stack/gap_api.h"
+#include "stack/l2c_api.h"
 
 
 #if (defined BTA_JV_INCLUDED && BTA_JV_INCLUDED == TRUE)
@@ -951,7 +951,7 @@ static bool create_base_record(const uint32_t sdp_handle, const char *name, cons
         proto_list[2].num_params = 0;
     }
 
-    char *stage = "protocol_list";
+    const char *stage = "protocol_list";
     if (!SDP_AddProtocolList(sdp_handle, num_proto_elements, proto_list)){
         APPL_TRACE_ERROR("create_base_record: failed to create base service "
                    "record, stage: %s, scn: %d, name: %s, with_obex: %d",
@@ -1000,7 +1000,7 @@ static int add_spp_sdp(const char *name, const int channel) {
     }
 
     // Create the base SDP record.
-    char *stage = "create_base_record";
+    const char *stage = "create_base_record";
     if (!create_base_record(handle, name, channel, FALSE /* with_obex */)){
         SDP_DeleteRecord(handle);
         APPL_TRACE_ERROR("add_spp_sdp: failed to register SPP service, "
@@ -1560,13 +1560,13 @@ static void bta_jv_port_mgmt_cl_cback(UINT32 code, UINT16 port_handle)
     PORT_CheckConnection(port_handle, rem_bda, &lcid);
 
     if (code == PORT_SUCCESS) {
-        evt_data.rfc_open.handle = p_cb->handle;
+        evt_data.rfc_open.handle = p_pcb->handle;
         evt_data.rfc_open.status = BTA_JV_SUCCESS;
         bdcpy(evt_data.rfc_open.rem_bda, rem_bda);
         p_pcb->state = BTA_JV_ST_CL_OPEN;
         p_cb->p_cback(BTA_JV_RFCOMM_OPEN_EVT, &evt_data, p_pcb->user_data);
     } else {
-        evt_data.rfc_close.handle = p_cb->handle;
+        evt_data.rfc_close.handle = p_pcb->handle;
         evt_data.rfc_close.status = BTA_JV_FAILURE;
         evt_data.rfc_close.port_status = code;
         evt_data.rfc_close.async = TRUE;
@@ -1605,14 +1605,14 @@ static void bta_jv_port_event_cl_cback(UINT32 code, UINT16 port_handle)
     APPL_TRACE_DEBUG( "bta_jv_port_event_cl_cback code=x%x port_handle:%d handle:%d",
                       code, port_handle, p_cb->handle);
     if (code & PORT_EV_RXCHAR) {
-        evt_data.data_ind.handle = p_cb->handle;
+        evt_data.data_ind.handle = p_pcb->handle;
         p_cb->p_cback(BTA_JV_RFCOMM_DATA_IND_EVT, &evt_data, p_pcb->user_data);
     }
 
     if (code & PORT_EV_FC) {
         p_pcb->cong = (code & PORT_EV_FCS) ? FALSE : TRUE;
         evt_data.rfc_cong.cong = p_pcb->cong;
-        evt_data.rfc_cong.handle = p_cb->handle;
+        evt_data.rfc_cong.handle = p_pcb->handle;
         evt_data.rfc_cong.status = BTA_JV_SUCCESS;
         p_cb->p_cback(BTA_JV_RFCOMM_CONG_EVT, &evt_data, p_pcb->user_data);
     }
@@ -1684,7 +1684,7 @@ void bta_jv_rfcomm_connect(tBTA_JV_MSG *p_data)
                FALSE-POSITIVE: port_state is initialized at PORT_GetState() */
             PORT_SetState(handle, &port_state);
 
-            evt_data.handle = p_cb->handle;
+            evt_data.handle = p_pcb->handle;
         } else {
             evt_data.status = BTA_JV_FAILURE;
             APPL_TRACE_ERROR("run out of rfc control block");
@@ -1823,7 +1823,7 @@ static void bta_jv_port_mgmt_sr_cback(UINT32 code, UINT16 port_handle)
         }
     }
     if (failed) {
-        evt_data.rfc_close.handle = p_cb->handle;
+        evt_data.rfc_close.handle = p_pcb->handle;
         evt_data.rfc_close.status = BTA_JV_FAILURE;
         evt_data.rfc_close.async = TRUE;
         evt_data.rfc_close.port_status = code;
@@ -1869,14 +1869,14 @@ static void bta_jv_port_event_sr_cback(UINT32 code, UINT16 port_handle)
 
     void *user_data = p_pcb->user_data;
     if (code & PORT_EV_RXCHAR) {
-        evt_data.data_ind.handle = p_cb->handle;
+        evt_data.data_ind.handle = p_pcb->handle;
         p_cb->p_cback(BTA_JV_RFCOMM_DATA_IND_EVT, &evt_data, user_data);
     }
 
     if (code & PORT_EV_FC) {
         p_pcb->cong = (code & PORT_EV_FCS) ? FALSE : TRUE;
         evt_data.rfc_cong.cong = p_pcb->cong;
-        evt_data.rfc_cong.handle = p_cb->handle;
+        evt_data.rfc_cong.handle = p_pcb->handle;
         evt_data.rfc_cong.status = BTA_JV_SUCCESS;
         p_cb->p_cback(BTA_JV_RFCOMM_CONG_EVT, &evt_data, user_data);
     }
@@ -2017,7 +2017,7 @@ void bta_jv_rfcomm_start_server(tBTA_JV_MSG *p_data)
         p_pcb->state = BTA_JV_ST_SR_LISTEN;
         p_pcb->user_data = rs->user_data;
         evt_data.status = BTA_JV_SUCCESS;
-        evt_data.handle = p_cb->handle;
+        evt_data.handle = p_pcb->handle;
         evt_data.sec_id = sec_id;
         evt_data.use_co = TRUE;
 
@@ -2092,7 +2092,7 @@ void bta_jv_rfcomm_read(tBTA_JV_MSG *p_data)
     tBTA_JV_RFCOMM_READ    evt_data;
 
     evt_data.status = BTA_JV_FAILURE;
-    evt_data.handle = p_cb->handle;
+    evt_data.handle = p_pcb->handle;
     evt_data.req_id = rc->req_id;
     evt_data.p_data = rc->p_data;
     if (PORT_ReadData(rc->p_pcb->port_handle, (char *)rc->p_data, rc->len, &evt_data.len) ==
@@ -2120,7 +2120,7 @@ void bta_jv_rfcomm_write(tBTA_JV_MSG *p_data)
     tBTA_JV_RFCOMM_WRITE    evt_data;
 
     evt_data.status = BTA_JV_FAILURE;
-    evt_data.handle = p_cb->handle;
+    evt_data.handle = p_pcb->handle;
     evt_data.req_id = wc->req_id;
     evt_data.cong   = p_pcb->cong;
     bta_jv_pm_conn_busy(p_pcb->p_pm_cb);
@@ -2648,7 +2648,7 @@ void bta_jv_l2cap_connect_le(tBTA_JV_MSG *p_data)
     id = t->id;
     t->init_called = FALSE;
 
-    if (L2CA_ConnectFixedChnl(t->chan, t->remote_addr)) {
+    if (L2CA_ConnectFixedChnl(t->chan, t->remote_addr, BLE_ADDR_UNKNOWN_TYPE)) {
 
         evt.l2c_cl_init.status = BTA_JV_SUCCESS;
         evt.l2c_cl_init.handle = id;

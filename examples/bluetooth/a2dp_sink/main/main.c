@@ -54,14 +54,14 @@ void app_main()
 
     i2s_config_t i2s_config = {
 #ifdef CONFIG_A2DP_SINK_OUTPUT_INTERNAL_DAC
-        .mode = I2S_MODE_DAC_BUILT_IN,
+        .mode = I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN,
 #else
         .mode = I2S_MODE_MASTER | I2S_MODE_TX,                                  // Only TX
 #endif
         .sample_rate = 44100,
         .bits_per_sample = 16,                                              
         .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,                           //2-channels
-        .communication_format = I2S_COMM_FORMAT_I2S | I2S_COMM_FORMAT_I2S_MSB,
+        .communication_format = I2S_COMM_FORMAT_I2S_MSB,
         .dma_buf_count = 6,
         .dma_buf_len = 60,                                                      //
         .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1                                //Interrupt level 1
@@ -70,6 +70,7 @@ void app_main()
 
     i2s_driver_install(0, &i2s_config, 0, NULL);
 #ifdef CONFIG_A2DP_SINK_OUTPUT_INTERNAL_DAC
+    i2s_set_dac_mode(I2S_DAC_CHANNEL_BOTH_EN);
     i2s_set_pin(0, NULL);
 #else
     i2s_pin_config_t pin_config = {
@@ -85,24 +86,25 @@ void app_main()
 
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_BLE));
 
+    esp_err_t err;
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    if (esp_bt_controller_init(&bt_cfg) != ESP_OK) {
-        ESP_LOGE(BT_AV_TAG, "%s initialize controller failed\n", __func__);
+    if ((err = esp_bt_controller_init(&bt_cfg)) != ESP_OK) {
+        ESP_LOGE(BT_AV_TAG, "%s initialize controller failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
-    if (esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT) != ESP_OK) {
-        ESP_LOGE(BT_AV_TAG, "%s enable controller failed\n", __func__);
+    if ((err = esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT)) != ESP_OK) {
+        ESP_LOGE(BT_AV_TAG, "%s enable controller failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
-    if (esp_bluedroid_init() != ESP_OK) {
-        ESP_LOGE(BT_AV_TAG, "%s initialize bluedroid failed\n", __func__);
+    if ((err = esp_bluedroid_init()) != ESP_OK) {
+        ESP_LOGE(BT_AV_TAG, "%s initialize bluedroid failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
-    if (esp_bluedroid_enable() != ESP_OK) {
-        ESP_LOGE(BT_AV_TAG, "%s enable bluedroid failed\n", __func__);
+    if ((err = esp_bluedroid_enable()) != ESP_OK) {
+        ESP_LOGE(BT_AV_TAG, "%s enable bluedroid failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
@@ -125,7 +127,7 @@ static void bt_av_hdl_stack_evt(uint16_t event, void *p_param)
 
         /* initialize A2DP sink */
         esp_a2d_register_callback(&bt_app_a2d_cb);
-        esp_a2d_register_data_callback(bt_app_a2d_data_cb);
+        esp_a2d_sink_register_data_callback(bt_app_a2d_data_cb);
         esp_a2d_sink_init();
 
         /* initialize AVRCP controller */

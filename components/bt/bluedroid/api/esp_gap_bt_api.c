@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "bt_target.h"
+#include "common/bt_target.h"
 #include <string.h>
 #include "esp_bt_main.h"
 #include "esp_gap_bt_api.h"
-#include "bt_trace.h"
-#include "btc_manage.h"
+#include "common/bt_trace.h"
+#include "btc/btc_manage.h"
 #include "btc_gap_bt.h"
+#include "btc/btc_storage.h"
 
 #if (BTC_GAP_BT_INCLUDED == TRUE)
 
@@ -63,7 +64,7 @@ esp_err_t esp_bt_gap_start_discovery(esp_bt_inq_mode_t mode, uint8_t inq_len, ui
     }
 
     if (mode != ESP_BT_INQ_MODE_GENERAL_INQUIRY &&
-            mode != ESP_BT_INQ_MODE_LIMITED_INQIURY) {
+            mode != ESP_BT_INQ_MODE_LIMITED_INQUIRY) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -141,4 +142,102 @@ uint8_t *esp_bt_gap_resolve_eir_data(uint8_t *eir, esp_bt_eir_type_t type, uint8
 
     return BTM_CheckEirData(eir, type, length);
 }
+
+esp_err_t esp_bt_gap_set_cod(esp_bt_cod_t cod, esp_bt_cod_mode_t mode)
+{
+    btc_msg_t msg;
+    btc_gap_bt_args_t arg;
+
+    if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    switch (mode) {
+    case ESP_BT_SET_COD_MAJOR_MINOR:
+    case ESP_BT_SET_COD_SERVICE_CLASS:
+    case ESP_BT_CLR_COD_SERVICE_CLASS:
+    case ESP_BT_SET_COD_ALL:
+    case ESP_BT_INIT_COD:
+        break;
+    default:
+        return ESP_ERR_INVALID_ARG;
+        break;
+    }
+
+    msg.sig = BTC_SIG_API_CALL;
+    msg.pid = BTC_PID_GAP_BT;
+    msg.act = BTC_GAP_BT_ACT_SET_COD;
+
+    arg.set_cod.mode = mode;
+    memcpy(&arg.set_cod.cod, &cod, sizeof(esp_bt_cod_t));
+    return (btc_transfer_context(&msg, &arg, sizeof(btc_gap_bt_args_t), NULL) == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
+}
+
+
+esp_err_t esp_bt_gap_get_cod(esp_bt_cod_t *cod)
+{
+    return btc_gap_bt_get_cod(cod);
+}
+
+
+esp_err_t esp_bt_gap_read_rssi_delta(esp_bd_addr_t remote_addr)
+{
+    btc_msg_t msg;
+    btc_gap_bt_args_t arg;
+    msg.sig = BTC_SIG_API_CALL;
+    msg.pid = BTC_PID_GAP_BT;
+    msg.act = BTC_GAP_BT_ACT_READ_RSSI_DELTA;
+    memcpy(arg.read_rssi_delta.bda.address, remote_addr, sizeof(esp_bd_addr_t));
+
+    return (btc_transfer_context(&msg, &arg, sizeof(btc_gap_bt_args_t), NULL) == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
+}
+
+esp_err_t esp_bt_gap_remove_bond_device(esp_bd_addr_t bd_addr)
+{
+    btc_msg_t msg;
+    btc_gap_bt_args_t arg;
+
+    if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    msg.sig = BTC_SIG_API_CALL;
+    msg.pid = BTC_PID_GAP_BT;
+    msg.act = BTC_GAP_BT_ACT_REMOVE_BOND_DEVICE;
+
+    memcpy(arg.rm_bond_device.bda.address, bd_addr, sizeof(esp_bd_addr_t));
+    return (btc_transfer_context(&msg, &arg, sizeof(btc_gap_bt_args_t), NULL) == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
+}
+
+int esp_bt_gap_get_bond_device_num(void)
+{
+    if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
+        return ESP_FAIL;
+    }
+    return btc_storage_get_num_bt_bond_devices();
+}
+
+esp_err_t esp_bt_gap_get_bond_device_list(int *dev_num, esp_bd_addr_t *dev_list)
+{
+    int ret;
+    int dev_num_total;
+
+    if (dev_num == NULL || dev_list == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    dev_num_total = btc_storage_get_num_bt_bond_devices();
+    if (*dev_num > dev_num_total) {
+        *dev_num = dev_num_total;
+    }
+
+    ret = btc_storage_get_bonded_bt_devices_list((bt_bdaddr_t *)dev_list, *dev_num);
+
+    return (ret == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
+}
+
 #endif /* #if BTC_GAP_BT_INCLUDED == TRUE */

@@ -1,16 +1,10 @@
-// Copyright 2015-2017 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+/*
+   This example code is in the Public Domain (or CC0 licensed, at your option.)
 
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+   Unless required by applicable law or agreed to in writing, this
+   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied.
+*/
 
 
 
@@ -52,12 +46,12 @@ esp_ble_ibeacon_vendor_t vendor_config = {
     .measured_power = 0xC5
 };
 
-BOOLEAN esp_ble_is_ibeacon_packet (uint8_t *adv_data, uint8_t adv_data_len){
-    BOOLEAN result = FALSE;
+bool esp_ble_is_ibeacon_packet (uint8_t *adv_data, uint8_t adv_data_len){
+    bool result = false;
 
     if ((adv_data != NULL) && (adv_data_len == 0x1E)){
         if (!memcmp(adv_data, (uint8_t*)&ibeacon_common_head, sizeof(ibeacon_common_head))){
-            result = TRUE;
+            result = true;
         }
     }
 

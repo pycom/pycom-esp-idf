@@ -108,3 +108,4 @@ static inline void vPortCPUReleaseMutexIntsDisabled(PORTMUX_RELEASE_MUX_FN_ARGS)
 #endif
 	vPortCPUReleaseMutexIntsDisabledInternal(PORTMUX_RELEASE_MUX_FN_CALL_ARGS(mux));
 }
+

@@ -22,12 +22,12 @@
  *
  ******************************************************************************/
 
-#include "bt_target.h"
+#include "common/bt_target.h"
 
 #if BLE_INCLUDED == TRUE && GATTC_INCLUDED == TRUE
 
 #include <string.h>
-#include "allocator.h"
+#include "osi/allocator.h"
 #include "gatt_int.h"
 #include "l2c_int.h"
 
@@ -586,7 +586,7 @@ void gatt_process_prep_write_rsp (tGATT_TCB *p_tcb, tGATT_CLCB *p_clcb, UINT8 op
     tGATT_VALUE  value = {0};
     UINT8        *p = p_data;
 
-    GATT_TRACE_ERROR("value resp op_code = %s len = %d", gatt_dbg_op_name(op_code), len);
+    GATT_TRACE_DEBUG("value resp op_code = %s len = %d", gatt_dbg_op_name(op_code), len);
 
     if (len < GATT_PREP_WRITE_RSP_MIN_LEN) {
         GATT_TRACE_ERROR("illegal prepare write response length, discard");

@@ -22,13 +22,13 @@
  *
  ******************************************************************************/
 
-#include "bt_target.h"
+#include "common/bt_target.h"
 
 #if defined(BTA_HH_INCLUDED) && (BTA_HH_INCLUDED == TRUE)
 
 #include <string.h>
 
-#include "bta_hh_api.h"
+#include "bta/bta_hh_api.h"
 #include "bta_hh_int.h"
 
 /*****************************************************************************
@@ -245,6 +245,8 @@ const tBTA_HH_ST_TBL bta_hh_st_tbl[] = {
 *****************************************************************************/
 #if BTA_DYNAMIC_MEMORY == FALSE
 tBTA_HH_CB  bta_hh_cb;
+#else
+tBTA_HH_CB  *bta_hh_cb_ptr;
 #endif
 /*****************************************************************************
 ** Static functions

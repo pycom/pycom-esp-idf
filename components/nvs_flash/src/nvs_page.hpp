@@ -127,11 +127,13 @@ public:
 
     esp_err_t markFreeing();
 
-    esp_err_t moveItem(Page& other);
+    esp_err_t copyItems(Page& other);
 
     esp_err_t erase();
 
     void debugDump() const;
+
+    esp_err_t calcEntries(nvs_stats_t &nvsStats);
 
 protected:
 

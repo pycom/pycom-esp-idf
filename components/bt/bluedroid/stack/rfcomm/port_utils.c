@@ -23,16 +23,16 @@
  ******************************************************************************/
 #include <string.h>
 
-#include "bt_target.h"
-#include "rfcdefs.h"
-#include "port_api.h"
+#include "common/bt_target.h"
+#include "stack/rfcdefs.h"
+#include "stack/port_api.h"
 #include "port_int.h"
 #include "rfc_int.h"
-#include "l2cdefs.h"
+#include "stack/l2cdefs.h"
 #include "btm_int.h"
-#include "btu.h"
-#include "mutex.h"
-#include "allocator.h"
+#include "stack/btu.h"
+#include "osi/mutex.h"
+#include "osi/allocator.h"
 #if (defined RFCOMM_INCLUDED && RFCOMM_INCLUDED == TRUE)
 
 static const tPORT_STATE default_port_pars = {
@@ -265,6 +265,7 @@ void port_release_port (tPORT *p_port)
             memcpy (p_port->bd_addr, BT_BD_ANY, BD_ADDR_LEN);
         } else {
             RFCOMM_TRACE_DEBUG ("port_release_port:Clean-up handle:%d", p_port->inx);
+            rfc_port_timer_free (p_port);
             memset (p_port, 0, sizeof (tPORT));
         }
     }

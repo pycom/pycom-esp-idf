@@ -30,11 +30,17 @@ extern "C"
 
 #define SPI_DEVICE_TXBIT_LSBFIRST          (1<<0)  ///< Transmit command/address/data LSB first instead of the default MSB first
 #define SPI_DEVICE_RXBIT_LSBFIRST          (1<<1)  ///< Receive data LSB first instead of the default MSB first
-#define SPI_DEVICE_BIT_LSBFIRST            (SPI_DEVICE_TXBIT_LSBFIRST|SPI_DEVICE_RXBIT_LSBFIRST); ///< Transmit and receive LSB first
+#define SPI_DEVICE_BIT_LSBFIRST            (SPI_DEVICE_TXBIT_LSBFIRST|SPI_DEVICE_RXBIT_LSBFIRST) ///< Transmit and receive LSB first
 #define SPI_DEVICE_3WIRE                   (1<<2)  ///< Use MOSI (=spid) for both sending and receiving data
 #define SPI_DEVICE_POSITIVE_CS             (1<<3)  ///< Make CS positive during a transaction instead of negative
 #define SPI_DEVICE_HALFDUPLEX              (1<<4)  ///< Transmit data before receiving it, instead of simultaneously
 #define SPI_DEVICE_CLK_AS_CS               (1<<5)  ///< Output clock on CS line if CS is active
+/** There are timing issue when reading at high frequency (the frequency is related to whether native pins are used, valid time after slave sees the clock).
+  *     - In half-duplex mode, the driver automatically inserts dummy bits before reading phase to fix the timing issue. Set this flag to disable this feature.
+  *     - In full-duplex mode, however, the hardware cannot use dummy bits, so there is no way to prevent data being read from getting corrupted.
+  *       Set this flag to confirm that you're going to work with output only, or read without dummy bits at your own risk.
+  */
+#define SPI_DEVICE_NO_DUMMY                (1<<6)  
 
 
 typedef struct spi_transaction_t spi_transaction_t;
@@ -62,23 +68,29 @@ typedef struct {
 
 #define SPI_TRANS_MODE_DIO            (1<<0)  ///< Transmit/receive data in 2-bit mode
 #define SPI_TRANS_MODE_QIO            (1<<1)  ///< Transmit/receive data in 4-bit mode
-#define SPI_TRANS_MODE_DIOQIO_ADDR    (1<<4)  ///< Also transmit address in mode selected by SPI_MODE_DIO/SPI_MODE_QIO
 #define SPI_TRANS_USE_RXDATA          (1<<2)  ///< Receive into rx_data member of spi_transaction_t instead into memory at rx_buffer.
 #define SPI_TRANS_USE_TXDATA          (1<<3)  ///< Transmit tx_data member of spi_transaction_t instead of data at tx_buffer. Do not set tx_buffer when using this.
-#define SPI_TRANS_VARIABLE_CMD        (1<<4)  ///< Use the ``command_bits`` in ``spi_transaction_ext_t`` rather than default value in ``spi_device_interface_config_t``.
-#define SPI_TRANS_VARIABLE_ADDR       (1<<5)  ///< Use the ``address_bits`` in ``spi_transaction_ext_t`` rather than default value in ``spi_device_interface_config_t``.
+#define SPI_TRANS_MODE_DIOQIO_ADDR    (1<<4)  ///< Also transmit address in mode selected by SPI_MODE_DIO/SPI_MODE_QIO
+#define SPI_TRANS_VARIABLE_CMD        (1<<5)  ///< Use the ``command_bits`` in ``spi_transaction_ext_t`` rather than default value in ``spi_device_interface_config_t``.
+#define SPI_TRANS_VARIABLE_ADDR       (1<<6)  ///< Use the ``address_bits`` in ``spi_transaction_ext_t`` rather than default value in ``spi_device_interface_config_t``.
 
 /**
  * This structure describes one SPI transaction. The descriptor should not be modified until the transaction finishes.
  */
 struct spi_transaction_t {
     uint32_t flags;                 ///< Bitwise OR of SPI_TRANS_* flags
-    uint16_t cmd;                   ///< Command data, of which the length is set in the ``command_bits`` of spi_device_interface_config_t.
-                                    ///< <b>NOTE: this field, used to be "command" in ESP-IDF 2.1 and before, is re-written to be used in a new way in ESP-IDF 3.0.</b>
-                                    ///< - Example: write 0x0123 and command_bits=12 to send command 0x12, 0x3_ (in previous version, you may have to write 0x3_12).
-    uint64_t addr;                  ///< Address data, of which the length is set in the ``address_bits`` of spi_device_interface_config_t.
-                                    ///< <b>NOTE: this field, used to be "address" in ESP-IDF 2.1 and before, is re-written to be used in a new way in ESP-IDF3.0.</b> 
-                                    ///< - Example: write 0x123400 and address_bits=24 to send address of 0x12, 0x34, 0x00 (in previous version, you may have to write 0x12340000).  
+    uint16_t cmd;                   /**< Command data, of which the length is set in the ``command_bits`` of spi_device_interface_config_t.
+                                      *
+                                      *  <b>NOTE: this field, used to be "command" in ESP-IDF 2.1 and before, is re-written to be used in a new way in ESP-IDF 3.0.</b>
+                                      *
+                                      *  Example: write 0x0123 and command_bits=12 to send command 0x12, 0x3_ (in previous version, you may have to write 0x3_12).
+                                      */
+    uint64_t addr;                  /**< Address data, of which the length is set in the ``address_bits`` of spi_device_interface_config_t.
+                                      *
+                                      *  <b>NOTE: this field, used to be "address" in ESP-IDF 2.1 and before, is re-written to be used in a new way in ESP-IDF3.0.</b> 
+                                      *
+                                      *  Example: write 0x123400 and address_bits=24 to send address of 0x12, 0x34, 0x00 (in previous version, you may have to write 0x12340000).  
+                                      */
     size_t length;                  ///< Total data length, in bits
     size_t rxlength;                ///< Total data length received, should be not greater than ``length`` in full-duplex mode (0 defaults this to the value of ``length``).
     void *user;                     ///< User-defined variable. Can be used to store eg transaction ID.
@@ -160,7 +172,7 @@ esp_err_t spi_bus_free(spi_host_device_t host);
  *         - ESP_ERR_NO_MEM        if out of memory
  *         - ESP_OK                on success
  */ 
-esp_err_t spi_bus_add_device(spi_host_device_t host, spi_device_interface_config_t *dev_config, spi_device_handle_t *handle);
+esp_err_t spi_bus_add_device(spi_host_device_t host, const spi_device_interface_config_t *dev_config, spi_device_handle_t *handle);
 
 
 /**
@@ -214,15 +226,17 @@ esp_err_t spi_device_get_trans_result(spi_device_handle_t handle, spi_transactio
 
 
 /**
- * @brief Do a SPI transaction
+ * @brief Send a SPI transaction, wait for it to complete, and return the result
  *
- * Essentially does the same as spi_device_queue_trans followed by spi_device_get_trans_result. Do
- * not use this when there is still a transaction queued that hasn't been finalized 
- * using spi_device_get_trans_result.
+ * This function is the equivalent of calling spi_device_queue_trans() followed by spi_device_get_trans_result().
+ * Do not use this when there is still a transaction separately queued from spi_device_queue_trans() that hasn't been finalized
+ * using spi_device_get_trans_result().
+ *
+ * @note This function is not thread safe when multiple tasks access the same SPI device.
  *
  * @param handle Device handle obtained using spi_host_add_dev
  * @param trans_desc Description of transaction to execute
- * @return 
+ * @return
  *         - ESP_ERR_INVALID_ARG   if parameter is invalid
  *         - ESP_OK                on success
  */

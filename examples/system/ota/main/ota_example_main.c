@@ -120,7 +120,7 @@ static bool read_past_http_header(char text[], int total_len, esp_ota_handle_t u
 
             esp_err_t err = esp_ota_write( update_handle, (const void *)ota_write_data, i_write_len);
             if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Error: esp_ota_write failed! err=0x%x", err);
+                ESP_LOGE(TAG, "Error: esp_ota_write failed (%s)!", esp_err_to_name(err));
                 return false;
             } else {
                 ESP_LOGI(TAG, "esp_ota_write header OK");
@@ -240,34 +240,40 @@ static void ota_example_task(void *pvParameter)
 
     err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &update_handle);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_ota_begin failed, error=%d", err);
+        ESP_LOGE(TAG, "esp_ota_begin failed (%s)", esp_err_to_name(err));
         task_fatal_error();
     }
     ESP_LOGI(TAG, "esp_ota_begin succeeded");
 
-    bool resp_body_start = false, flag = true;
+    bool resp_body_start = false, socket_flag = true, http_200_flag = false;
     /*deal with all receive packet*/
-    while (flag) {
+    while (socket_flag) {
         memset(text, 0, TEXT_BUFFSIZE);
         memset(ota_write_data, 0, BUFFSIZE);
         int buff_len = recv(socket_id, text, TEXT_BUFFSIZE, 0);
         if (buff_len < 0) { /*receive error*/
             ESP_LOGE(TAG, "Error: receive data error! errno=%d", errno);
             task_fatal_error();
-        } else if (buff_len > 0 && !resp_body_start) { /*deal with response header*/
+        } else if (buff_len > 0 && !resp_body_start) {  /*deal with response header*/
+            // only start ota when server response 200 state code
+            if (strstr(text, "200") == NULL && !http_200_flag) {
+                ESP_LOGE(TAG, "ota url is invalid or bin is not exist");
+                task_fatal_error();
+            }
+            http_200_flag = true;
             memcpy(ota_write_data, text, buff_len);
             resp_body_start = read_past_http_header(text, buff_len, update_handle);
         } else if (buff_len > 0 && resp_body_start) { /*deal with response body*/
             memcpy(ota_write_data, text, buff_len);
             err = esp_ota_write( update_handle, (const void *)ota_write_data, buff_len);
             if (err != ESP_OK) {
-                ESP_LOGE(TAG, "Error: esp_ota_write failed! err=0x%x", err);
+                ESP_LOGE(TAG, "Error: esp_ota_write failed (%s)!", esp_err_to_name(err));
                 task_fatal_error();
             }
             binary_file_length += buff_len;
             ESP_LOGI(TAG, "Have written image length %d", binary_file_length);
         } else if (buff_len == 0) {  /*packet over*/
-            flag = false;
+            socket_flag = false;
             ESP_LOGI(TAG, "Connection closed, all packets received");
             close(socket_id);
         } else {
@@ -283,7 +289,7 @@ static void ota_example_task(void *pvParameter)
     }
     err = esp_ota_set_boot_partition(update_partition);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_ota_set_boot_partition failed! err=0x%x", err);
+        ESP_LOGE(TAG, "esp_ota_set_boot_partition failed (%s)!", esp_err_to_name(err));
         task_fatal_error();
     }
     ESP_LOGI(TAG, "Prepare to restart system!");

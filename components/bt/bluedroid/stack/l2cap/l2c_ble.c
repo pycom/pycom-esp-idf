@@ -23,14 +23,14 @@
  ******************************************************************************/
 
 #include <string.h>
-#include "bt_target.h"
+#include "common/bt_target.h"
 //#include "bt_utils.h"
-#include "l2cdefs.h"
+#include "stack/l2cdefs.h"
 #include "l2c_int.h"
-#include "btu.h"
+#include "stack/btu.h"
 #include "btm_int.h"
-#include "hcimsgs.h"
-#include "controller.h"
+#include "stack/hcimsgs.h"
+#include "device/controller.h"
 
 #if (BLE_INCLUDED == TRUE)
 static BOOLEAN l2cble_start_conn_update (tL2C_LCB *p_lcb);
@@ -766,6 +766,15 @@ void l2cble_process_sig_cmd (tL2C_LCB *p_lcb, UINT8 *p, UINT16 pkt_len)
 *******************************************************************************/
 BOOLEAN l2cble_init_direct_conn (tL2C_LCB *p_lcb)
 {
+#if ( (defined BLE_PRIVACY_SPT) && (BLE_PRIVACY_SPT == TRUE))
+    //check for security device information in the cache
+    bool dev_rec_exist = true;
+    tBTM_SEC_DEV_REC *find_dev_rec = btm_find_dev (p_lcb->remote_bd_addr);
+    if(find_dev_rec == NULL) {
+        dev_rec_exist = false;
+    }
+
+#endif
     tBTM_SEC_DEV_REC *p_dev_rec = btm_find_or_alloc_dev (p_lcb->remote_bd_addr);
     tBTM_BLE_CB *p_cb = &btm_cb.ble_ctr_cb;
     UINT16 scan_int;
@@ -788,6 +797,26 @@ BOOLEAN l2cble_init_direct_conn (tL2C_LCB *p_lcb)
 
 #if ( (defined BLE_PRIVACY_SPT) && (BLE_PRIVACY_SPT == TRUE))
     own_addr_type = btm_cb.ble_ctr_cb.privacy_mode ? BLE_ADDR_RANDOM : BLE_ADDR_PUBLIC;
+    if(dev_rec_exist) {
+        // if the current address information is valid, get the real address information
+        if(p_dev_rec->ble.current_addr_valid) {
+            peer_addr_type = p_dev_rec->ble.current_addr_type;
+            memcpy(peer_addr, p_dev_rec->ble.current_addr, 6);
+        } else {
+            /* find security device information but not find the real address information
+             * This state may be directly open whithout scanning. In this case, you must 
+             * use the current adv address of the device to open*/
+        } 
+    } else {
+        //not find security device information, We think this is a new device, connect directly
+    }
+
+    /* It will cause that scanner doesn't send scan request to advertiser
+    * which has sent IRK to us and we have stored the IRK in controller.
+    * It is a design problem of hardware. The temporal solution is not to 
+    * send the key to the controller and then resolve the random address in host.
+    * so we need send the real address information to controller. */
+    /*
     if (p_dev_rec->ble.in_controller_list & BTM_RESOLVING_LIST_BIT) {
         if (btm_cb.ble_ctr_cb.privacy_mode >=  BTM_PRIVACY_1_2) {
             own_addr_type |= BLE_ADDR_TYPE_ID_BIT;
@@ -798,6 +827,7 @@ BOOLEAN l2cble_init_direct_conn (tL2C_LCB *p_lcb)
     } else {
         btm_ble_disable_resolving_list(BTM_BLE_RL_INIT, TRUE);
     }
+    */
 #endif
 
     if (!btm_ble_topology_check(BTM_BLE_STATE_INIT)) {
@@ -884,7 +914,7 @@ void l2c_link_processs_ble_num_bufs (UINT16 num_lm_ble_bufs)
         num_lm_ble_bufs = L2C_DEF_NUM_BLE_BUF_SHARED;
         l2cb.num_lm_acl_bufs -= L2C_DEF_NUM_BLE_BUF_SHARED;
     }
-    L2CAP_TRACE_DEBUG("#####################################num_lm_ble_bufs = %d",num_lm_ble_bufs);
+    L2CAP_TRACE_DEBUG("num_lm_ble_bufs = %d",num_lm_ble_bufs);
     l2cb.num_lm_ble_bufs = l2cb.controller_le_xmit_window = num_lm_ble_bufs;
 }
 
@@ -1025,10 +1055,16 @@ void l2cble_process_rc_param_request_evt(UINT16 handle, UINT16 int_min, UINT16 i
         if ((p_lcb->conn_update_mask & L2C_BLE_CONN_UPDATE_DISABLE) == 0) {
             p_lcb->conn_update_mask |= L2C_BLE_UPDATE_PENDING;
             btsnd_hcic_ble_rc_param_req_reply(handle, int_min, int_max, latency, timeout, 0, 0);
-        } else {
-            L2CAP_TRACE_EVENT ("L2CAP - LE - update currently disabled");
-            p_lcb->conn_update_mask |= L2C_BLE_NEW_CONN_PARAM;
-            btsnd_hcic_ble_rc_param_req_neg_reply (handle, HCI_ERR_UNACCEPT_CONN_INTERVAL);
+        }else {
+            /* always accept connection parameters request which is sent by itself */
+            if (int_max == BTM_BLE_CONN_INT_MIN) {
+                p_lcb->conn_update_mask |= L2C_BLE_UPDATE_PENDING;
+                btsnd_hcic_ble_rc_param_req_reply(handle, int_min, int_max, latency, timeout, 0, 0);
+            }else {
+                L2CAP_TRACE_EVENT ("L2CAP - LE - update currently disabled");
+                p_lcb->conn_update_mask |= L2C_BLE_NEW_CONN_PARAM;
+                btsnd_hcic_ble_rc_param_req_neg_reply (handle, HCI_ERR_UNACCEPT_CONN_INTERVAL);
+            }
         }
 
     } else {

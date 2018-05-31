@@ -19,17 +19,17 @@
 #include <stdio.h>
 
 
-#include "bt_target.h"
-#include "bt_trace.h"
-#include "bt_types.h"
-#include "gatt_api.h"
-#include "bta_api.h"
-#include "bta_gatt_api.h"
+#include "common/bt_target.h"
+#include "common/bt_trace.h"
+#include "stack/bt_types.h"
+#include "stack/gatt_api.h"
+#include "bta/bta_api.h"
+#include "bta/bta_gatt_api.h"
 #include "bta_gatts_int.h"
 
 #include "btc_blufi_prf.h"
-#include "btc_task.h"
-#include "btc_manage.h"
+#include "btc/btc_task.h"
+#include "btc/btc_manage.h"
 
 #include "blufi_int.h"
 
@@ -106,8 +106,14 @@ void btc_blufi_protocol_handler(uint8_t type, uint8_t *data, int len)
             msg.act = ESP_BLUFI_EVENT_RECV_SLAVE_DISCONNECT_BLE;
             btc_transfer_context(&msg, NULL, 0, NULL);
             break;
+        case BLUFI_TYPE_CTRL_SUBTYPE_GET_WIFI_LIST:
+            msg.sig = BTC_SIG_API_CB;
+            msg.pid = BTC_PID_BLUFI;
+            msg.act = ESP_BLUFI_EVENT_GET_WIFI_LIST;
+            btc_transfer_context(&msg, NULL, 0, NULL);
+            break;
         default:
-            LOG_ERROR("%s Unkown Ctrl pkt %02x\n", __func__, type);
+            BTC_TRACE_ERROR("%s Unkown Ctrl pkt %02x\n", __func__, type);
             break;
         }
         break;
@@ -245,8 +251,16 @@ void btc_blufi_protocol_handler(uint8_t type, uint8_t *data, int len)
 
             btc_transfer_context(&msg, &param, sizeof(esp_blufi_cb_param_t), btc_blufi_cb_deep_copy);
             break;
+        case BLUFI_TYPE_DATA_SUBTYPE_CUSTOM_DATA:
+            msg.sig = BTC_SIG_API_CB;
+            msg.pid = BTC_PID_BLUFI;
+            msg.act = ESP_BLUFI_EVENT_RECV_CUSTOM_DATA;
+            param.custom_data.data = &data[0];
+            param.custom_data.data_len = len;
+            btc_transfer_context(&msg, &param, sizeof(esp_blufi_cb_param_t), btc_blufi_cb_deep_copy);
+            break;
         default:
-            LOG_ERROR("%s Unkown Ctrl pkt %02x\n", __func__, type);
+            BTC_TRACE_ERROR("%s Unkown Ctrl pkt %02x\n", __func__, type);
             break;
         }
         break;

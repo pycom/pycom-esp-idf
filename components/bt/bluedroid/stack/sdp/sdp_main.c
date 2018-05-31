@@ -26,19 +26,19 @@
 #include <string.h>
 //#include <stdio.h>
 
-#include "bt_target.h"
-#include "allocator.h"
-#include "l2cdefs.h"
-#include "hcidefs.h"
-#include "hcimsgs.h"
+#include "common/bt_target.h"
+#include "osi/allocator.h"
+#include "stack/l2cdefs.h"
+#include "stack/hcidefs.h"
+#include "stack/hcimsgs.h"
 
-#include "l2c_api.h"
-#include "l2cdefs.h"
+#include "stack/l2c_api.h"
+#include "stack/l2cdefs.h"
 
-#include "btu.h"
-#include "btm_api.h"
+#include "stack/btu.h"
+#include "stack/btm_api.h"
 
-#include "sdp_api.h"
+#include "stack/sdp_api.h"
 #include "sdpint.h"
 
 #if (SDP_INCLUDED == TRUE)
@@ -47,6 +47,8 @@
 /********************************************************************************/
 #if SDP_DYNAMIC_MEMORY == FALSE
 tSDP_CB  sdp_cb;
+#else
+tSDP_CB  *sdp_cb_ptr;
 #endif
 
 /********************************************************************************/
@@ -79,6 +81,9 @@ static void sdp_disconnect_cfm (UINT16 l2cap_cid, UINT16 result);
 *******************************************************************************/
 void sdp_init (void)
 {
+#if SDP_DYNAMIC_MEMORY
+    sdp_cb_ptr = (tSDP_CB *)osi_malloc(sizeof(tSDP_CB));
+#endif /* #if SDP_DYNAMIC_MEMORY */
     /* Clears all structures and local SDP database (if Server is enabled) */
     memset (&sdp_cb, 0, sizeof (tSDP_CB));
 
@@ -131,6 +136,14 @@ void sdp_init (void)
     if (!L2CA_Register (SDP_PSM, &sdp_cb.reg_info)) {
         SDP_TRACE_ERROR ("SDP Registration failed\n");
     }
+}
+
+void sdp_deinit (void)
+{
+#if SDP_DYNAMIC_MEMORY
+    osi_free(sdp_cb_ptr);
+    sdp_cb_ptr = NULL;
+#endif /* #if SDP_DYNAMIC_MEMORY */
 }
 
 #if (defined(SDP_DEBUG) && SDP_DEBUG == TRUE)

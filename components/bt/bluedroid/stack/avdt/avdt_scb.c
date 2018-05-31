@@ -24,15 +24,15 @@
  ******************************************************************************/
 
 #include <string.h>
-#include "bt_types.h"
-#include "bt_target.h"
-#include "bt_utils.h"
-#include "avdt_api.h"
-#include "avdtc_api.h"
+#include "stack/bt_types.h"
+#include "common/bt_target.h"
+#include "common/bt_defs.h"
+#include "stack/avdt_api.h"
+#include "stack/avdtc_api.h"
 #include "avdt_int.h"
-#include "btu.h"
-#include "allocator.h"
-#include "fixed_queue.h"
+#include "stack/btu.h"
+#include "osi/allocator.h"
+#include "osi/fixed_queue.h"
 
 #if (defined(AVDT_INCLUDED) && AVDT_INCLUDED == TRUE)
 
@@ -644,7 +644,7 @@ void avdt_scb_dealloc(tAVDT_SCB *p_scb, tAVDT_SCB_EVT *p_data)
     UNUSED(p_data);
 
     AVDT_TRACE_DEBUG("avdt_scb_dealloc hdl=%d\n", avdt_scb_to_hdl(p_scb));
-    btu_stop_timer(&p_scb->timer_entry);
+    btu_free_timer(&p_scb->timer_entry);
 
 #if AVDT_MULTIPLEXING == TRUE
     /* free fragments we're holding, if any; it shouldn't happen */

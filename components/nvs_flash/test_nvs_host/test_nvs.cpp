@@ -17,6 +17,8 @@
 #include "spi_flash_emulation.h"
 #include <sstream>
 #include <iostream>
+#include <unistd.h>
+#include <sys/wait.h>
 
 #define TEST_ESP_ERR(rc, res) CHECK((rc) == (res))
 #define TEST_ESP_OK(rc) CHECK((rc) == ESP_OK)
@@ -132,14 +134,14 @@ TEST_CASE("when writing and erasing, used/erased counts are updated correctly", 
     CHECK(page.getErasedEntryCount() == 1);
     for (size_t i = 0; i < Page::ENTRY_COUNT - 2; ++i) {
         char name[16];
-        snprintf(name, sizeof(name), "i%ld", i);
+        snprintf(name, sizeof(name), "i%ld", (long int)i);
         CHECK(page.writeItem(1, name, i) == ESP_OK);
     }
     CHECK(page.getUsedEntryCount() == Page::ENTRY_COUNT - 1);
     CHECK(page.getErasedEntryCount() == 1);
     for (size_t i = 0; i < Page::ENTRY_COUNT - 2; ++i) {
         char name[16];
-        snprintf(name, sizeof(name), "i%ld", i);
+        snprintf(name, sizeof(name), "i%ld", (long int)i);
         CHECK(page.eraseItem(1, itemTypeOf<size_t>(), name) == ESP_OK);
     }
     CHECK(page.getUsedEntryCount() == 1);
@@ -153,7 +155,7 @@ TEST_CASE("when page is full, adding an element fails", "[nvs]")
     CHECK(page.load(0) == ESP_OK);
     for (size_t i = 0; i < Page::ENTRY_COUNT; ++i) {
         char name[16];
-        snprintf(name, sizeof(name), "i%ld", i);
+        snprintf(name, sizeof(name), "i%ld", (long int)i);
         CHECK(page.writeItem(1, name, i) == ESP_OK);
     }
     CHECK(page.writeItem(1, "foo", 64UL) == ESP_ERR_NVS_PAGE_FULL);
@@ -257,6 +259,25 @@ TEST_CASE("Page validates blob size", "[nvs]")
     // Should fail as well
     TEST_ESP_ERR(page.writeItem(1, ItemType::BLOB, "2", buf, Page::BLOB_MAX_SIZE + 1), ESP_ERR_NVS_VALUE_TOO_LONG);
     TEST_ESP_OK(page.writeItem(1, ItemType::BLOB, "2", buf, Page::BLOB_MAX_SIZE));
+}
+
+TEST_CASE("Page handles invalid CRC of variable length items", "[nvs][cur]")
+{
+    SpiFlashEmulator emu(4);
+    {
+        Page page;
+        TEST_ESP_OK(page.load(0));
+        char buf[128] = {0};
+        TEST_ESP_OK(page.writeItem(1, ItemType::BLOB, "1", buf, sizeof(buf)));
+    }
+    // corrupt header of the item (64 is the offset of the first item in page)
+    uint32_t overwrite_buf = 0;
+    emu.write(64, &overwrite_buf, 4);
+    // load page again
+    {
+        Page page;
+        TEST_ESP_OK(page.load(0));
+    }
 }
 
 TEST_CASE("can init PageManager in empty flash", "[nvs]")
@@ -701,9 +722,16 @@ TEST_CASE("can init storage from flash with random contents", "[nvs]")
 }
 
 
-TEST_CASE("nvs api tests, starting with random data in flash", "[nvs][.][long]")
+TEST_CASE("nvs api tests, starting with random data in flash", "[nvs][long]")
 {
-    for (size_t count = 0; count < 10000; ++count) {
+    const size_t testIters = 3000;
+    int lastPercent = -1;
+    for (size_t count = 0; count < testIters; ++count) {
+        int percentDone = (int) (count * 100 / testIters);
+        if (percentDone != lastPercent) {
+            lastPercent = percentDone;
+            printf("%d%%\n", percentDone);
+        }
         SpiFlashEmulator emu(10);
         emu.randomize(static_cast<uint32_t>(count));
         
@@ -958,7 +986,7 @@ TEST_CASE("monkey test", "[nvs][monkey]")
     s_perf << "Monkey test: nErase=" << emu.getEraseOps() << " nWrite=" << emu.getWriteOps() << std::endl;
 }
 
-TEST_CASE("test recovery from sudden poweroff", "[.][long][nvs][recovery][monkey]")
+TEST_CASE("test recovery from sudden poweroff", "[long][nvs][recovery][monkey]")
 {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -1123,7 +1151,7 @@ TEST_CASE("crc errors in item header are handled", "[nvs]")
     // add more items to make the page full
     for (size_t i = 0; i < Page::ENTRY_COUNT; ++i) {
         char item_name[Item::MAX_KEY_LENGTH + 1];
-        snprintf(item_name, sizeof(item_name), "item_%ld", i);
+        snprintf(item_name, sizeof(item_name), "item_%ld", (long int)i);
         TEST_ESP_OK(storage.writeItem(1, item_name, static_cast<uint32_t>(i)));
     }
 
@@ -1244,6 +1272,282 @@ TEST_CASE("multiple partitions access check", "[nvs]")
     TEST_ESP_OK( nvs_get_i32(handle2, "foo", &v2));
     CHECK(v1 == 0xdeadbeef);
     CHECK(v2 == 0xcafebabe);
+}
+
+TEST_CASE("nvs page selection takes into account free entries also not just erased entries", "[nvs]")
+{
+    const size_t blob_size = Page::BLOB_MAX_SIZE;
+    uint8_t blob[blob_size] = {0};
+    SpiFlashEmulator emu(3);
+    TEST_ESP_OK( nvs_flash_init_custom(NVS_DEFAULT_PART_NAME, 0, 3) );
+    nvs_handle handle;
+    TEST_ESP_OK( nvs_open("test", NVS_READWRITE, &handle) );
+    // Fill first page
+    TEST_ESP_OK( nvs_set_blob(handle, "1a", blob, blob_size/3) );
+    TEST_ESP_OK( nvs_set_blob(handle, "1b", blob, blob_size) );
+    // Fill second page
+    TEST_ESP_OK( nvs_set_blob(handle, "2a", blob, blob_size) );
+    TEST_ESP_OK( nvs_set_blob(handle, "2b", blob, blob_size) );
+
+    // The item below should be able to fit the first page.
+    TEST_ESP_OK( nvs_set_blob(handle, "3a", blob, 4) );
+    TEST_ESP_OK( nvs_commit(handle) );
+    nvs_close(handle);
+}
+
+TEST_CASE("calculate used and free space", "[nvs]")
+{
+    SpiFlashEmulator emu(6);
+    nvs_flash_deinit();
+    TEST_ESP_ERR(nvs_get_stats(NULL, NULL), ESP_ERR_INVALID_ARG);
+    nvs_stats_t stat1;
+    nvs_stats_t stat2;
+    TEST_ESP_ERR(nvs_get_stats(NULL, &stat1), ESP_ERR_NVS_NOT_INITIALIZED);
+    CHECK(stat1.free_entries == 0);
+    CHECK(stat1.namespace_count == 0);
+    CHECK(stat1.total_entries == 0);
+    CHECK(stat1.used_entries == 0);
+
+    nvs_handle handle = 0;
+    size_t h_count_entries;
+    TEST_ESP_ERR(nvs_get_used_entry_count(handle, &h_count_entries), ESP_ERR_NVS_INVALID_HANDLE);
+    CHECK(h_count_entries == 0);
+
+    // init nvs
+    TEST_ESP_OK(nvs_flash_init_custom(NVS_DEFAULT_PART_NAME, 0, 6));
+
+    TEST_ESP_ERR(nvs_get_used_entry_count(handle, &h_count_entries), ESP_ERR_NVS_INVALID_HANDLE);
+    CHECK(h_count_entries == 0);
+
+    Page p;
+    // after erase. empty partition
+    TEST_ESP_OK(nvs_get_stats(NULL, &stat1));
+    CHECK(stat1.free_entries != 0);
+    CHECK(stat1.namespace_count == 0);
+    CHECK(stat1.total_entries == 6 * p.ENTRY_COUNT);
+    CHECK(stat1.used_entries == 0);
+
+    // create namespace test_k1
+    nvs_handle handle_1;
+    TEST_ESP_OK(nvs_open("test_k1", NVS_READWRITE, &handle_1));
+    TEST_ESP_OK(nvs_get_stats(NULL, &stat2));
+    CHECK(stat2.free_entries + 1 == stat1.free_entries);
+    CHECK(stat2.namespace_count == 1);
+    CHECK(stat2.total_entries == stat1.total_entries);
+    CHECK(stat2.used_entries == 1);
+
+    // create pair key-value com
+    TEST_ESP_OK(nvs_set_i32(handle_1, "com", 0x12345678));
+    TEST_ESP_OK(nvs_get_stats(NULL, &stat1));
+    CHECK(stat1.free_entries + 1 == stat2.free_entries);
+    CHECK(stat1.namespace_count == 1);
+    CHECK(stat1.total_entries == stat2.total_entries);
+    CHECK(stat1.used_entries == 2);
+
+    // change value in com
+    TEST_ESP_OK(nvs_set_i32(handle_1, "com", 0x01234567));
+    TEST_ESP_OK(nvs_get_stats(NULL, &stat2));
+    CHECK(stat2.free_entries == stat1.free_entries);
+    CHECK(stat2.namespace_count == 1);
+    CHECK(stat2.total_entries != 0);
+    CHECK(stat2.used_entries == 2);
+
+    // create pair key-value ru
+    TEST_ESP_OK(nvs_set_i32(handle_1, "ru", 0x00FF00FF));
+    TEST_ESP_OK(nvs_get_stats(NULL, &stat1));
+    CHECK(stat1.free_entries + 1 == stat2.free_entries);
+    CHECK(stat1.namespace_count == 1);
+    CHECK(stat1.total_entries != 0);
+    CHECK(stat1.used_entries == 3);
+
+    // amount valid pair in namespace 1
+    size_t h1_count_entries;
+    TEST_ESP_OK(nvs_get_used_entry_count(handle_1, &h1_count_entries));
+    CHECK(h1_count_entries == 2);
+
+    nvs_handle handle_2;
+    // create namespace test_k2
+    TEST_ESP_OK(nvs_open("test_k2", NVS_READWRITE, &handle_2));
+    TEST_ESP_OK(nvs_get_stats(NULL, &stat2));
+    CHECK(stat2.free_entries + 1 == stat1.free_entries);
+    CHECK(stat2.namespace_count == 2);
+    CHECK(stat2.total_entries == stat1.total_entries);
+    CHECK(stat2.used_entries == 4);
+
+    // create pair key-value
+    TEST_ESP_OK(nvs_set_i32(handle_2, "su1", 0x00000001));
+    TEST_ESP_OK(nvs_set_i32(handle_2, "su2", 0x00000002));
+    TEST_ESP_OK(nvs_set_i32(handle_2, "sus", 0x00000003));
+    TEST_ESP_OK(nvs_get_stats(NULL, &stat1));
+    CHECK(stat1.free_entries + 3 == stat2.free_entries);
+    CHECK(stat1.namespace_count == 2);
+    CHECK(stat1.total_entries == stat2.total_entries);
+    CHECK(stat1.used_entries == 7);
+
+    CHECK(stat1.total_entries == (stat1.used_entries + stat1.free_entries));
+
+    // amount valid pair in namespace 2
+    size_t h2_count_entries;
+    TEST_ESP_OK(nvs_get_used_entry_count(handle_2, &h2_count_entries));
+    CHECK(h2_count_entries == 3);
+
+    CHECK(stat1.used_entries == (h1_count_entries + h2_count_entries + stat1.namespace_count));
+
+    nvs_close(handle_1);
+    nvs_close(handle_2);
+
+    size_t temp = h2_count_entries;
+    TEST_ESP_ERR(nvs_get_used_entry_count(handle_1, &h2_count_entries), ESP_ERR_NVS_INVALID_HANDLE);
+    CHECK(h2_count_entries == 0);
+    h2_count_entries = temp;
+    TEST_ESP_ERR(nvs_get_used_entry_count(handle_1, NULL), ESP_ERR_INVALID_ARG);
+
+    nvs_handle handle_3;
+    // create namespace test_k3
+    TEST_ESP_OK(nvs_open("test_k3", NVS_READWRITE, &handle_3));
+    TEST_ESP_OK(nvs_get_stats(NULL, &stat2));
+    CHECK(stat2.free_entries + 1 == stat1.free_entries);
+    CHECK(stat2.namespace_count == 3);
+    CHECK(stat2.total_entries == stat1.total_entries);
+    CHECK(stat2.used_entries == 8);
+
+    // create pair blobs
+    uint32_t blob[12];
+    TEST_ESP_OK(nvs_set_blob(handle_3, "bl1", &blob, sizeof(blob)));
+    TEST_ESP_OK(nvs_get_stats(NULL, &stat1));
+    CHECK(stat1.free_entries + 3 == stat2.free_entries);
+    CHECK(stat1.namespace_count == 3);
+    CHECK(stat1.total_entries == stat2.total_entries);
+    CHECK(stat1.used_entries == 11);
+
+    // amount valid pair in namespace 2
+    size_t h3_count_entries;
+    TEST_ESP_OK(nvs_get_used_entry_count(handle_3, &h3_count_entries));
+    CHECK(h3_count_entries == 3);
+
+    CHECK(stat1.used_entries == (h1_count_entries + h2_count_entries + h3_count_entries + stat1.namespace_count));
+
+    nvs_close(handle_3);
+}
+
+TEST_CASE("Recovery from power-off when the entry being erased is not on active page", "[nvs]")
+{
+    const size_t blob_size = Page::BLOB_MAX_SIZE;
+    size_t read_size = blob_size;
+    uint8_t blob[blob_size] = {0x11};
+    SpiFlashEmulator emu(3);
+    TEST_ESP_OK( nvs_flash_init_custom(NVS_DEFAULT_PART_NAME, 0, 3) );
+    nvs_handle handle;
+    TEST_ESP_OK( nvs_open("test", NVS_READWRITE, &handle) );
+
+    emu.clearStats();
+    emu.failAfter(2 * Page::BLOB_MAX_SIZE/4 + 36);
+    TEST_ESP_OK( nvs_set_blob(handle, "1a", blob, blob_size) );
+    TEST_ESP_OK( nvs_set_blob(handle, "1b", blob, blob_size) );
+
+    TEST_ESP_ERR( nvs_erase_key(handle, "1a"), ESP_ERR_FLASH_OP_FAIL );
+
+    TEST_ESP_OK( nvs_flash_init_custom(NVS_DEFAULT_PART_NAME, 0, 3) );
+
+    /* Check 1a is erased fully*/
+    TEST_ESP_ERR( nvs_get_blob(handle, "1a", blob, &read_size), ESP_ERR_NVS_NOT_FOUND);
+
+    /* Check 2b is still accessible*/
+    TEST_ESP_OK( nvs_get_blob(handle, "1b", blob, &read_size));
+
+    nvs_close(handle);
+}
+
+TEST_CASE("Recovery from power-off when page is being freed.", "[nvs]")
+{
+    const size_t blob_size = (Page::ENTRY_COUNT-3) * Page::ENTRY_SIZE;
+    size_t read_size = blob_size/2;
+    uint8_t blob[blob_size] = {0};
+    SpiFlashEmulator emu(3);
+    TEST_ESP_OK(nvs_flash_init_custom(NVS_DEFAULT_PART_NAME, 0, 3));
+    nvs_handle handle;
+    TEST_ESP_OK(nvs_open("test", NVS_READWRITE, &handle));
+    // Fill first page
+    TEST_ESP_OK(nvs_set_blob(handle, "1a", blob, blob_size/3));
+    TEST_ESP_OK(nvs_set_blob(handle, "1b", blob, blob_size/3));
+    TEST_ESP_OK(nvs_set_blob(handle, "1c", blob, blob_size/4));
+    // Fill second page
+    TEST_ESP_OK(nvs_set_blob(handle, "2a", blob, blob_size/2));
+    TEST_ESP_OK(nvs_set_blob(handle, "2b", blob, blob_size/2));
+
+    TEST_ESP_OK(nvs_erase_key(handle, "1c"));
+
+    emu.clearStats();
+    emu.failAfter(6 * Page::ENTRY_COUNT);
+    TEST_ESP_ERR(nvs_set_blob(handle, "1d", blob, blob_size/4), ESP_ERR_FLASH_OP_FAIL);
+
+    TEST_ESP_OK(nvs_flash_init_custom(NVS_DEFAULT_PART_NAME, 0, 3));
+
+    read_size = blob_size/3;
+    TEST_ESP_OK( nvs_get_blob(handle, "1a", blob, &read_size));
+    TEST_ESP_OK( nvs_get_blob(handle, "1b", blob, &read_size));
+
+    read_size = blob_size /4;
+    TEST_ESP_ERR( nvs_get_blob(handle, "1c", blob, &read_size), ESP_ERR_NVS_NOT_FOUND);
+    TEST_ESP_ERR( nvs_get_blob(handle, "1d", blob, &read_size), ESP_ERR_NVS_NOT_FOUND);
+
+    read_size = blob_size /2;
+    TEST_ESP_OK( nvs_get_blob(handle, "2a", blob, &read_size));
+    TEST_ESP_OK( nvs_get_blob(handle, "2b", blob, &read_size));
+
+    TEST_ESP_OK(nvs_commit(handle));
+    nvs_close(handle);
+}
+
+
+/* Add new tests above */
+/* This test has to be the final one */
+
+TEST_CASE("check partition generation utility", "[nvs_part_gen]")
+{
+    int childpid = fork();
+    if (childpid == 0) {
+        exit(execlp("python", "python",
+                "../nvs_partition_generator/nvs_partition_gen.py",
+                "../nvs_partition_generator/sample.csv",
+                "../nvs_partition_generator/partition.bin", NULL));
+    } else {
+        CHECK(childpid > 0);
+        int status;
+        waitpid(childpid, &status, 0);
+        CHECK(WEXITSTATUS(status) != -1);
+    }
+}
+
+TEST_CASE("read data from partition generated via partition generation utility", "[nvs_part_gen]")
+{
+    SpiFlashEmulator emu("../nvs_partition_generator/partition.bin");
+    nvs_handle handle;
+    TEST_ESP_OK( nvs_flash_init_custom("test", 0, 2) );
+    TEST_ESP_OK( nvs_open_from_partition("test", "dummyNamespace", NVS_READONLY, &handle));
+    uint8_t u8v;
+    TEST_ESP_OK( nvs_get_u8(handle, "dummyU8Key", &u8v));
+    CHECK(u8v == 127);
+    int8_t i8v;
+    TEST_ESP_OK( nvs_get_i8(handle, "dummyI8Key", &i8v));
+    CHECK(i8v == -128);
+    uint16_t u16v;
+    TEST_ESP_OK( nvs_get_u16(handle, "dummyU16Key", &u16v));
+    CHECK(u16v == 32768);
+    uint32_t u32v;
+    TEST_ESP_OK( nvs_get_u32(handle, "dummyU32Key", &u32v));
+    CHECK(u32v == 4294967295);
+    int32_t i32v;
+    TEST_ESP_OK( nvs_get_i32(handle, "dummyI32Key", &i32v));
+    CHECK(i32v == -2147483648);
+    char buf[64] = {0};
+    size_t buflen = 64;
+    TEST_ESP_OK( nvs_get_str(handle, "dummyStringKey", buf, &buflen));
+    CHECK(strncmp(buf, "0A:0B:0C:0D:0E:0F", buflen) == 0);
+    buflen = 64;
+    uint8_t hexdata[] = {0x01, 0x02, 0x03, 0xab, 0xcd, 0xef};
+    TEST_ESP_OK( nvs_get_blob(handle, "dummyHex2BinKey", buf, &buflen));
+    CHECK(memcmp(buf, hexdata, buflen) == 0);
 }
 
 TEST_CASE("dump all performance data", "[nvs]")

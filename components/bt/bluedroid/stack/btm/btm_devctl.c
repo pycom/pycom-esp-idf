@@ -27,17 +27,17 @@
 #include <string.h>
 //#include <stdio.h>
 #include <stddef.h>
-#include "bt_trace.h"
-#include "bt_types.h"
+#include "common/bt_trace.h"
+#include "stack/bt_types.h"
 //#include "bt_utils.h"
 #include "btm_int.h"
-#include "btu.h"
-#include "controller.h"
-#include "hci_layer.h"
-#include "hcimsgs.h"
+#include "stack/btu.h"
+#include "device/controller.h"
+#include "hci/hci_layer.h"
+#include "stack/hcimsgs.h"
 #include "l2c_int.h"
 //#include "btcore/include/module.h"
-//#include "osi/include/thread.h"
+//#include "osi/include/osi/thread.h"
 
 #if BLE_INCLUDED == TRUE
 #include "gatt_int.h"
@@ -170,6 +170,9 @@ static void reset_complete(void)
     btm_pm_reset();
 
     l2c_link_processs_num_bufs(controller->get_acl_buffer_count_classic());
+#if BTM_SCO_HCI_INCLUDED == TRUE
+    btm_sco_process_num_bufs(controller->get_sco_buffer_count());
+#endif
 #if (BLE_INCLUDED == TRUE)
 
 #if (defined BLE_PRIVACY_SPT && BLE_PRIVACY_SPT == TRUE)
@@ -533,7 +536,7 @@ void btm_read_local_name_complete (UINT8 *p, UINT16 evt_len)
     UINT8           status;
     UNUSED(evt_len);
 
-    btu_stop_timer (&btm_cb.devcb.rln_timer);
+    btu_free_timer (&btm_cb.devcb.rln_timer);
 
     /* If there was a callback address for read local name, call it */
     btm_cb.devcb.p_rln_cmpl_cb = NULL;
@@ -804,7 +807,7 @@ tBTM_STATUS BTM_WritePageTimeout(UINT16 timeout)
 ** Function         BTM_WriteVoiceSettings
 **
 ** Description      Send HCI Write Voice Settings command.
-**                  See hcidefs.h for settings bitmask values.
+**                  See stack/hcidefs.h for settings bitmask values.
 **
 ** Returns
 **      BTM_SUCCESS         Command sent.

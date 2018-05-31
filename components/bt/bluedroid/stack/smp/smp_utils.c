@@ -21,20 +21,20 @@
  *  This file contains functions for the SMP L2CAP utility functions
  *
  ******************************************************************************/
-#include "bt_target.h"
+#include "common/bt_target.h"
 
 #if SMP_INCLUDED == TRUE
 
-#include "bt_types.h"
+#include "stack/bt_types.h"
 //#include "bt_utils.h"
 #include <string.h>
 //#include <ctype.h>
-#include "hcidefs.h"
-#include "btm_ble_api.h"
-#include "l2c_api.h"
+#include "stack/hcidefs.h"
+#include "stack/btm_ble_api.h"
+#include "stack/l2c_api.h"
 #include "l2c_int.h"
 #include "smp_int.h"
-#include "controller.h"
+#include "device/controller.h"
 #include "btm_int.h"
 
 #define SMP_PAIRING_REQ_SIZE    7
@@ -951,6 +951,7 @@ void smp_proc_pairing_cmpl(tSMP_CB *p_cb)
     tSMP_EVT_DATA   evt_data = {0};
     tSMP_CALLBACK   *p_callback = p_cb->p_callback;
     BD_ADDR         pairing_bda;
+    tBTM_SEC_DEV_REC    *p_rec;
 
     SMP_TRACE_DEBUG ("smp_proc_pairing_cmpl \n");
 
@@ -974,6 +975,15 @@ void smp_proc_pairing_cmpl(tSMP_CB *p_cb)
 
     memcpy (pairing_bda, p_cb->pairing_bda, BD_ADDR_LEN);
 
+    if (p_cb->role == HCI_ROLE_SLAVE) {
+        p_rec = btm_find_dev (p_cb->pairing_bda);
+        if(p_rec && p_rec->ble.skip_update_conn_param) {
+            //clear flag
+            p_rec->ble.skip_update_conn_param = false;
+        } else {
+            L2CA_EnableUpdateBleConnParams(p_cb->pairing_bda, TRUE);
+        }
+    }
     smp_reset_control_value(p_cb);
 
     if (p_callback) {

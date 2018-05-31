@@ -1,16 +1,10 @@
-// Copyright 2015-2017 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+/*
+   This example code is in the Public Domain (or CC0 licensed, at your option.)
 
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+   Unless required by applicable law or agreed to in writing, this
+   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied.
+*/
 
 
 
@@ -28,7 +22,6 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include "controller.h"
 
 #include "esp_gap_ble_api.h"
 #include "esp_gattc_api.h"
@@ -79,6 +72,6 @@ typedef struct {
 /* Constant part of iBeacon data */
 extern esp_ble_ibeacon_head_t ibeacon_common_head;
 
-BOOLEAN esp_ble_is_ibeacon_packet (uint8_t *adv_data, uint8_t adv_data_len);
+bool esp_ble_is_ibeacon_packet (uint8_t *adv_data, uint8_t adv_data_len);
 
 esp_err_t esp_ble_config_ibeacon_data (esp_ble_ibeacon_vendor_t *vendor_config, esp_ble_ibeacon_t *ibeacon_adv_data);

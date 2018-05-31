@@ -1,16 +1,10 @@
-// Copyright 2015-2017 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+/*
+   This example code is in the Public Domain (or CC0 licensed, at your option.)
 
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+   Unless required by applicable law or agreed to in writing, this
+   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied.
+*/
 
 
 #include "freertos/FreeRTOS.h"
@@ -467,6 +461,7 @@ static void spp_task_init(void)
 
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
+    esp_err_t err;
     ESP_LOGE(GATTS_TABLE_TAG, "GAP_EVT, event %d\n", event);
 
     switch (event) {
@@ -475,8 +470,8 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
         break;
     case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
         //advertising start complete event to indicate advertising start successfully or failed
-        if(param->adv_start_cmpl.status != ESP_BT_STATUS_SUCCESS) {
-            ESP_LOGE(GATTS_TABLE_TAG, "Advertising start failed\n");
+        if((err = param->adv_start_cmpl.status) != ESP_BT_STATUS_SUCCESS) {
+            ESP_LOGE(GATTS_TABLE_TAG, "Advertising start failed: %s\n", esp_err_to_name(err));
         }
         break;
     default:
@@ -489,7 +484,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
     esp_ble_gatts_cb_param_t *p_data = (esp_ble_gatts_cb_param_t *) param;
     uint8_t res = 0xff;
 
-    ESP_LOGE(GATTS_TABLE_TAG, "event = %x\n",event);
+    ESP_LOGI(GATTS_TABLE_TAG, "event = %x\n",event);
     switch (event) {
     	case ESP_GATTS_REG_EVT:
     	    ESP_LOGI(GATTS_TABLE_TAG, "%s %d\n", __func__, __LINE__);
@@ -639,7 +634,7 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
             return;
         }
     }
-	
+
     do {
         int idx;
         for (idx = 0; idx < SPP_PROFILE_NUM; idx++) {
@@ -670,25 +665,25 @@ void app_main()
 
     ret = esp_bt_controller_init(&bt_cfg);
     if (ret) {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed\n", __func__);
+        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
     ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
     if (ret) {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed\n", __func__);
+        ESP_LOGE(GATTS_TABLE_TAG, "%s enable controller failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
     ESP_LOGI(GATTS_TABLE_TAG, "%s init bluetooth\n", __func__);
     ret = esp_bluedroid_init();
     if (ret) {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s init bluetooth failed\n", __func__);
+        ESP_LOGE(GATTS_TABLE_TAG, "%s init bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
     ret = esp_bluedroid_enable();
     if (ret) {
-        ESP_LOGE(GATTS_TABLE_TAG, "%s enable bluetooth failed\n", __func__);
+        ESP_LOGE(GATTS_TABLE_TAG, "%s enable bluetooth failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 

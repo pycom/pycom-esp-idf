@@ -24,16 +24,16 @@
  ******************************************************************************/
 #include <string.h>
 
-#include "bt_target.h"
-#include "rfcdefs.h"
-#include "port_api.h"
+#include "common/bt_target.h"
+#include "stack/rfcdefs.h"
+#include "stack/port_api.h"
 #include "btm_int.h"
-#include "btm_api.h"
+#include "stack/btm_api.h"
 #include "port_int.h"
 #include "rfc_int.h"
-#include "bt_defs.h"
-#include "mutex.h"
-#include "allocator.h"
+#include "common/bt_defs.h"
+#include "osi/mutex.h"
+#include "osi/allocator.h"
 #if (defined RFCOMM_INCLUDED && RFCOMM_INCLUDED == TRUE)
 /*
 ** Local function definitions
@@ -833,7 +833,7 @@ void PORT_DataInd (tRFC_MCB *p_mcb, UINT8 dlci, BT_HDR *p_buf)
         //osi_free (p_buf);
         return;
     } else {
-        RFCOMM_TRACE_ERROR("PORT_DataInd, p_port:%p, p_data_co_callback is null", p_port);
+        RFCOMM_TRACE_DEBUG("PORT_DataInd, p_port:%p, p_data_co_callback is null", p_port);
     }
     /* If client registered callback we can just deliver receive data */
     if (p_port->p_data_callback) {

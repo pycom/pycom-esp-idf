@@ -26,28 +26,30 @@
 // #include <assert.h>
 #include <string.h>
 
-#include "alarm.h"
-#include "thread.h"
-#include "btm_api.h"
-#include "bta_api.h"
-#include "bta_sys.h"
+#include "osi/alarm.h"
+#include "osi/thread.h"
+#include "stack/btm_api.h"
+#include "bta/bta_api.h"
+#include "bta/bta_sys.h"
 #include "bta_sys_int.h"
 
-#include "fixed_queue.h"
-#include "hash_map.h"
-#include "osi.h"
-#include "hash_functions.h"
+#include "osi/fixed_queue.h"
+#include "osi/hash_map.h"
+#include "osi/osi.h"
+#include "osi/hash_functions.h"
 #if( defined BTA_AR_INCLUDED ) && (BTA_AR_INCLUDED == TRUE)
-#include "bta_ar_api.h"
+#include "bta/bta_ar_api.h"
 #endif
-#include "utl.h"
-#include "allocator.h"
-#include "mutex.h"
+#include "bta/utl.h"
+#include "osi/allocator.h"
+#include "osi/mutex.h"
 
 
 /* system manager control block definition */
 #if BTA_DYNAMIC_MEMORY == FALSE
 tBTA_SYS_CB bta_sys_cb;
+#else
+tBTA_SYS_CB *bta_sys_cb_ptr;
 #endif
 
 static hash_map_t *bta_alarm_hash_map;
@@ -57,8 +59,8 @@ static osi_mutex_t bta_alarm_lock;
 
 /* trace level */
 /* TODO Bluedroid - Hard-coded trace levels -  Needs to be configurable */
-UINT8 appl_trace_level = BT_TRACE_LEVEL_WARNING; //APPL_INITIAL_TRACE_LEVEL;
-UINT8 btif_trace_level = BT_TRACE_LEVEL_WARNING;
+UINT8 appl_trace_level = APPL_INITIAL_TRACE_LEVEL;
+UINT8 btif_trace_level = BTIF_INITIAL_TRACE_LEVEL;
 
 void btu_bta_alarm_ready(fixed_queue_t *queue);
 
@@ -73,7 +75,7 @@ typedef void (*tBTA_SYS_ACTION)(tBTA_SYS_HW_MSG *p_data);
 
 /* action function list */
 const tBTA_SYS_ACTION bta_sys_action[] = {
-    /* device manager local device API events - cf bta_sys.h for events */
+    /* device manager local device API events - cf bta/bta_sys.h for events */
     bta_sys_hw_api_enable,             /* 0  BTA_SYS_HW_API_ENABLE_EVT    */
     bta_sys_hw_evt_enabled,           /* 1  BTA_SYS_HW_EVT_ENABLED_EVT */
     bta_sys_hw_evt_stack_enabled,       /* 2  BTA_SYS_HW_EVT_STACK_ENABLED_EVT */
@@ -190,6 +192,9 @@ void bta_sys_free(void)
 {
     hash_map_free(bta_alarm_hash_map);
     osi_mutex_free(&bta_alarm_lock);
+#if BTA_DYNAMIC_MEMORY
+    FREE_AND_RESET(bta_sys_cb_ptr);
+#endif
 }
 
 /*******************************************************************************
@@ -602,7 +607,7 @@ void bta_sys_start_timer(TIMER_LIST_ENT *p_tle, UINT16 type, INT32 timeout_ms)
 
     osi_alarm_t *alarm = hash_map_get(bta_alarm_hash_map, p_tle);
     if (alarm == NULL) {
-        LOG_ERROR("%s unable to create alarm.", __func__);
+        APPL_TRACE_ERROR("%s unable to create alarm.", __func__);
         return;
     }
 
@@ -646,10 +651,32 @@ void bta_sys_stop_timer(TIMER_LIST_ENT *p_tle)
 
     osi_alarm_t *alarm = hash_map_get(bta_alarm_hash_map, p_tle);
     if (alarm == NULL) {
-        LOG_DEBUG("%s expected alarm was not in bta alarm hash map.", __func__);
+        APPL_TRACE_DEBUG("%s expected alarm was not in bta alarm hash map.", __func__);
         return;
     }
     osi_alarm_cancel(alarm);
+}
+
+/*******************************************************************************
+**
+** Function         bta_sys_free_timer
+**
+** Description      Stop and free a BTA timer.
+**
+** Returns          void
+**
+*******************************************************************************/
+void bta_sys_free_timer(TIMER_LIST_ENT *p_tle)
+{
+    assert(p_tle != NULL);
+
+    osi_alarm_t *alarm = hash_map_get(bta_alarm_hash_map, p_tle);
+    if (alarm == NULL) {
+        APPL_TRACE_DEBUG("%s expected alarm was not in bta alarm hash map.", __func__);
+        return;
+    }
+    osi_alarm_cancel(alarm);
+    hash_map_erase(bta_alarm_hash_map, p_tle);
 }
 
 /*******************************************************************************

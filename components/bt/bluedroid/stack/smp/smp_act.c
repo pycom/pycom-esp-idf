@@ -17,10 +17,10 @@
  ******************************************************************************/
 
 #include <string.h>
-#include "interop.h"
-#include "bt_target.h"
+#include "device/interop.h"
+#include "common/bt_target.h"
 #include "btm_int.h"
-#include "l2c_api.h"
+#include "stack/l2c_api.h"
 #include "smp_int.h"
 //#include "utils/include/bt_utils.h"
 
@@ -58,7 +58,7 @@ static bool lmp_version_below(BD_ADDR bda, uint8_t version)
         SMP_TRACE_WARNING("%s cannot retrieve LMP version...", __func__);
         return false;
     }
-    SMP_TRACE_WARNING("%s LMP version %d < %d", __func__, acl->lmp_version, version);
+    SMP_TRACE_DEBUG("%s LMP version %d < %d", __func__, acl->lmp_version, version);
     return acl->lmp_version < version;
 }
 
@@ -1389,6 +1389,11 @@ void smp_idle_terminate(tSMP_CB *p_cb, tSMP_INT_DATA *p_data)
 *******************************************************************************/
 void smp_fast_conn_param(tSMP_CB *p_cb, tSMP_INT_DATA *p_data)
 {
+    tBTM_SEC_DEV_REC    *p_rec = btm_find_dev (p_cb->pairing_bda);
+    if(p_rec && p_rec->ble.skip_update_conn_param) {
+        //do nothing
+        return;
+    }
     /* Disable L2CAP connection parameter updates while bonding since
        some peripherals are not able to revert to fast connection parameters
        during the start of service discovery. Connection paramter updates

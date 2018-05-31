@@ -23,16 +23,18 @@
  *
  ******************************************************************************/
 
-#include "bt_types.h"
-#include "bt_target.h"
+#include "stack/bt_types.h"
+#include "common/bt_target.h"
 #include <string.h>
 #include "btm_int.h"
-#include "allocator.h"
+#include "osi/allocator.h"
 
 /* Global BTM control block structure
 */
 #if BTM_DYNAMIC_MEMORY == FALSE
 tBTM_CB  btm_cb;
+#else
+tBTM_CB  *btm_cb_ptr;
 #endif
 
 /*******************************************************************************
@@ -49,9 +51,11 @@ tBTM_CB  btm_cb;
 *******************************************************************************/
 void btm_init (void)
 {
+#if BTM_DYNAMIC_MEMORY
+    btm_cb_ptr = (tBTM_CB *)osi_malloc(sizeof(tBTM_CB));
+#endif /* #if BTM_DYNAMIC_MEMORY */
     /* All fields are cleared; nonzero fields are reinitialized in appropriate function */
     memset(&btm_cb, 0, sizeof(tBTM_CB));
-
     btm_cb.page_queue = fixed_queue_new(SIZE_MAX);
     btm_cb.sec_pending_q = fixed_queue_new(SIZE_MAX);
 
@@ -87,4 +91,7 @@ void btm_free(void)
 {
     fixed_queue_free(btm_cb.page_queue, osi_free_func);
     fixed_queue_free(btm_cb.sec_pending_q, osi_free_func);
+#if BTM_DYNAMIC_MEMORY
+    FREE_AND_RESET(btm_cb_ptr);
+#endif
 }

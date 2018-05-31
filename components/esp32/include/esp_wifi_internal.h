@@ -40,6 +40,11 @@
 extern "C" {
 #endif
 
+typedef struct {
+    QueueHandle_t handle; /**< FreeRTOS queue handler */
+    void *storage;        /**< storage for FreeRTOS queue */
+} wifi_static_queue_t;
+
 /**
  * @brief Initialize Wi-Fi Driver
  *     Alloc resource for WiFi driver, such as WiFi control structure, RX/TX buffer,
@@ -55,7 +60,7 @@ extern "C" {
  *
  * @return
  *    - ESP_OK: succeed
- *    - ESP_ERR_WIFI_NO_MEM: out of memory
+ *    - ESP_ERR_NO_MEM: out of memory
  *    - others: refer to error code esp_err.h
  */
 esp_err_t esp_wifi_init_internal(const wifi_init_config_t *config);
@@ -81,7 +86,7 @@ void esp_wifi_internal_free_rx_buffer(void* buffer);
   *
   * @param  wifi_interface_t wifi_if : wifi interface id
   * @param  void *buffer : the buffer to be tansmit
-  * @param  u16_t len : the length of buffer
+  * @param  uint16_t len : the length of buffer
   *
   * @return
   *    - ERR_OK  : Successfully transmit the buffer to wifi driver
@@ -89,7 +94,7 @@ void esp_wifi_internal_free_rx_buffer(void* buffer);
   *    - ERR_IF : WiFi driver error
   *    - ERR_ARG : Invalid argument
   */
-int esp_wifi_internal_tx(wifi_interface_t wifi_if, void *buffer, u16_t len);
+int esp_wifi_internal_tx(wifi_interface_t wifi_if, void *buffer, uint16_t len);
 
 /**
   * @brief     The WiFi RX callback function

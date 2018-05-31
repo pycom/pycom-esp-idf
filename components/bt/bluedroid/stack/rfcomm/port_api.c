@@ -23,17 +23,17 @@
  ******************************************************************************/
 
 #include <string.h>
-#include "bt_target.h"
-#include "rfcdefs.h"
-#include "port_api.h"
+#include "common/bt_target.h"
+#include "stack/rfcdefs.h"
+#include "stack/port_api.h"
 #include "port_int.h"
 #include "btm_int.h"
-#include "btm_api.h"
+#include "stack/btm_api.h"
 #include "rfc_int.h"
-#include "l2c_api.h"
-#include "sdp_api.h"
-#include "allocator.h"
-#include "mutex.h"
+#include "stack/l2c_api.h"
+#include "stack/sdp_api.h"
+#include "osi/allocator.h"
+#include "osi/mutex.h"
 
 #if (defined RFCOMM_INCLUDED && RFCOMM_INCLUDED == TRUE)
 /* duration of break in 200ms units */
@@ -1731,6 +1731,9 @@ int PORT_Test (UINT16 handle, UINT8 *p_data, UINT16 len)
 *******************************************************************************/
 void RFCOMM_Init (void)
 {
+#if (RFC_DYNAMIC_MEMORY)
+    rfc_cb_ptr = (tRFC_CB *)osi_malloc(sizeof(tRFC_CB));
+#endif /* #if (RFC_DYNAMIC_MEMORY) */
     memset (&rfc_cb, 0, sizeof (tRFC_CB));  /* Init RFCOMM control block */
 
     rfc_cb.rfc.last_mux = MAX_BD_CONNECTIONS;

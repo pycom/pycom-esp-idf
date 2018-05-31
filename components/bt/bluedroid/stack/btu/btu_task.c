@@ -18,27 +18,27 @@
 #include <string.h>
 
 
-#include "alarm.h"
-#include "thread.h"
-#include "bt_target.h"
-#include "bt_trace.h"
-#include "bt_types.h"
-#include "allocator.h"
-#include "mutex.h"
-#include "btm_api.h"
+#include "osi/alarm.h"
+#include "osi/thread.h"
+#include "common/bt_target.h"
+#include "common/bt_trace.h"
+#include "stack/bt_types.h"
+#include "osi/allocator.h"
+#include "osi/mutex.h"
+#include "stack/btm_api.h"
 #include "btm_int.h"
-#include "btu.h"
-#include "hash_map.h"
-#include "hcimsgs.h"
+#include "stack/btu.h"
+#include "osi/hash_map.h"
+#include "stack/hcimsgs.h"
 #include "l2c_int.h"
-#include "osi.h"
+#include "osi/osi.h"
 #if (defined(SDP_INCLUDED) && SDP_INCLUDED == TRUE)
 #include "sdpint.h"
 #endif
 
 #if (defined(RFCOMM_INCLUDED) && RFCOMM_INCLUDED == TRUE)
-#include "port_api.h"
-#include "port_ext.h"
+#include "stack/port_api.h"
+#include "stack/port_ext.h"
 #endif
 
 #if (defined(GAP_INCLUDED) && GAP_INCLUDED == TRUE)
@@ -70,7 +70,7 @@ extern void avdt_rcv_sync_info (BT_HDR *p_buf);
 #endif
 
 #if (defined(BTA_INCLUDED) && BTA_INCLUDED == TRUE)
-#include "bta_sys.h"
+#include "bta/bta_sys.h"
 #endif
 
 #if (BLE_INCLUDED == TRUE)
@@ -86,11 +86,14 @@ extern void avdt_rcv_sync_info (BT_HDR *p_buf);
 //#endif
 
 extern void BTE_InitStack(void);
+extern void BTE_DeinitStack(void);
 
 /* Define BTU storage area
 */
 #if BTU_DYNAMIC_MEMORY == FALSE
 tBTU_CB  btu_cb;
+#else
+tBTU_CB  *btu_cb_ptr;
 #endif
 
 extern hash_map_t *btu_general_alarm_hash_map;
@@ -253,7 +256,7 @@ void btu_task_thread_handler(void *arg)
                     }
                     default:
                         // FAIL
-                        LOG_ERROR("Received unexpected oneshot timer event:0x%x\n", p_tle->event);
+                        HCI_TRACE_ERROR("Received unexpected oneshot timer event:0x%x\n", p_tle->event);
                         break;
                 }
                 break;
@@ -277,7 +280,7 @@ task_post_status_t btu_task_post(uint32_t sig, void *param, task_post_t timeout)
     evt.par = param;
 
     if (xQueueSend(xBtuQueue, &evt, timeout) != pdTRUE) {
-        LOG_ERROR("xBtuQueue failed\n");
+        HCI_TRACE_ERROR("xBtuQueue failed\n");
         return TASK_POST_FAIL;
     }
 
@@ -312,6 +315,7 @@ void btu_task_shut_down(void)
 #if (defined(BTA_INCLUDED) && BTA_INCLUDED == TRUE)
     bta_sys_free();
 #endif
+    BTE_DeinitStack();
 
     btu_free_core();
 }
@@ -458,7 +462,7 @@ void btu_start_timer(TIMER_LIST_ENT *p_tle, UINT16 type, UINT32 timeout_sec)
 
     alarm = hash_map_get(btu_general_alarm_hash_map, p_tle);
     if (alarm == NULL) {
-        LOG_ERROR("%s Unable to create alarm", __func__);
+        HCI_TRACE_ERROR("%s Unable to create alarm", __func__);
         return;
     }
     osi_alarm_cancel(alarm);
@@ -492,7 +496,7 @@ void btu_stop_timer(TIMER_LIST_ENT *p_tle)
     // Get the alarm for the timer list entry.
     osi_alarm_t *alarm = hash_map_get(btu_general_alarm_hash_map, p_tle);
     if (alarm == NULL) {
-        LOG_WARN("%s Unable to find expected alarm in hashmap", __func__);
+        HCI_TRACE_WARNING("%s Unable to find expected alarm in hashmap", __func__);
         return;
     }
     osi_alarm_cancel(alarm);
@@ -511,15 +515,12 @@ void btu_free_timer(TIMER_LIST_ENT *p_tle)
 {
     assert(p_tle != NULL);
 
-    if (p_tle->in_use == FALSE) {
-        return;
-    }
     p_tle->in_use = FALSE;
 
     // Get the alarm for the timer list entry.
     osi_alarm_t *alarm = hash_map_get(btu_general_alarm_hash_map, p_tle);
     if (alarm == NULL) {
-        LOG_WARN("%s Unable to find expected alarm in hashmap", __func__);
+        HCI_TRACE_DEBUG("%s Unable to find expected alarm in hashmap", __func__);
         return;
     }
     osi_alarm_cancel(alarm);
@@ -575,7 +576,7 @@ void btu_start_quick_timer(TIMER_LIST_ENT *p_tle, UINT16 type, UINT32 timeout_ti
 
     alarm = hash_map_get(btu_l2cap_alarm_hash_map, p_tle);
     if (alarm == NULL) {
-        LOG_ERROR("%s Unable to create alarm", __func__);
+        HCI_TRACE_ERROR("%s Unable to create alarm", __func__);
         return;
     }
     osi_alarm_cancel(alarm);
@@ -608,11 +609,28 @@ void btu_stop_quick_timer(TIMER_LIST_ENT *p_tle)
     // Get the alarm for the timer list entry.
     osi_alarm_t *alarm = hash_map_get(btu_l2cap_alarm_hash_map, p_tle);
     if (alarm == NULL) {
-        LOG_WARN("%s Unable to find expected alarm in hashmap", __func__);
+        HCI_TRACE_WARNING("%s Unable to find expected alarm in hashmap", __func__);
         return;
     }
     osi_alarm_cancel(alarm);
 }
+
+void btu_free_quick_timer(TIMER_LIST_ENT *p_tle)
+{
+    assert(p_tle != NULL);
+
+    p_tle->in_use = FALSE;
+
+    // Get the alarm for the timer list entry.
+    osi_alarm_t *alarm = hash_map_get(btu_l2cap_alarm_hash_map, p_tle);
+    if (alarm == NULL) {
+        HCI_TRACE_DEBUG("%s Unable to find expected alarm in hashmap", __func__);
+        return;
+    }
+    osi_alarm_cancel(alarm);
+    hash_map_erase(btu_l2cap_alarm_hash_map, p_tle);
+}
+
 #endif /* defined(QUICK_TIMER_TICKS_PER_SEC) && (QUICK_TIMER_TICKS_PER_SEC > 0) */
 
 void btu_oneshot_alarm_cb(void *data)
@@ -644,7 +662,7 @@ void btu_start_timer_oneshot(TIMER_LIST_ENT *p_tle, UINT16 type, UINT32 timeout_
 
     alarm = hash_map_get(btu_oneshot_alarm_hash_map, p_tle);
     if (alarm == NULL) {
-        LOG_ERROR("%s Unable to create alarm", __func__);
+        HCI_TRACE_ERROR("%s Unable to create alarm", __func__);
         return;
     }
     osi_alarm_cancel(alarm);
@@ -668,7 +686,7 @@ void btu_stop_timer_oneshot(TIMER_LIST_ENT *p_tle)
     // Get the alarm for the timer list entry.
     osi_alarm_t *alarm = hash_map_get(btu_oneshot_alarm_hash_map, p_tle);
     if (alarm == NULL) {
-        LOG_WARN("%s Unable to find expected alarm in hashmap", __func__);
+        HCI_TRACE_WARNING("%s Unable to find expected alarm in hashmap", __func__);
         return;
     }
     osi_alarm_cancel(alarm);

@@ -17,53 +17,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <ctype.h>
 #include <netdb.h>
 #include <esp_log.h>
+#include <http_parser.h>
 
-#include "connectlib.h"
 #include "sh2lib.h"
 
 static const char *TAG = "sh2lib";
 
 #define DBG_FRAME_SEND 1
-
-/* SSL connection on the TCP socket that is already connected */
-static int do_ssl_connect(struct sh2lib_handle *hd, int sockfd, const char *hostname)
-{
-    SSL_CTX *ssl_ctx = SSL_CTX_new(TLSv1_2_client_method());
-    if (!ssl_ctx) {
-        return -1;
-    }
-
-    unsigned char vector[] = "\x02h2";
-    SSL_CTX_set_alpn_protos(ssl_ctx, vector, strlen((char *)vector));
-    SSL *ssl = SSL_new(ssl_ctx);
-    if (!ssl) {
-        SSL_CTX_free(ssl_ctx);
-        return -1;
-    }
-
-    SSL_set_tlsext_host_name(ssl, hostname);
-    SSL_set_fd(ssl, sockfd);
-    int ret = SSL_connect(ssl);
-    if (ret < 1) {
-        int err = SSL_get_error(ssl, ret);
-        ESP_LOGE(TAG, "[ssl-connect] Failed SSL handshake ret=%d error=%d", ret, err);
-        SSL_CTX_free(ssl_ctx);
-        SSL_free(ssl);
-        return -1;
-    }
-    hd->ssl_ctx = ssl_ctx;
-    hd->ssl = ssl;
-    hd->sockfd = sockfd;
-
-    int flags = fcntl(hd->sockfd, F_GETFL, 0);
-    fcntl(hd->sockfd, F_SETFL, flags | O_NONBLOCK);
-
-    return 0;
-}
 
 /*
  * The implementation of nghttp2_send_callback type. Here we write
@@ -74,10 +37,9 @@ static int do_ssl_connect(struct sh2lib_handle *hd, int sockfd, const char *host
 static ssize_t callback_send_inner(struct sh2lib_handle *hd, const uint8_t *data,
                                    size_t length)
 {
-    int rv = SSL_write(hd->ssl, data, (int)length);
+    int rv = esp_tls_conn_write(hd->http2_tls, data, length);
     if (rv <= 0) {
-        int err = SSL_get_error(hd->ssl, rv);
-        if (err == SSL_ERROR_WANT_WRITE || err == SSL_ERROR_WANT_READ) {
+        if (rv == MBEDTLS_ERR_SSL_WANT_READ || rv == MBEDTLS_ERR_SSL_WANT_WRITE) {
             rv = NGHTTP2_ERR_WOULDBLOCK;
         } else {
             rv = NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -127,10 +89,9 @@ static ssize_t callback_recv(nghttp2_session *session, uint8_t *buf,
 {
     struct sh2lib_handle *hd = user_data;
     int rv;
-    rv = SSL_read(hd->ssl, buf, (int)length);
+    rv = esp_tls_conn_read(hd->http2_tls, (char *)buf, (int)length);
     if (rv < 0) {
-        int err = SSL_get_error(hd->ssl, rv);
-        if (err == SSL_ERROR_WANT_WRITE || err == SSL_ERROR_WANT_READ) {
+        if (rv == MBEDTLS_ERR_SSL_WANT_READ || rv == MBEDTLS_ERR_SSL_WANT_WRITE) {
             rv = NGHTTP2_ERR_WOULDBLOCK;
         } else {
             rv = NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -141,7 +102,7 @@ static ssize_t callback_recv(nghttp2_session *session, uint8_t *buf,
     return rv;
 }
 
-char *sh2lib_frame_type_str(int type)
+const char *sh2lib_frame_type_str(int type)
 {
     switch (type) {
     case NGHTTP2_HEADERS:
@@ -280,26 +241,19 @@ static int do_http2_connect(struct sh2lib_handle *hd)
 int sh2lib_connect(struct sh2lib_handle *hd, const char *uri)
 {
     memset(hd, 0, sizeof(*hd));
-
-    struct uri res;
-    /* Parse the URI */
-    if (parse_uri(&res, uri) != 0) {
-        ESP_LOGE(TAG, "[sh2-connect] Failed to parse URI");
-        return -1;
-    }
-
-    /* TCP connection with the server */
-    int sockfd = connect_to_host(res.host, res.hostlen, res.port);
-    if (sockfd < 0) {
-        ESP_LOGE(TAG, "[sh2-connect] Failed to connect to %s", uri);
-        return -1;
-    }
-
-    /* SSL Connection on the socket */
-    if (do_ssl_connect(hd, sockfd, res.host) != 0) {
-        ESP_LOGE(TAG, "[sh2-connect] SSL Handshake failed with %s", uri);
+    const char *proto[] = {"h2", NULL};
+    esp_tls_cfg_t tls_cfg = {
+        .alpn_protos = proto,
+        .non_block = true,
+    };    
+    if ((hd->http2_tls = esp_tls_conn_http_new(uri, &tls_cfg)) == NULL) {
+        ESP_LOGE(TAG, "[sh2-connect] esp-tls connection failed");
         goto error;
     }
+    struct http_parser_url u;
+    http_parser_url_init(&u);
+    http_parser_parse_url(uri, strlen(uri), 0, &u);
+    hd->hostname = strndup(&uri[u.field_data[UF_HOST].off], u.field_data[UF_HOST].len);
 
     /* HTTP/2 Connection */
     if (do_http2_connect(hd) != 0) {
@@ -319,17 +273,13 @@ void sh2lib_free(struct sh2lib_handle *hd)
         nghttp2_session_del(hd->http2_sess);
         hd->http2_sess = NULL;
     }
-    if (hd->ssl) {
-        SSL_free(hd->ssl);
-        hd->ssl = NULL;
+    if (hd->http2_tls) {
+	esp_tls_conn_delete(hd->http2_tls);
+        hd->http2_tls = NULL;
     }
-    if (hd->ssl_ctx) {
-        SSL_CTX_free(hd->ssl_ctx);
-        hd->ssl_ctx = NULL;
-    }
-    if (hd->sockfd) {
-        close(hd->sockfd);
-        hd->ssl_ctx = 0;
+    if (hd->hostname) {
+        free(hd->hostname);
+        hd->hostname = NULL;
     }
 }
 
@@ -341,11 +291,13 @@ int sh2lib_execute(struct sh2lib_handle *hd)
         ESP_LOGE(TAG, "[sh2-execute] HTTP2 session send failed %d", ret);
         return -1;
     }
+
     ret = nghttp2_session_recv(hd->http2_sess);
     if (ret != 0) {
         ESP_LOGE(TAG, "[sh2-execute] HTTP2 session recv failed %d", ret);
         return -1;
     }
+
     return 0;
 }
 
@@ -361,10 +313,10 @@ int sh2lib_do_get_with_nv(struct sh2lib_handle *hd, const nghttp2_nv *nva, size_
 
 int sh2lib_do_get(struct sh2lib_handle *hd, const char *path, sh2lib_frame_data_recv_cb_t recv_cb)
 {
-#define HTTP2_PATH_NV ":path"
     const nghttp2_nv nva[] = { SH2LIB_MAKE_NV(":method", "GET"),
                                SH2LIB_MAKE_NV(":scheme", "https"),
-    {(uint8_t *)HTTP2_PATH_NV, (uint8_t *)path, strlen(HTTP2_PATH_NV), strlen(path), NGHTTP2_NV_FLAG_NONE},
+                               SH2LIB_MAKE_NV(":authority", hd->hostname),
+                               SH2LIB_MAKE_NV(":path", path),
                              };
     return sh2lib_do_get_with_nv(hd, nva, sizeof(nva) / sizeof(nva[0]), recv_cb);
 }
@@ -400,6 +352,7 @@ int sh2lib_do_post(struct sh2lib_handle *hd, const char *path,
 {
     const nghttp2_nv nva[] = { SH2LIB_MAKE_NV(":method", "POST"),
                                SH2LIB_MAKE_NV(":scheme", "https"),
+                               SH2LIB_MAKE_NV(":authority", hd->hostname),
                                SH2LIB_MAKE_NV(":path", path),
                              };
     return sh2lib_do_putpost_with_nv(hd, nva, sizeof(nva) / sizeof(nva[0]), send_cb, recv_cb);
@@ -411,6 +364,7 @@ int sh2lib_do_put(struct sh2lib_handle *hd, const char *path,
 {
     const nghttp2_nv nva[] = { SH2LIB_MAKE_NV(":method", "PUT"),
                                SH2LIB_MAKE_NV(":scheme", "https"),
+                               SH2LIB_MAKE_NV(":authority", hd->hostname),
                                SH2LIB_MAKE_NV(":path", path),
                              };
     return sh2lib_do_putpost_with_nv(hd, nva, sizeof(nva) / sizeof(nva[0]), send_cb, recv_cb);

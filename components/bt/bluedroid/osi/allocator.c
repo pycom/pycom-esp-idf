@@ -18,8 +18,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "bt_defs.h"
-#include "allocator.h"
+#include "common/bt_defs.h"
+#include "osi/allocator.h"
 
 extern void *pvPortZalloc(size_t size);
 extern void vPortFree(void *pv);
@@ -57,7 +57,7 @@ void osi_mem_dbg_record(void *p, int size, const char *func, int line)
     int i;
 
     if (!p || size == 0) {
-        LOG_ERROR("%s invalid !!\n", __func__);
+        OSI_TRACE_ERROR("%s invalid !!\n", __func__);
         return;
     }
 
@@ -73,7 +73,7 @@ void osi_mem_dbg_record(void *p, int size, const char *func, int line)
     }
 
     if (i >= OSI_MEM_DBG_INFO_MAX) {
-        LOG_ERROR("%s full %s %d !!\n", __func__, func, line);
+        OSI_TRACE_ERROR("%s full %s %d !!\n", __func__, func, line);
     }
 }
 
@@ -82,7 +82,7 @@ void osi_mem_dbg_clean(void *p, const char *func, int line)
     int i;
 
     if (!p) {
-        LOG_ERROR("%s invalid\n", __func__);
+        OSI_TRACE_ERROR("%s invalid\n", __func__);
         return;
     }
 
@@ -98,7 +98,7 @@ void osi_mem_dbg_clean(void *p, const char *func, int line)
     }
 
     if (i >= OSI_MEM_DBG_INFO_MAX) {
-        LOG_ERROR("%s full %s %d !!\n", __func__, func, line);
+        OSI_TRACE_ERROR("%s full %s %d !!\n", __func__, func, line);
     }
 }
 
@@ -108,10 +108,10 @@ void osi_mem_dbg_show(void)
 
     for (i = 0; i < OSI_MEM_DBG_INFO_MAX; i++) {
         if (mem_dbg_info[i].p || mem_dbg_info[i].size != 0 ) {
-            LOG_ERROR("--> p %p, s %d, f %s, l %d\n", mem_dbg_info[i].p, mem_dbg_info[i].size, mem_dbg_info[i].func, mem_dbg_info[i].line);
+            OSI_TRACE_ERROR("--> p %p, s %d, f %s, l %d\n", mem_dbg_info[i].p, mem_dbg_info[i].size, mem_dbg_info[i].func, mem_dbg_info[i].line);
         }
     }
-    LOG_ERROR("--> count %d\n", mem_dbg_count);
+    OSI_TRACE_ERROR("--> count %d\n", mem_dbg_count);
 }
 #endif
 
@@ -132,26 +132,40 @@ void *osi_malloc_func(size_t size)
 {
 #ifdef CONFIG_BLUEDROID_MEM_DEBUG
     void *p;
-
+#if CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST
+    p = heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL);
+#else
     p = malloc(size);
+#endif /* #if CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST */
     osi_mem_dbg_record(p, size, __func__, __LINE__);
     return p;
 #else
+#if CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST
+    return heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL);
+#else
     return malloc(size);
-#endif
+#endif /* #if CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST */
+#endif /* #ifdef CONFIG_BLUEDROID_MEM_DEBUG */
 }
 
 void *osi_calloc_func(size_t size)
 {
 #ifdef CONFIG_BLUEDROID_MEM_DEBUG
     void *p;
-
+#if CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST
+    p = heap_caps_calloc_prefer(1, size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL);
+#else
     p = calloc(1, size);
+#endif /* #if CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST */
     osi_mem_dbg_record(p, size, __func__, __LINE__);
     return p;
 #else
+#if CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST
+    return heap_caps_calloc_prefer(1, size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL);
+#else
     return calloc(1, size);
-#endif
+#endif /* #if CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST */ 
+#endif /* #ifdef CONFIG_BLUEDROID_MEM_DEBUG */
 }
 
 void osi_free_func(void *ptr)

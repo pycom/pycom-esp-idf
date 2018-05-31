@@ -22,7 +22,7 @@
  *
  ******************************************************************************/
 
-#include "bt_target.h"
+#include "common/bt_target.h"
 
 #if defined(BTA_HH_INCLUDED) && (BTA_HH_INCLUDED == TRUE)
 
@@ -30,12 +30,11 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "bta_hh_api.h"
+#include "bta/bta_hh_api.h"
 #include "bta_hh_int.h"
-#include "l2c_api.h"
-#include "utl.h"
+#include "stack/l2c_api.h"
+#include "bta/utl.h"
 
-#define LOG_TAG "bt_bta_hh"
 #include "osi/include/log.h"
 
 /*****************************************************************************
@@ -67,7 +66,7 @@ void BTA_HhEnable(tBTA_SEC sec_mask, tBTA_HH_CBACK *p_cback)
     /* register with BTA system manager */
     bta_sys_register(BTA_ID_HH, &bta_hh_reg);
 
-    LOG_INFO("%s sec_mask:0x%x p_cback:%p", __func__, sec_mask, p_cback);
+    APPL_TRACE_API("%s sec_mask:0x%x p_cback:%p", __func__, sec_mask, p_cback);
     p_buf = (tBTA_HH_API_ENABLE *)osi_malloc((UINT16)sizeof(tBTA_HH_API_ENABLE));
 
     if (p_buf != NULL) {

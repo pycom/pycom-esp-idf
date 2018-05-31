@@ -1,16 +1,10 @@
-// Copyright 2015-2017 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+/*
+   This example code is in the Public Domain (or CC0 licensed, at your option.)
 
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+   Unless required by applicable law or agreed to in writing, this
+   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied.
+*/
 
 #ifndef __ESP_EDDYSTONE_PROTOCOL_H__
 #define __ESP_EDDYSTONE_PROTOCOL_H__
@@ -25,10 +19,25 @@
 #define EDDYSTONE_FRAME_TYPE_URL        0x10
 #define EDDYSTONE_FRAME_TYPE_TLM        0x20
 #define EDDYSTONE_FRAME_TYPE_EID        0x30
-
-#define EDDYSTONE_UID_FRAME_LEN         0x17
-#define EDDYSTONE_TLM_FRAME_LEN         0x11
-#define EDDYSTONE_URL_MAX_LEN           18
+//UID
+#define EDDYSTONE_UID_RANG_DATA_LEN     1
+#define EDDYSTONE_UID_NAMESPACE_LEN     10
+#define EDDYSTONE_UID_INSTANCE_LEN      6
+#define EDDYSTONE_UID_RFU_LEN           2
+#define EDDYSTONE_UID_DATA_LEN         (EDDYSTONE_UID_RANG_DATA_LEN + EDDYSTONE_UID_NAMESPACE_LEN + EDDYSTONE_UID_INSTANCE_LEN)
+//TLM
+#define EDDYSTONE_TLM_VERSION_LEN          1
+#define EDDYSTONE_TLM_BATTERY_VOLTAGE_LEN  2
+#define EDDYSTONE_TLM_TEMPERATURE_LEN      2
+#define EDDYSTONE_TLM_ADV_COUNT_LEN        4
+#define EDDYSTONE_TLM_TIME_LEN             4
+#define EDDYSTONE_TLM_DATA_LEN             (EDDYSTONE_TLM_VERSION_LEN + EDDYSTONE_TLM_BATTERY_VOLTAGE_LEN + \
+EDDYSTONE_TLM_TEMPERATURE_LEN + EDDYSTONE_TLM_ADV_COUNT_LEN + EDDYSTONE_TLM_TIME_LEN)           
+//URL
+#define EDDYSTONE_URL_SCHEME_LEN        1
+#define EDDYSTONE_URL_ENCODED_MAX_LEN   17
+#define EDDYSTONE_URL_MAX_LEN           (EDDYSTONE_URL_SCHEME_LEN + EDDYSTONE_URL_ENCODED_MAX_LEN)
+#define EDDYSTONE_URL_TX_POWER_LEN      1
 
 
 /* Eddystone UID frame */

@@ -12,15 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "btc_task.h"
-#include "btc_main.h"
-#include "btc_dm.h"
-#include "future.h"
+#include "btc/btc_task.h"
+#include "btc/btc_main.h"
+#include "btc/btc_dm.h"
+#include "osi/future.h"
 #include "esp_err.h"
-#include "btc_config.h"
-#include "alarm.h"
-#include "btc_ble_storage.h"
-#include "bta_gatt_common.h"
+#include "btc/btc_config.h"
+#include "osi/alarm.h"
+#include "btc/btc_ble_storage.h"
+#include "btc_gap_ble.h"
+#include "bta_gattc_int.h"
+#include "bta_gatts_int.h"
+#include "bta_dm_int.h"
 
 static future_t *main_future[BTC_MAIN_FUTURE_NUM];
 
@@ -41,7 +44,9 @@ static void btc_enable_bluetooth(void)
 
 static void btc_disable_bluetooth(void)
 {
+#if (SMP_INCLUDED)
     btc_config_shut_down();
+#endif
     if (BTA_DisableBluetooth() != BTA_SUCCESS) {
         future_ready(*btc_main_get_future_p(BTC_MAIN_DISABLE_FUTURE), FUTURE_FAIL);
     }
@@ -57,8 +62,8 @@ static void btc_init_bluetooth(void)
     osi_alarm_create_mux();
     osi_alarm_init();
     bte_main_boot_entry(btc_init_callback);
-    btc_config_init();
 #if (SMP_INCLUDED)
+    btc_config_init();
     //load the ble local key whitch has been store in the flash
     btc_dm_load_ble_local_keys();
 #endif /* #if (SMP_INCLUDED) */
@@ -67,21 +72,26 @@ static void btc_init_bluetooth(void)
 
 static void btc_deinit_bluetooth(void)
 {
+    btc_gap_ble_deinit();
+    bta_dm_sm_deinit();
+#if (GATTC_INCLUDED)
+    bta_gattc_deinit();
+#endif /* #if (GATTC_INCLUDED) */
+#if (GATTS_INCLUDED)
+    bta_gatts_deinit();
+#endif /* #if (GATTS_INCLUDED) */
     bte_main_shutdown();
+#if (SMP_INCLUDED)
     btc_config_clean_up();
+#endif
     osi_alarm_deinit();
     osi_alarm_delete_mux();
     future_ready(*btc_main_get_future_p(BTC_MAIN_DEINIT_FUTURE), FUTURE_SUCCESS);
 }
 
-static void btc_set_local_mtu(uint16_t mtu)
-{
-    BTA_GATT_SetLocalMTU(mtu);
-}
-
 void btc_main_call_handler(btc_msg_t *msg)
 {
-    LOG_DEBUG("%s act %d\n", __func__, msg->act);
+    BTC_TRACE_DEBUG("%s act %d\n", __func__, msg->act);
 
     switch (msg->act) {
     case BTC_MAIN_ACT_INIT:
@@ -96,14 +106,8 @@ void btc_main_call_handler(btc_msg_t *msg)
     case BTC_MAIN_ACT_DISABLE:
         btc_disable_bluetooth();
         break;
-    case BTC_GATT_ACT_SET_LOCAL_MTU:
-    {
-        btc_ble_main_args_t *arg = (btc_ble_main_args_t *)(msg->arg);
-        btc_set_local_mtu(arg->set_mtu.mtu);
-        break;
-    }
     default:
-        LOG_ERROR("%s UNKNOWN ACT %d\n", __func__, msg->act);
+        BTC_TRACE_ERROR("%s UNKNOWN ACT %d\n", __func__, msg->act);
         break;
     }
 }

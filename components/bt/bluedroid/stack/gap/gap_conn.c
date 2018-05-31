@@ -17,15 +17,15 @@
  ******************************************************************************/
 
 
-#include "bt_target.h"
-#include "bt_defs.h"
-#include "btu.h"
+#include "common/bt_target.h"
+#include "common/bt_defs.h"
+#include "stack/btu.h"
 #include "gap_int.h"
-#include "l2cdefs.h"
+#include "stack/l2cdefs.h"
 #include "l2c_int.h"
 #include <string.h>
-#include "mutex.h"
-#include "allocator.h"
+#include "osi/mutex.h"
+#include "osi/allocator.h"
 
 #if GAP_CONN_INCLUDED == TRUE
 #include "btm_int.h"
@@ -123,7 +123,7 @@ void gap_conn_init (void)
 ** Returns          handle of the connection if successful, else GAP_INVALID_HANDLE
 **
 *******************************************************************************/
-UINT16 GAP_ConnOpen (char *p_serv_name, UINT8 service_id, BOOLEAN is_server,
+UINT16 GAP_ConnOpen (const char *p_serv_name, UINT8 service_id, BOOLEAN is_server,
                      BD_ADDR p_rem_bda, UINT16 psm, tL2CAP_CFG_INFO *p_cfg,
                      tL2CAP_ERTM_INFO *ertm_info, UINT16 security, UINT8 chan_mode_mask,
                      tGAP_CONN_CALLBACK *p_cb)

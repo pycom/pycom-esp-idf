@@ -327,7 +327,7 @@ void IRAM_ATTR esp_restart_noos()
 
     // Reset timer/spi/uart
     DPORT_SET_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG,
-            DPORT_TIMERS_RST | DPORT_SPI_RST_1 | DPORT_UART_RST);
+            DPORT_TIMERS_RST | DPORT_SPI01_RST | DPORT_UART_RST);
     DPORT_REG_WRITE(DPORT_PERIP_RST_EN_REG, 0);
 
     // Set CPU back to XTAL source, no PLL, same as hard reset
@@ -355,11 +355,6 @@ void IRAM_ATTR esp_restart_noos()
 
 void system_restart(void) __attribute__((alias("esp_restart")));
 
-void system_restore(void)
-{
-    esp_wifi_restore();
-}
-
 uint32_t esp_get_free_heap_size( void )
 {
     return heap_caps_get_free_size( MALLOC_CAP_DEFAULT );
@@ -384,9 +379,10 @@ const char* esp_get_idf_version(void)
 
 static void get_chip_info_esp32(esp_chip_info_t* out_info)
 {
-    out_info->model = CHIP_ESP32;
     uint32_t reg = REG_READ(EFUSE_BLK0_RDATA3_REG);
     memset(out_info, 0, sizeof(*out_info));
+    
+    out_info->model = CHIP_ESP32;
     if ((reg & EFUSE_RD_CHIP_VER_REV1_M) != 0) {
         out_info->revision = 1;
     }

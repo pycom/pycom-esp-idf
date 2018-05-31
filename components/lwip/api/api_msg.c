@@ -1085,12 +1085,6 @@ lwip_netconn_do_delconn(void *m)
   } else
 #endif /* LWIP_NETCONN_FULLDUPLEX */
   {
-    if (!(state != NETCONN_CONNECT || IN_NONBLOCKING_CONNECT(msg->conn))) {
-      msg->err = ERR_INPROGRESS;
-      NETCONN_SET_SAFE_ERR(msg->conn, ERR_INPROGRESS);
-      LWIP_DEBUGF(API_MSG_DEBUG, ("netconn error:ERR_INPROGRESS\n"));
-      return;
-    }
     /* Drain and delete mboxes */
     netconn_drain(msg->conn);
 
@@ -1440,7 +1434,7 @@ lwip_netconn_do_listen(void *m)
  *
  * @param msg the api_msg_msg pointing to the connection
  */
-void
+void ESP_IRAM_ATTR
 lwip_netconn_do_send(void *m)
 {
   struct api_msg_msg *msg = (struct api_msg_msg*)m;

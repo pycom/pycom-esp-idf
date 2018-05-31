@@ -1,16 +1,10 @@
-// Copyright 2015-2017 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+/*
+   This example code is in the Public Domain (or CC0 licensed, at your option.)
 
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+   Unless required by applicable law or agreed to in writing, this
+   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied.
+*/
 
 
 
@@ -286,23 +280,23 @@ void app_main()
     ESP_ERROR_CHECK( ret );
 
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    if (esp_bt_controller_init(&bt_cfg) != ESP_OK) {
-        ESP_LOGE(GAP_TAG, "%s initialize controller failed\n", __func__);
+    if ((ret = esp_bt_controller_init(&bt_cfg)) != ESP_OK) {
+        ESP_LOGE(GAP_TAG, "%s initialize controller failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
-    if (esp_bt_controller_enable(ESP_BT_MODE_BTDM) != ESP_OK) {
-        ESP_LOGE(GAP_TAG, "%s enable controller failed\n", __func__);
+    if ((ret = esp_bt_controller_enable(ESP_BT_MODE_BTDM)) != ESP_OK) {
+        ESP_LOGE(GAP_TAG, "%s enable controller failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
-    if (esp_bluedroid_init() != ESP_OK) {
-        ESP_LOGE(GAP_TAG, "%s initialize bluedroid failed\n", __func__);
+    if ((ret = esp_bluedroid_init()) != ESP_OK) {
+        ESP_LOGE(GAP_TAG, "%s initialize bluedroid failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 
-    if (esp_bluedroid_enable() != ESP_OK) {
-        ESP_LOGE(GAP_TAG, "%s enable bluedroid failed\n", __func__);
+    if ((ret = esp_bluedroid_enable()) != ESP_OK) {
+        ESP_LOGE(GAP_TAG, "%s enable bluedroid failed: %s\n", __func__, esp_err_to_name(ret));
         return;
     }
 

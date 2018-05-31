@@ -30,46 +30,46 @@ static const char* GPIO_TAG = "gpio";
     }
 
 const uint32_t GPIO_PIN_MUX_REG[GPIO_PIN_COUNT] = {
-    GPIO_PIN_REG_0,
-    GPIO_PIN_REG_1,
-    GPIO_PIN_REG_2,
-    GPIO_PIN_REG_3,
-    GPIO_PIN_REG_4,
-    GPIO_PIN_REG_5,
-    GPIO_PIN_REG_6,
-    GPIO_PIN_REG_7,
-    GPIO_PIN_REG_8,
-    GPIO_PIN_REG_9,
-    GPIO_PIN_REG_10,
-    GPIO_PIN_REG_11,
-    GPIO_PIN_REG_12,
-    GPIO_PIN_REG_13,
-    GPIO_PIN_REG_14,
-    GPIO_PIN_REG_15,
-    GPIO_PIN_REG_16,
-    GPIO_PIN_REG_17,
-    GPIO_PIN_REG_18,
-    GPIO_PIN_REG_19,
+    IO_MUX_GPIO0_REG,
+    IO_MUX_GPIO1_REG,
+    IO_MUX_GPIO2_REG,
+    IO_MUX_GPIO3_REG,
+    IO_MUX_GPIO4_REG,
+    IO_MUX_GPIO5_REG,
+    IO_MUX_GPIO6_REG,
+    IO_MUX_GPIO7_REG,
+    IO_MUX_GPIO8_REG,
+    IO_MUX_GPIO9_REG,
+    IO_MUX_GPIO10_REG,
+    IO_MUX_GPIO11_REG,
+    IO_MUX_GPIO12_REG,
+    IO_MUX_GPIO13_REG,
+    IO_MUX_GPIO14_REG,
+    IO_MUX_GPIO15_REG,
+    IO_MUX_GPIO16_REG,
+    IO_MUX_GPIO17_REG,
+    IO_MUX_GPIO18_REG,
+    IO_MUX_GPIO19_REG,
     0,
-    GPIO_PIN_REG_21,
-    GPIO_PIN_REG_22,
-    GPIO_PIN_REG_23,
+    IO_MUX_GPIO21_REG,
+    IO_MUX_GPIO22_REG,
+    IO_MUX_GPIO23_REG,
     0,
-    GPIO_PIN_REG_25,
-    GPIO_PIN_REG_26,
-    GPIO_PIN_REG_27,
-    0,
-    0,
+    IO_MUX_GPIO25_REG,
+    IO_MUX_GPIO26_REG,
+    IO_MUX_GPIO27_REG,
     0,
     0,
-    GPIO_PIN_REG_32,
-    GPIO_PIN_REG_33,
-    GPIO_PIN_REG_34,
-    GPIO_PIN_REG_35,
-    GPIO_PIN_REG_36,
-    GPIO_PIN_REG_37,
-    GPIO_PIN_REG_38,
-    GPIO_PIN_REG_39
+    0,
+    0,
+    IO_MUX_GPIO32_REG,
+    IO_MUX_GPIO33_REG,
+    IO_MUX_GPIO34_REG,
+    IO_MUX_GPIO35_REG,
+    IO_MUX_GPIO36_REG,
+    IO_MUX_GPIO37_REG,
+    IO_MUX_GPIO38_REG,
+    IO_MUX_GPIO39_REG,
 };
 
 typedef struct {
@@ -403,7 +403,7 @@ esp_err_t gpio_isr_handler_remove(gpio_num_t gpio_num)
 
 esp_err_t gpio_install_isr_service(int intr_alloc_flags)
 {
-    GPIO_CHECK(gpio_isr_func == NULL, "GPIO isr service already installed", ESP_FAIL);
+    GPIO_CHECK(gpio_isr_func == NULL, "GPIO isr service already installed", ESP_ERR_INVALID_STATE);
     esp_err_t ret;
     portENTER_CRITICAL(&gpio_spinlock);
     gpio_isr_func = (gpio_isr_func_t*) calloc(GPIO_NUM_MAX, sizeof(gpio_isr_func_t));
@@ -481,4 +481,82 @@ esp_err_t gpio_get_drive_capability(gpio_num_t gpio_num, gpio_drive_cap_t* stren
         *strength = GET_PERI_REG_BITS2(GPIO_PIN_MUX_REG[gpio_num], FUN_DRV_V, FUN_DRV_S);
     }
     return ESP_OK;
+}
+
+static const uint32_t GPIO_HOLD_MASK[34] = {
+    0,
+    GPIO_SEL_1,
+    0,
+    GPIO_SEL_0,
+    0,
+    GPIO_SEL_8,
+    GPIO_SEL_2,
+    GPIO_SEL_3,
+    GPIO_SEL_4,
+    GPIO_SEL_5,
+    GPIO_SEL_6,
+    GPIO_SEL_7,
+    0,
+    0,
+    0,
+    0,
+    GPIO_SEL_9,
+    GPIO_SEL_10,
+    GPIO_SEL_11,
+    GPIO_SEL_12,
+    0,
+    GPIO_SEL_14,
+    GPIO_SEL_15,
+    GPIO_SEL_16,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+};
+
+esp_err_t gpio_hold_en(gpio_num_t gpio_num)
+{
+    GPIO_CHECK(GPIO_IS_VALID_OUTPUT_GPIO(gpio_num), "Only output-capable GPIO support this function", ESP_ERR_NOT_SUPPORTED);
+    esp_err_t r = ESP_OK;
+    if (RTC_GPIO_IS_VALID_GPIO(gpio_num)) {
+        r = rtc_gpio_hold_en(gpio_num);
+    } else if (GPIO_HOLD_MASK[gpio_num]) {
+        SET_PERI_REG_MASK(RTC_IO_DIG_PAD_HOLD_REG, GPIO_HOLD_MASK[gpio_num]);
+    } else {
+        r = ESP_ERR_NOT_SUPPORTED;
+    }
+    return r == ESP_OK ? ESP_OK : ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t gpio_hold_dis(gpio_num_t gpio_num)
+{
+    GPIO_CHECK(GPIO_IS_VALID_OUTPUT_GPIO(gpio_num), "Only output-capable GPIO support this function", ESP_ERR_NOT_SUPPORTED);
+    esp_err_t r = ESP_OK;
+    if (RTC_GPIO_IS_VALID_GPIO(gpio_num)) {
+        r = rtc_gpio_hold_dis(gpio_num);
+    } else if (GPIO_HOLD_MASK[gpio_num]) {
+        CLEAR_PERI_REG_MASK(RTC_IO_DIG_PAD_HOLD_REG, GPIO_HOLD_MASK[gpio_num]);
+    } else {
+        r = ESP_ERR_NOT_SUPPORTED;
+    }
+    return r == ESP_OK ? ESP_OK : ESP_ERR_NOT_SUPPORTED;
+}
+
+void gpio_iomux_in(uint32_t gpio, uint32_t signal_idx)
+{
+    GPIO.func_in_sel_cfg[signal_idx].sig_in_sel = 0;
+    PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[gpio]);
+}
+
+void gpio_iomux_out(uint8_t gpio_num, int func, bool oen_inv)
+{
+    GPIO.func_out_sel_cfg[gpio_num].oen_sel = 0;
+    GPIO.func_out_sel_cfg[gpio_num].oen_inv_sel = oen_inv;
+    PIN_FUNC_SELECT(GPIO_PIN_MUX_REG[gpio_num], func);
 }

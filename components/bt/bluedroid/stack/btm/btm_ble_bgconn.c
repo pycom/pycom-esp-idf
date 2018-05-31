@@ -23,15 +23,15 @@
  ******************************************************************************/
 
 #include <string.h>
-#include "bt_trace.h"
-#include "controller.h"
-#include "allocator.h"
-#include "hash_map.h"
-#include "bt_types.h"
-#include "btu.h"
+#include "common/bt_trace.h"
+#include "device/controller.h"
+#include "osi/allocator.h"
+#include "osi/hash_map.h"
+#include "stack/bt_types.h"
+#include "stack/btu.h"
 #include "btm_int.h"
 #include "l2c_int.h"
-#include "hcimsgs.h"
+#include "stack/hcimsgs.h"
 //#include "bt_utils.h"
 
 #ifndef BTM_BLE_SCAN_PARAM_TOUT
@@ -571,7 +571,7 @@ void btm_ble_initiate_select_conn(BD_ADDR bda)
     BTM_TRACE_EVENT ("btm_ble_initiate_select_conn");
 
     /* use direct connection procedure to initiate connection */
-    if (!L2CA_ConnectFixedChnl(L2CAP_ATT_CID, bda)) {
+    if (!L2CA_ConnectFixedChnl(L2CAP_ATT_CID, bda, BLE_ADDR_UNKNOWN_TYPE)) {
         BTM_TRACE_ERROR("btm_ble_initiate_select_conn failed");
     }
 }

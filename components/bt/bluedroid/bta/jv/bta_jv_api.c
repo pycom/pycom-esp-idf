@@ -23,19 +23,19 @@
  *
  ******************************************************************************/
 
-#include "bta_api.h"
-#include "bta_sys.h"
-#include "bta_jv_api.h"
+#include "bta/bta_api.h"
+#include "bta/bta_sys.h"
+#include "bta/bta_jv_api.h"
 #include "bta_jv_int.h"
-#include "allocator.h"
+#include "osi/allocator.h"
 #include <string.h>
-#include "port_api.h"
-#include "sdp_api.h"
-#include "utl.h"
-#include "gap_api.h"
+#include "stack/port_api.h"
+#include "stack/sdp_api.h"
+#include "bta/utl.h"
+#include "stack/gap_api.h"
 
-#include "bt_target.h"
-#include "sdp_api.h"
+#include "common/bt_target.h"
+#include "stack/sdp_api.h"
 
 
 #if (defined BTA_JV_INCLUDED && BTA_JV_INCLUDED == TRUE)
@@ -1068,7 +1068,6 @@ tBTA_JV_STATUS BTA_JvRfcommReady(UINT32 handle, UINT32 *p_data_size)
 **                  BTA_JV_FAILURE, otherwise.
 **
 *******************************************************************************/
-// UINT8 spp_data[10] = {1,2,3,4,5,6,7,8,9,0};
 
 tBTA_JV_STATUS BTA_JvRfcommWrite(UINT32 handle, UINT32 req_id, int len, UINT8 *p_data)
 {
@@ -1093,7 +1092,6 @@ tBTA_JV_STATUS BTA_JvRfcommWrite(UINT32 handle, UINT32 req_id, int len, UINT8 *p
         bta_sys_sendmsg(p_msg);
         status = BTA_JV_SUCCESS;
     }
-
     return (status);
 }
 
