@@ -73,5 +73,3 @@ int esp_clk_apb_freq(void);
  * @return Value or RTC counter, expressed in microseconds
  */
 uint64_t esp_clk_rtc_time();
-
-void select_rtc_slow_clk(rtc_slow_freq_t slow_clk);
