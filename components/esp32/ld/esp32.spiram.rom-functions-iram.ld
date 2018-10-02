@@ -47,6 +47,7 @@
     *lib_a-mktime.o(.literal .text .literal.* .text.*)
     *lib_a-syswrite.o(.literal .text .literal.* .text.*)
     *lib_a-tzset_r.o(.literal .text .literal.* .text.*)
+    *lib_a-sysgettod.o(.literal .text .literal.* .text.*)
     *lib_a-tzset.o(.literal .text .literal.* .text.*)
     *lib_a-toupper.o(.literal .text .literal.* .text.*)
     *lib_a-tolower.o(.literal .text .literal.* .text.*)

@@ -15,6 +15,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_app_trace_util.h"
+#include "soc/soc.h"
+#include "soc/rtc.h"
 #include "esp_clk.h"
 
 ///////////////////////////////////////////////////////////////////////////////

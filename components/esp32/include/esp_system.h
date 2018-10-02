@@ -288,6 +288,8 @@ typedef struct {
  */
 void esp_chip_info(esp_chip_info_t* out_info);
 
+uint32_t esp_get_revision(void);
+
 #ifdef __cplusplus
 }
 #endif
