@@ -12,7 +12,7 @@ Prerequisites
 To use this utility in encryption mode, the following packages need to be installed:
     - cryptography package
 
-These dependencies is already captured by including these packages in `requirement.txt` in top level IDF directory.
+This dependency is already captured by including these packages in `requirement.txt` in top level IDF directory.
 
 CSV file format
 ---------------
@@ -28,7 +28,7 @@ Type
 Encoding
     Supported values are: ``u8``, ``i8``, ``u16``, ``u32``, ``i32``, ``string``, ``hex2bin``, ``base64`` and ``binary``. This specifies how actual data values are encoded in the resultant binary file. Difference between ``string`` and ``binary`` encoding is that ``string`` data is terminated with a NULL character, whereas ``binary`` data is not.
 
-.. note:: For ``file`` type, only ``hex2bin``, ``base64``, ``string`` and ``binary`` is supported as of now.
+    .. note:: For ``file`` type, only ``hex2bin``, ``base64``, ``string`` and ``binary`` is supported as of now.
 
 Value
 	Data value.
@@ -44,7 +44,7 @@ Below is an example dump of such CSV file::
     key1,data,u8,1
     key2,file,string,/path/to/file
 
-.. note:: Make sure there are no spaces before and after ',' or at the end of each line in CSV file.
+.. note:: Make sure there are no spaces before and after ',' in CSV file.
 
 NVS Entry and Namespace association
 -----------------------------------
@@ -56,7 +56,7 @@ When a new namespace entry is encountered in the CSV file, each follow-up entrie
 Multipage Blob Support
 ----------------------
 
-By default, binary blobs are allowed to span over multiple pages and written in the format mentioned in section :ref:`structure_of_entry`.
+By default, binary blobs are allowed to span over multiple pages and written in the format mentioned in section :ref:`structure_of_entry`. 
 If older format is intended to be used, the utility provides an option to disable this feature.
 
 Encryption Support
@@ -66,122 +66,77 @@ This utility allows you to create an enrypted binary file also. Encryption used 
 Running the utility
 -------------------
 
-**Usage**::
+*Usage*::
 
-    python nvs_partition_gen.py [-h] [--input INPUT] [--output OUTPUT]
-                            [--size SIZE] [--version {v1,v2}]
-                            [--keygen {true,false}] [--encrypt {true,false}]
-                            [--keyfile KEYFILE] [--outdir OUTDIR]
-
-
-+------------------------+----------------------------------------------------------------------------------------------+
-|   Arguments            |                                     Description                                              |
-+========================+==============================================================================================+
-| --input INPUT          | Path to CSV file to parse.                                                                   |
-+------------------------+----------------------------------------------------------------------------------------------+
-| --output OUTPUT        | Path to output generated binary file.                                                        |
-+------------------------+----------------------------------------------------------------------------------------------+
-| --size SIZE            | Size of NVS Partition in bytes (must be multiple of 4096)                                    |
-+------------------------+----------------------------------------------------------------------------------------------+
-| --version {v1,v2}      | Set version. Default: v2                                                                     |
-+------------------------+----------------------------------------------------------------------------------------------+
-| --keygen {true,false}  | Generate keys for encryption.                                                                |
-+------------------------+----------------------------------------------------------------------------------------------+
-| --encrypt {true,false} | Set encryption mode. Default: false                                                          |
-+------------------------+----------------------------------------------------------------------------------------------+
-| --keyfile KEYFILE      | File having key for encryption (Applicable only if encryption mode is true)                  |
-+------------------------+----------------------------------------------------------------------------------------------+
-| --outdir OUTDIR        | The output directory to store the files created (Default: current directory)                 |
-+------------------------+----------------------------------------------------------------------------------------------+
+    python nvs_partition_gen.py [--version {v1,v2}] input output
 
 You can run this utility in two modes:
-    -   Default mode - Binary generated in this mode is an unencrypted binary file.
+    -   Normal mode - Binary generated in this mode is an unencrypted binary file.
     -   Encryption mode - Binary generated in this mode is an encrypted binary file.
 
+*In normal mode:*
 
-**In default mode:**
---------------------
+    A sample CSV file is provided with the utility. You can run the utility using below command::
 
-*Usage*::
+        python nvs_partition_generator.py sample.csv sample.bin
 
-    python nvs_partition_gen.py [-h] --input INPUT --output OUTPUT
-                            --size SIZE [--version {v1,v2}]
-                            [--keygen {true,false}] [--encrypt {true,false}]
-                            [--keyfile KEYFILE] [--outdir OUTDIR]
+*In encryption mode:*
 
-You can run the utility using below command::
+    You can run the utility using below commands:
 
-    python nvs_partition_gen.py --input sample.csv --output sample.bin --size 0x3000
+            -   By taking encryption keys as an input file. A sample encryption keys file is provided with the utility::
 
+                   python nvs_partition_gen.py sample.csv sample_encrypted.bin --encrypt True --keyfile testdata/keys.txt
 
+            -   By enabling generation of encryption keys::
 
-**In encryption mode:**
------------------------
-
-*Usage*::
-
-    python nvs_partition_gen.py [-h] --input INPUT --output OUTPUT
-                            --size SIZE --encrypt {true,false}
-                            --keygen {true,false} --keyfile KEYFILE
-                            [--version {v1,v2}] [--outdir OUTDIR]
+                   python nvs_partition_gen.py sample.csv sample_encrypted.bin --encrypt True --keygen True
 
 
-You can run the utility using below commands:
-
-    -   By enabling generation of encryption keys::
-
-            python nvs_partition_gen.py --input sample.csv --output sample_encrypted.bin --size 0x3000 --encrypt true --keygen true
-
-    -   By taking encryption keys as an input file. A sample encryption keys binary file is provided with the utility::
-
-            python nvs_partition_gen.py --input sample.csv --output sample_encrypted.bin --size 0x3000 --encrypt true --keyfile testdata/sample_encryption_keys.bin
-
-    -   By enabling generation of encryption keys and storing the keys in custom filename::
-
-            python nvs_partition_gen.py --input sample.csv --output sample_encrypted.bin --size 0x3000 --encrypt true --keygen true --keyfile encryption_keys_generated.bin
-
-.. note:: If `--keygen` is given with `--keyfile` argument, generated keys will be stored in `--keyfile` file. If `--keygen` argument is absent, `--keyfile` is taken as input file having key for encryption.
+.. note:: In encryption mode, this utility creates a binary file named `encryption_keys.bin` containing the encryption keys used. This binary file is compatible with NVS key-partition structure. Refer to :ref:`nvs_key_partition` for more details.
 
 
-*To generate* **only** *encryption keys with this utility*::
-
-    python nvs_partition_gen.py --keygen true
-
-This creates an `encryption_keys_<timestamp>.bin` file.
-
-.. note:: This newly created file having encryption keys in `keys/` directory is compatible with NVS key-partition structure. Refer to :ref:`nvs_key_partition` for more details.
-
-
-You can also provide the format version number (in any of the two modes):
+You can also provide the format version number while running this utility:
     - Multipage Blob Support Enabled (v2)
     - Multipage Blob Support Disabled (v1)
 
 
-**Multipage Blob Support Enabled (v2):**
-----------------------------------------
+*Multipage Blob Support Enabled (v2):*
 
 You can run the utility in this format by setting the version parameter to v2, as shown below.
 A sample CSV file is provided with the utility::
 
-    python nvs_partition_gen.py --input sample_multipage_blob.csv --output partition_multipage_blob.bin --size 0x4000 --version v2
+    python nvs_partition_gen.py sample_multipage_blob.csv partition_multipage_blob.bin --version v2
 
 
-**Multipage Blob Support Disabled (v1):**
------------------------------------------
+*Multipage Blob Support Disabled (v1):*
 
 You can run the utility in this format by setting the version parameter to v1, as shown below.
 A sample CSV file is provided with the utility::
 
-    python nvs_partition_gen.py --input sample_singlepage_blob.csv --output partition_single_page.bin --size 0x3000 --version v1
+    python nvs_partition_gen.py sample_singlepage_blob.csv partition_single_page.bin --version v1
 
-
-.. note::  *Minimum NVS Partition Size needed is 0x3000 bytes.*
-
-.. note::  *When flashing the binary onto the device, make sure it is consistent with the application's sdkconfig.*
++------------------------+----------------------------------------------------------------------------------------------+
+|   Arguments            |                                     Description                                              |
++========================+==============================================================================================+
+| input                  | Path to CSV file to parse. Will use stdin if omitted                                         |
++------------------------+----------------------------------------------------------------------------------------------+
+| output                 | Path to output converted binary file. Will use stdout if omitted                             |
++------------------------+----------------------------------------------------------------------------------------------+
+| size                   | Size of NVS Partition in hex (must be multiple of 4096). Eg. 0x1000                          |
++------------------------+----------------------------------------------------------------------------------------------+
+| --version {v1,v2}      |  Set version. Default: v2                                                                    |
++-------------------------------+---------------------------------------------------------------------------------------+
+| --keygen {True,False}  |  Generate keys for encryption. Default: False                                                |
+|                        |  (Applicable only if encryption mode is true)                                                |
++------------------------+----------------------------------------------------------------------------------------------+
+| --encrypt {True,False} |  Set encryption mode. Default: False                                                         |
++------------------------+----------------------------------------------------------------------------------------------+
+| --keyfile KEYFILE      | File having key for encryption (Applicable only if encryption mode is true)                  |
++------------------------+----------------------------------------------------------------------------------------------+
 
 Caveats
 -------
 -  Utility doesn't check for duplicate keys and will write data pertaining to both keys. User needs to make sure keys are distinct.
 -  Once a new page is created, no data will be written in the space left in previous page. Fields in the CSV file need to be ordered in such a way so as to optimize memory.
 -  64-bit datatype is not yet supported.
-
