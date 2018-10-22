@@ -81,20 +81,20 @@ enum
 {
     kVersion                       = 2,     ///< MLE Version
     kUdpPort                       = 19788, ///< MLE UDP Port
-    kParentRequestRouterTimeout    = 20000,   ///< Router Parent Request timeout
-    kParentRequestReedTimeout      = 20000,  ///< Router and REEDs Parent Request timeout
+    kParentRequestRouterTimeout    = 10000,   ///< Router Parent Request timeout
+    kParentRequestReedTimeout      = 10000,  ///< Router and REEDs Parent Request timeout
     kAttachStartJitter             = 50,    ///< Maximum jitter time added to start of attach.
     kAnnounceProcessTimeout        = 250,   ///< Timeout after receiving Announcement before channel/pan-id change
-    kAnnounceTimeout               = 8000,  ///< Total timeout used for sending Announcement messages
-    kMinAnnounceDelay              = 2000,    ///< Minimum delay between Announcement messages
+    kAnnounceTimeout               = 3000,  ///< Total timeout used for sending Announcement messages
+    kMinAnnounceDelay              = 500,    ///< Minimum delay between Announcement messages
     kParentResponseMaxDelayRouters = 1000,   ///< Maximum delay for response for Parent Request sent to routers only
-    kParentResponseMaxDelayAll     = 2000,  ///< Maximum delay for response for Parent Request sent to all devices
+    kParentResponseMaxDelayAll     = 1000,  ///< Maximum delay for response for Parent Request sent to all devices
     kUnicastRetransmissionDelay    = 1000,  ///< Base delay before retransmitting an MLE unicast.
     kMaxTransmissionCount          = 5,     ///< Maximum number of times an MLE message may be transmitted.
     kMaxResponseDelay              = 1000,  ///< Maximum delay before responding to a multicast request
-    kMaxChildIdRequestTimeout      = 20000,  ///< Maximum delay for receiving a Child ID Request
-    kMaxChildUpdateResponseTimeout = 20000,  ///< Maximum delay for receiving a Child Update Response
-    kMaxLinkRequestTimeout         = 20000,  ///< Maximum delay for receiving a Link Accept
+    kMaxChildIdRequestTimeout      = 10000,  ///< Maximum delay for receiving a Child ID Request
+    kMaxChildUpdateResponseTimeout = 10000,  ///< Maximum delay for receiving a Child Update Response
+    kMaxLinkRequestTimeout         = 10000,  ///< Maximum delay for receiving a Link Accept
     kMinTimeout = (((kMaxChildKeepAliveAttempts + 1) * kUnicastRetransmissionDelay) / 1000), ///< Minimum timeout(s)
 };
 
