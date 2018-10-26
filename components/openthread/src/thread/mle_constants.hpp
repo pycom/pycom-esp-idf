@@ -84,8 +84,8 @@ enum
     kParentRequestRouterTimeout    = 10000,   ///< Router Parent Request timeout
     kParentRequestReedTimeout      = 10000,  ///< Router and REEDs Parent Request timeout
     kAttachStartJitter             = 50,    ///< Maximum jitter time added to start of attach.
-    kAnnounceProcessTimeout        = 250,   ///< Timeout after receiving Announcement before channel/pan-id change
-    kAnnounceTimeout               = 3000,  ///< Total timeout used for sending Announcement messages
+    kAnnounceProcessTimeout        = 2500,   ///< Timeout after receiving Announcement before channel/pan-id change
+    kAnnounceTimeout               = 5000,  ///< Total timeout used for sending Announcement messages
     kMinAnnounceDelay              = 500,    ///< Minimum delay between Announcement messages
     kParentResponseMaxDelayRouters = 1000,   ///< Maximum delay for response for Parent Request sent to routers only
     kParentResponseMaxDelayAll     = 1000,  ///< Maximum delay for response for Parent Request sent to all devices
