@@ -40,6 +40,7 @@
 #define OPENTHREAD_CONFIG_LOG_OUTPUT OPENTHREAD_CONFIG_LOG_OUTPUT_DEBUG_UART
 //OPENTHREAD_CONFIG_LOG_OUTPUT_NONE
 //OPENTHREAD_CONFIG_LOG_OUTPUT_DEBUG_UART
+//#define OPENTHREAD_CONFIG_LOG_OUTPUT OPENTHREAD_CONFIG_LOG_OUTPUT_PLATFORM_DEFINED
 
 /* Define to 1 to enable the commissioner role. */
 #define OPENTHREAD_ENABLE_COMMISSIONER 0
@@ -86,6 +87,9 @@
 
 /* Define to 1 to enable Service feature. */
 #define OPENTHREAD_ENABLE_SERVICE 0
+
+/* Define to 1 to enable long routes support. */
+#define OPENTHREAD_CONFIG_ENABLE_LONG_ROUTES 0
 
 /* Name of package */
 #define PACKAGE "openthread"

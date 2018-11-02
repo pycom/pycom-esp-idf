@@ -35,7 +35,7 @@
 #ifndef OPENTHREAD_JOINER_H_
 #define OPENTHREAD_JOINER_H_
 
-#include <openthread/types.h>
+#include <openthread/platform/radio.h>
 #include <openthread/platform/toolchain.h>
 
 #ifdef __cplusplus
@@ -56,7 +56,8 @@ extern "C" {
  * This enumeration defines the Joiner State.
  *
  */
-typedef enum otJoinerState {
+typedef enum otJoinerState
+{
     OT_JOINER_STATE_IDLE      = 0,
     OT_JOINER_STATE_DISCOVER  = 1,
     OT_JOINER_STATE_CONNECT   = 2,

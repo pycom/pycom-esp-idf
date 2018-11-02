@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2017, The OpenThread Authors.
+ *  Copyright (c) 2018, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,45 +28,52 @@
 
 /**
  * @file
- *   This file implements the OpenThread TMF proxy API.
+ * @brief
+ *   This file includes the platform abstraction for the time service.
  */
 
-#include "openthread-core-config.h"
+#ifndef TIME_H_
+#define TIME_H_
 
-#include <openthread/tmf_proxy.h>
+#include <stdint.h>
 
-#include "common/instance.hpp"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-#if OPENTHREAD_FTD && OPENTHREAD_ENABLE_TMF_PROXY
+/**
+ * @addtogroup plat-time
+ *
+ * @brief
+ *   This module includes the platform abstraction for the time service.
+ *
+ * @{
+ *
+ */
 
-using namespace ot;
+/**
+ * Get the current time (64bits width).
+ *
+ * @returns The current time in microseconds.
+ *
+ */
+uint64_t otPlatTimeGet(void);
 
-otError otTmfProxyStart(otInstance *aInstance, otTmfProxyStreamHandler aTmfProxyCallback, void *aContext)
-{
-    Instance &instance = *static_cast<Instance *>(aInstance);
+/**
+ * Get the device's XTAL accuracy.
+ *
+ * @returns The device's XTAL accuracy, in ppm.
+ *
+ */
+uint16_t otPlatTimeGetXtalAccuracy(void);
 
-    return instance.GetThreadNetif().GetTmfProxy().Start(aTmfProxyCallback, aContext);
-}
+/**
+ * @}
+ *
+ */
 
-otError otTmfProxyStop(otInstance *aInstance)
-{
-    Instance &instance = *static_cast<Instance *>(aInstance);
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
-    return instance.GetThreadNetif().GetTmfProxy().Stop();
-}
-
-otError otTmfProxySend(otInstance *aInstance, otMessage *aMessage, uint16_t aLocator, uint16_t aPort)
-{
-    Instance &instance = *static_cast<Instance *>(aInstance);
-
-    return instance.GetThreadNetif().GetTmfProxy().Send(*static_cast<ot::Message *>(aMessage), aLocator, aPort);
-}
-
-bool otTmfProxyIsEnabled(otInstance *aInstance)
-{
-    Instance &instance = *static_cast<Instance *>(aInstance);
-
-    return instance.GetThreadNetif().GetTmfProxy().IsEnabled();
-}
-
-#endif // OPENTHREAD_FTD && OPENTHREAD_ENABLE_TMF_PROXY
+#endif // TIME_H_

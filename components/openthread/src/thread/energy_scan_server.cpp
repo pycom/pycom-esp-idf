@@ -113,7 +113,7 @@ void EnergyScanServer::HandleRequest(Coap::Header &aHeader, Message &aMessage, c
     if (aHeader.IsConfirmable() && !aMessageInfo.GetSockAddr().IsMulticast())
     {
         SuccessOrExit(GetNetif().GetCoap().SendEmptyAck(aHeader, responseInfo));
-        otLogInfoMeshCoP(GetInstance(), "sent energy scan query response");
+        otLogInfoMeshCoP("sent energy scan query response");
     }
 
 exit:
@@ -213,7 +213,7 @@ otError EnergyScanServer::SendReport(void)
     messageInfo.SetPeerPort(kCoapUdpPort);
     SuccessOrExit(error = GetNetif().GetCoap().SendMessage(*message, messageInfo));
 
-    otLogInfoMeshCoP(GetInstance(), "sent scan results");
+    otLogInfoMeshCoP("sent scan results");
 
 exit:
 
@@ -227,12 +227,12 @@ exit:
     return error;
 }
 
-void EnergyScanServer::HandleStateChanged(Notifier::Callback &aCallback, uint32_t aFlags)
+void EnergyScanServer::HandleStateChanged(Notifier::Callback &aCallback, otChangedFlags aFlags)
 {
     aCallback.GetOwner<EnergyScanServer>().HandleStateChanged(aFlags);
 }
 
-void EnergyScanServer::HandleStateChanged(uint32_t aFlags)
+void EnergyScanServer::HandleStateChanged(otChangedFlags aFlags)
 {
     if ((aFlags & OT_CHANGED_THREAD_NETDATA) != 0 && !mActive &&
         GetNetif().GetNetworkDataLeader().GetCommissioningData() == NULL)

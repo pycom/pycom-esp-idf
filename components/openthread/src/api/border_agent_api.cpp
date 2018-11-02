@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, The OpenThread Authors.
+ *  Copyright (c) 2018, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,38 +28,24 @@
 
 /**
  * @file
- *   This file includes definitions for manipulating Thread Network Data managed by the Thread Leader.
+ *   This file implements the OpenThread Border Agent API.
  */
-
-#ifndef NETWORK_DATA_LEADER_MTD_HPP_
-#define NETWORK_DATA_LEADER_MTD_HPP_
 
 #include "openthread-core-config.h"
 
-#include "utils/wrap_stdint.h"
+#include <openthread/border_agent.h>
 
-namespace ot {
+#include "common/instance.hpp"
 
-namespace NetworkData {
+#if OPENTHREAD_ENABLE_BORDER_AGENT
 
-class Leader : public LeaderBase
+using namespace ot;
+
+otBorderAgentState otBorderAgentGetState(otInstance *aInstance)
 {
-public:
-    explicit Leader(Instance &aInstance)
-        : LeaderBase(aInstance)
-    {
-    }
+    Instance &instance = *static_cast<Instance *>(aInstance);
 
-    void Start(void) {}
-    void Stop(void) {}
+    return instance.GetThreadNetif().GetBorderAgent().GetState();
+}
 
-    void IncrementVersion(void) {}
-    void IncrementStableVersion(void) {}
-
-    otError SendServerDataNotification(uint16_t) { return OT_ERROR_NOT_IMPLEMENTED; }
-};
-
-} // namespace NetworkData
-} // namespace ot
-
-#endif // NETWORK_DATA_LEADER_MTD_HPP_
+#endif // OPENTHREAD_ENABLE_BORDER_AGENT

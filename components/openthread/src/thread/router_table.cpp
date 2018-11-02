@@ -249,7 +249,7 @@ Router *RouterTable::Allocate(uint8_t aRouterId)
     mRouterIdSequenceLastUpdated = TimerMilli::GetNow();
     GetNetif().GetMle().ResetAdvertiseInterval();
 
-    otLogInfoMle(GetInstance(), "Allocate router id %d", aRouterId);
+    otLogNoteMle("Allocate router id %d", aRouterId);
 
 exit:
     return rval;
@@ -289,10 +289,10 @@ otError RouterTable::Release(uint8_t aRouterId)
     mRouterIdSequenceLastUpdated = TimerMilli::GetNow();
 
     netif.GetAddressResolver().Remove(aRouterId);
-    netif.GetNetworkDataLeader().RemoveBorderRouter(rloc16);
+    netif.GetNetworkDataLeader().RemoveBorderRouter(rloc16, NetworkData::Leader::kMatchModeRouterId);
     netif.GetMle().ResetAdvertiseInterval();
 
-    otLogInfoMle(GetInstance(), "Release router id %d", aRouterId);
+    otLogNoteMle("Release router id %d", aRouterId);
 
 exit:
     return error;
@@ -534,14 +534,11 @@ void RouterTable::ProcessTlv(const Mle::RouteTlv &aTlv)
         }
         else
         {
-            if (IsAllocated(i))
-            {
-                Router *router = GetRouter(i);
+            Router *router = GetRouter(i);
 
-                assert(router != NULL);
-                router->SetNextHop(Mle::kInvalidRouterId);
-                RemoveNeighbor(*router);
-            }
+            assert(router != NULL);
+            router->SetNextHop(Mle::kInvalidRouterId);
+            RemoveNeighbor(*router);
 
             mAllocatedRouterIds[i / 8] &= ~(1 << (i % 8));
         }

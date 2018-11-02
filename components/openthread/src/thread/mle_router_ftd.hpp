@@ -364,13 +364,13 @@ public:
     /**
      * This method store a child information into non-volatile memory.
      *
-     * @param[in]  aChildRloc16   The child RLOC16 to store.
+     * @param[in]  aChild          A reference to the child to store.
      *
      * @retval  OT_ERROR_NONE      Successfully store child.
      * @retval  OT_ERROR_NO_BUFS   Insufficient available buffers to store child.
      *
      */
-    otError StoreChild(uint16_t aChildRloc16);
+    otError StoreChild(const Child &aChild);
 
     /**
      * This method returns a pointer to a Neighbor object.
@@ -414,7 +414,7 @@ public:
 
     /**
      * This method returns a pointer to a Neighbor object if a one-way link is maintained
-     * as in the instance of an FFD child with neighbor routers.
+     * as in the instance of an FTD child with neighbor routers.
      *
      * @param[in]  aAddress  The address of the Neighbor.
      *
@@ -580,7 +580,7 @@ public:
      * @returns The assigned parent priority value, -2 means not assigned.
      *
      */
-    int8_t GetAssignParentPriority(void) const;
+    int8_t GetAssignParentPriority(void) const { return mParentPriority; }
 
     /**
      * This method sets the parent priority.
@@ -669,6 +669,17 @@ public:
      */
     static uint8_t LinkQualityToCost(uint8_t aLinkQuality);
 
+#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+    /**
+     * This method generates an MLE Time Synchronization message.
+     *
+     * @retval OT_ERROR_NONE     Successfully sent an MLE Time Synchronization message.
+     * @retval OT_ERROR_NO_BUFS  Insufficient buffers to generate the MLE Time Synchronization message.
+     *
+     */
+    otError SendTimeSync(void);
+#endif
+
 private:
     enum
     {
@@ -707,6 +718,9 @@ private:
     otError HandleDataRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     otError HandleNetworkDataUpdateRouter(void);
     otError HandleDiscoveryRequest(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+    otError HandleTimeSync(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+#endif
 
     otError ProcessRouteTlv(const RouteTlv &aRoute);
     void    StopAdvertiseTimer(void);

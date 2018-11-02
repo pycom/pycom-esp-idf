@@ -149,10 +149,9 @@ Message *CoapBase::NewMessage(const Header &aHeader, uint8_t aPriority)
     // Ensure that header has minimum required length.
     VerifyOrExit(aHeader.GetLength() >= Header::kMinHeaderLength);
 
-    VerifyOrExit((message = mSocket.NewMessage(aHeader.GetLength())) != NULL);
+    VerifyOrExit((message = mSocket.NewMessage(aHeader.GetLength(), aPriority)) != NULL);
     message->Prepend(aHeader.GetBytes(), aHeader.GetLength());
     message->SetOffset(0);
-    message->SetPriority(aPriority);
 
 exit:
     return message;
@@ -527,8 +526,8 @@ exit:
 
 void CoapBase::HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
 {
-    static_cast<Coap *>(aContext)->Receive(*static_cast<Message *>(aMessage),
-                                           *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
+    static_cast<CoapBase *>(aContext)->Receive(*static_cast<Message *>(aMessage),
+                                               *static_cast<const Ip6::MessageInfo *>(aMessageInfo));
 }
 
 void CoapBase::Receive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
@@ -551,7 +550,7 @@ exit:
 
     if (error)
     {
-        otLogInfoCoapErr(GetNetif().GetInstance(), error, "Receive failed");
+        otLogInfoCoapErr(error, "Receive failed");
     }
 }
 
@@ -710,7 +709,7 @@ exit:
 
     if (error != OT_ERROR_NONE)
     {
-        otLogInfoCoapErr(GetNetif().GetInstance(), error, "Failed to process request");
+        otLogInfoCoapErr(error, "Failed to process request");
 
         if (error == OT_ERROR_NOT_FOUND)
         {

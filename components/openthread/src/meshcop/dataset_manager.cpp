@@ -38,8 +38,6 @@
 
 #include <stdio.h>
 
-#include <openthread/types.h>
-
 #include "common/instance.hpp"
 #include "common/logging.hpp"
 #include "common/owner-locator.hpp"
@@ -151,6 +149,7 @@ otError DatasetManager::Set(const Dataset &aDataset)
     otError          error = OT_ERROR_NONE;
     const Timestamp *timestamp;
     int              compare;
+    bool             isMasterkeyUpdated = false;
 
     timestamp = aDataset.GetTimestamp();
 
@@ -161,23 +160,23 @@ otError DatasetManager::Set(const Dataset &aDataset)
 
         if (mLocal.GetType() == Tlv::kActiveTimestamp)
         {
-            SuccessOrExit(error = aDataset.ApplyConfiguration(GetInstance()));
+            SuccessOrExit(error = aDataset.ApplyConfiguration(GetInstance(), &isMasterkeyUpdated));
         }
     }
 
     compare = mLocal.Compare(timestamp);
 
-    if (compare > 0)
+    if (isMasterkeyUpdated || compare > 0)
     {
-        ThreadNetif &netif = GetNetif();
-
         mLocal.Set(aDataset);
 
-        if (netif.GetMle().GetRole() == OT_DEVICE_ROLE_LEADER)
+#if OPENTHREAD_FTD
+        if (GetNetif().GetMle().GetRole() == OT_DEVICE_ROLE_LEADER)
         {
-            netif.GetNetworkDataLeader().IncrementVersion();
-            netif.GetNetworkDataLeader().IncrementStableVersion();
+            GetNetif().GetNetworkDataLeader().IncrementVersion();
+            GetNetif().GetNetworkDataLeader().IncrementStableVersion();
         }
+#endif
     }
     else if (compare < 0)
     {
@@ -242,7 +241,7 @@ otError DatasetManager::Register(void)
     messageInfo.SetPeerPort(kCoapUdpPort);
     SuccessOrExit(error = netif.GetCoap().SendMessage(*message, messageInfo));
 
-    otLogInfoMeshCoP(GetInstance(), "sent dataset to leader");
+    otLogInfoMeshCoP("sent dataset to leader");
 
 exit:
 
@@ -360,7 +359,7 @@ void DatasetManager::SendGetResponse(const Coap::Header &    aRequestHeader,
 
     SuccessOrExit(error = netif.GetCoap().SendMessage(*message, aMessageInfo));
 
-    otLogInfoMeshCoP(GetInstance(), "sent dataset get response");
+    otLogInfoMeshCoP("sent dataset get response");
 
 exit:
 
@@ -491,7 +490,7 @@ void PendingDataset::StartDelayTimer(void)
         }
 
         mDelayTimer.StartAt(dataset.GetUpdateTime(), delay);
-        otLogInfoMeshCoP(GetInstance(), "delay timer started %d", delay);
+        otLogInfoMeshCoP("delay timer started %d", delay);
     }
 }
 
@@ -521,7 +520,7 @@ void PendingDataset::HandleDelayTimer(void)
         }
     }
 
-    otLogInfoMeshCoP(GetInstance(), "pending delay timer expired");
+    otLogInfoMeshCoP("pending delay timer expired");
 
     dataset.ConvertToActive();
     GetNetif().GetActiveDataset().Set(dataset);

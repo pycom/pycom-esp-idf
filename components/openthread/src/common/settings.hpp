@@ -146,9 +146,9 @@ protected:
 #endif
 
 #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_WARN) && (OPENTHREAD_CONFIG_LOG_UTIL != 0)
-    void LogFailure(otError aError, const char *aAction) const;
+    void LogFailure(otError aError, const char *aAction, bool aIsDelete) const;
 #else
-    void LogFailure(otError, const char *) const {}
+    void LogFailure(otError, const char *, bool) const {}
 #endif
 };
 
@@ -379,6 +379,20 @@ public:
          *
          */
         void Advance(void);
+
+        /**
+         * This method overloads operator `++` (pre-increment) to advance the iterator to move to the next Child Info
+         * entry in the list (if any).
+         *
+         */
+        void operator++(void) { Advance(); }
+
+        /**
+         * This method overloads operator `++` (post-increment) to advance the iterator to move to the next Child Info
+         * entry in the list (if any).
+         *
+         */
+        void operator++(int) { Advance(); }
 
         /**
          * This method gets the Child Info corresponding to the current iterator entry in the list.

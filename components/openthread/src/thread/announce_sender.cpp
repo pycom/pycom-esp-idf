@@ -183,7 +183,7 @@ void AnnounceSender::CheckState(void)
 
     SendAnnounce(channelMask, 0, period, kMaxJitter);
 
-    otLogInfoMle(GetInstance(), "Starting periodic MLE Announcements tx, period %u, mask %s", period,
+    otLogInfoMle("Starting periodic MLE Announcements tx, period %u, mask %s", period,
                  channelMask.ToString().AsCString());
 
 exit:
@@ -193,15 +193,15 @@ exit:
 void AnnounceSender::Stop(void)
 {
     AnnounceSenderBase::Stop();
-    otLogInfoMle(GetInstance(), "Stopping periodic MLE Announcements tx");
+    otLogInfoMle("Stopping periodic MLE Announcements tx");
 }
 
-void AnnounceSender::HandleStateChanged(Notifier::Callback &aCallback, uint32_t aFlags)
+void AnnounceSender::HandleStateChanged(Notifier::Callback &aCallback, otChangedFlags aFlags)
 {
     aCallback.GetOwner<AnnounceSender>().HandleStateChanged(aFlags);
 }
 
-void AnnounceSender::HandleStateChanged(uint32_t aFlags)
+void AnnounceSender::HandleStateChanged(otChangedFlags aFlags)
 {
     if ((aFlags & OT_CHANGED_THREAD_ROLE) != 0)
     {

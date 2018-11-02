@@ -33,8 +33,6 @@
 
 #include "child_supervision.hpp"
 
-#include <openthread/openthread.h>
-
 #include "openthread-core-config.h"
 #include "common/code_utils.hpp"
 #include "common/instance.hpp"
@@ -100,7 +98,7 @@ void ChildSupervisor::SendMessage(Child &aChild)
     SuccessOrExit(netif.SendMessage(*message));
     message = NULL;
 
-    otLogInfoUtil(GetInstance(), "Sending supervision message to child 0x%04x", aChild.GetRloc16());
+    otLogInfoUtil("Sending supervision message to child 0x%04x", aChild.GetRloc16());
 
 exit:
 
@@ -124,7 +122,7 @@ void ChildSupervisor::HandleTimer(void)
 {
     VerifyOrExit(mSupervisionInterval != 0);
 
-    for (ChildTable::Iterator iter(GetInstance(), ChildTable::kInStateValid); !iter.IsDone(); iter.Advance())
+    for (ChildTable::Iterator iter(GetInstance(), ChildTable::kInStateValid); !iter.IsDone(); iter++)
     {
         Child &child = *iter.GetChild();
 
@@ -157,22 +155,22 @@ void ChildSupervisor::CheckState(void)
     if (shouldRun && !mTimer.IsRunning())
     {
         mTimer.Start(kOneSecond);
-        otLogInfoUtil(GetInstance(), "Starting Child Supervision");
+        otLogInfoUtil("Starting Child Supervision");
     }
 
     if (!shouldRun && mTimer.IsRunning())
     {
         mTimer.Stop();
-        otLogInfoUtil(GetInstance(), "Stopping Child Supervision");
+        otLogInfoUtil("Stopping Child Supervision");
     }
 }
 
-void ChildSupervisor::HandleStateChanged(Notifier::Callback &aCallback, uint32_t aFlags)
+void ChildSupervisor::HandleStateChanged(Notifier::Callback &aCallback, otChangedFlags aFlags)
 {
     aCallback.GetOwner<ChildSupervisor>().HandleStateChanged(aFlags);
 }
 
-void ChildSupervisor::HandleStateChanged(uint32_t aFlags)
+void ChildSupervisor::HandleStateChanged(otChangedFlags aFlags)
 {
     if ((aFlags & (OT_CHANGED_THREAD_ROLE | OT_CHANGED_THREAD_CHILD_ADDED | OT_CHANGED_THREAD_CHILD_REMOVED)) != 0)
     {
@@ -251,7 +249,7 @@ void SupervisionListener::HandleTimer(void)
     VerifyOrExit((netif.GetMle().GetRole() == OT_DEVICE_ROLE_CHILD) &&
                  (netif.GetMeshForwarder().GetRxOnWhenIdle() == false));
 
-    otLogWarnUtil(netif.GetInstance(), "Supervision timeout. No frame from parent in %d sec", mTimeout);
+    otLogWarnUtil("Supervision timeout. No frame from parent in %d sec", mTimeout);
 
     netif.GetMle().SendChildUpdateRequest();
 
