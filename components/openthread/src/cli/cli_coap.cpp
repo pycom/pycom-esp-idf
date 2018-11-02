@@ -127,16 +127,16 @@ void Coap::HandleServerResponse(otCoapHeader *aHeader, otMessage *aMessage, cons
 {
     otError      error = OT_ERROR_NONE;
     otCoapHeader responseHeader;
-    otMessage *  responseMessage;
+    otMessage *  responseMessage = NULL;
     otCoapCode   responseCode    = OT_COAP_CODE_EMPTY;
     char         responseContent = '0';
 
     mInterpreter.mServer->OutputFormat(
-        "Received coap request from [%x:%x:%x:%x:%x:%x:%x:%x]: ", HostSwap16(aMessageInfo->mSockAddr.mFields.m16[0]),
-        HostSwap16(aMessageInfo->mSockAddr.mFields.m16[1]), HostSwap16(aMessageInfo->mSockAddr.mFields.m16[2]),
-        HostSwap16(aMessageInfo->mSockAddr.mFields.m16[3]), HostSwap16(aMessageInfo->mSockAddr.mFields.m16[4]),
-        HostSwap16(aMessageInfo->mSockAddr.mFields.m16[5]), HostSwap16(aMessageInfo->mSockAddr.mFields.m16[6]),
-        HostSwap16(aMessageInfo->mSockAddr.mFields.m16[7]));
+        "Received coap request from [%x:%x:%x:%x:%x:%x:%x:%x]: ", HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[0]),
+        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[1]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[2]),
+        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[3]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[4]),
+        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[5]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[6]),
+        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[7]));
 
     switch (otCoapHeaderGetCode(aHeader))
     {
@@ -158,7 +158,7 @@ void Coap::HandleServerResponse(otCoapHeader *aHeader, otMessage *aMessage, cons
 
     default:
         mInterpreter.mServer->OutputFormat("Undefined\r\n");
-        return;
+        ExitNow(error = OT_ERROR_PARSE);
     }
 
     PrintPayload(aMessage);
@@ -196,11 +196,14 @@ void Coap::HandleServerResponse(otCoapHeader *aHeader, otMessage *aMessage, cons
 
 exit:
 
-    if (error != OT_ERROR_NONE && responseMessage != NULL)
+    if (error != OT_ERROR_NONE)
     {
-        mInterpreter.mServer->OutputFormat("Cannot send coap response message: Error %d: %s\r\n", error,
-                                           otThreadErrorToString(error));
-        otMessageFree(responseMessage);
+        if (responseMessage != NULL)
+        {
+            mInterpreter.mServer->OutputFormat("Cannot send coap response message: Error %d: %s\r\n", error,
+                                               otThreadErrorToString(error));
+            otMessageFree(responseMessage);
+        }
     }
     else if (responseCode >= OT_COAP_CODE_RESPONSE_MIN)
     {

@@ -32,7 +32,6 @@
 #include "openthread-core-config.h"
 
 #include <openthread/dns.h>
-#include <openthread/types.h>
 
 #include "common/message.hpp"
 #include "common/timer.hpp"
@@ -193,14 +192,6 @@ public:
      *
      */
     otError Query(const otDnsQuery *aQuery, otDnsResponseHandler aHandler, void *aContext);
-
-    /**
-     * This method returns a port number used by DNS client.
-     *
-     * @returns A port number.
-     *
-     */
-    uint16_t GetPort(void) { return mSocket.GetSockName().mPort; };
 
 private:
     /**

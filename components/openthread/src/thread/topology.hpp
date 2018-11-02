@@ -36,6 +36,8 @@
 
 #include "openthread-core-config.h"
 
+#include <openthread/thread_ftd.h>
+
 #include "common/message.hpp"
 #include "common/random.hpp"
 #include "mac/mac_frame.hpp"
@@ -134,7 +136,7 @@ public:
      * @returns TRUE if a Full Thread Device, FALSE otherwise.
      *
      */
-    bool IsFullThreadDevice(void) const { return (mMode & Mle::ModeTlv::kModeFFD) != 0; }
+    bool IsFullThreadDevice(void) const { return (mMode & Mle::ModeTlv::kModeFullThreadDevice) != 0; }
 
     /**
      * This method indicates whether or not the device uses secure IEEE 802.15.4 Data Request messages.
@@ -336,6 +338,24 @@ public:
      */
     uint8_t GetChallengeSize(void) const { return sizeof(mValidPending.mPending.mChallenge); }
 
+#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+    /**
+     * This method indicates whether or not time sync feature is enabled.
+     *
+     * @returns TRUE if time sync feature is enabled, FALSE otherwise.
+     *
+     */
+    bool IsTimeSyncEnabled(void) const { return mTimeSyncEnabled; }
+
+    /**
+     * This method sets whether or not time sync feature is enabled.
+     *
+     * @param[in]  aEnable    TRUE if time sync feature is enabled, FALSE otherwise.
+     *
+     */
+    void SetTimeSyncEnabled(bool aEnabled) { mTimeSyncEnabled = aEnabled; }
+#endif
+
 private:
     Mac::ExtAddress mMacAddr;   ///< The IEEE 802.15.4 Extended Address
     uint32_t        mLastHeard; ///< Time when last heard.
@@ -352,13 +372,18 @@ private:
         } mPending;
     } mValidPending;
 
-    uint32_t        mKeySequence;     ///< Current key sequence
-    uint16_t        mRloc16;          ///< The RLOC16
-    uint8_t         mState : 3;       ///< The link state
-    uint8_t         mMode : 4;        ///< The MLE device mode
-    bool            mDataRequest : 1; ///< Indicates whether or not a Data Poll was received
-    uint8_t         mLinkFailures;    ///< Consecutive link failure count
-    LinkQualityInfo mLinkInfo;        ///< Link quality info (contains average RSS, link margin and link quality)
+    uint32_t mKeySequence;     ///< Current key sequence
+    uint16_t mRloc16;          ///< The RLOC16
+    uint8_t  mState : 3;       ///< The link state
+    uint8_t  mMode : 4;        ///< The MLE device mode
+    bool     mDataRequest : 1; ///< Indicates whether or not a Data Poll was received
+#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+    uint8_t mLinkFailures : 7;    ///< Consecutive link failure count
+    bool    mTimeSyncEnabled : 1; ///< Indicates whether or not time sync feature is enabled.
+#else
+    uint8_t mLinkFailures; ///< Consecutive link failure count
+#endif
+    LinkQualityInfo mLinkInfo; ///< Link quality info (contains average RSS, link margin and link quality)
 };
 
 /**
@@ -888,7 +913,12 @@ public:
 private:
     uint8_t mNextHop;            ///< The next hop towards this router
     uint8_t mLinkQualityOut : 2; ///< The link quality out for this router
-    uint8_t mCost : 4;           ///< The cost to this router via neighbor router
+
+#if OPENTHREAD_CONFIG_ENABLE_LONG_ROUTES
+    uint8_t mCost; ///< The cost to this router via neighbor router
+#else
+    uint8_t mCost : 4;     ///< The cost to this router via neighbor router
+#endif
 };
 
 } // namespace ot

@@ -38,7 +38,9 @@ ot_platform_headers                     = \
     logging.h                             \
     radio.h                               \
     random.h                              \
+    time.h                                \
     uart.h                                \
+    udp.h                                 \
     spi-slave.h                           \
     settings.h                            \
     messagepool.h                         \

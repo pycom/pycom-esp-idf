@@ -36,8 +36,8 @@
 #include "openthread-core-config.h"
 
 #include <openthread/instance.h>
-#include <openthread/openthread.h>
 #include <openthread/platform/misc.h>
+#include <openthread/platform/radio.h>
 
 #include "common/instance.hpp"
 #include "common/logging.hpp"
@@ -51,7 +51,7 @@ otInstance *otInstanceInit(void *aInstanceBuffer, size_t *aInstanceBufferSize)
     Instance *instance;
 
     instance = Instance::Init(aInstanceBuffer, aInstanceBufferSize);
-    otLogInfoApi(*instance, "otInstance Initialized");
+    otLogInfoApi("otInstance Initialized");
 
     return instance;
 }
@@ -76,12 +76,8 @@ bool otInstanceIsInitialized(otInstance *aInstance)
 
 void otInstanceFinalize(otInstance *aInstance)
 {
-#if OPENTHREAD_MTD || OPENTHREAD_FTD
     Instance &instance = *static_cast<Instance *>(aInstance);
     instance.Finalize();
-#else
-    OT_UNUSED_VARIABLE(aInstance);
-#endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 }
 
 void otInstanceReset(otInstance *aInstance)
@@ -121,56 +117,23 @@ otError otInstanceErasePersistentInfo(otInstance *aInstance)
 }
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 
-otLogLevel otGetDynamicLogLevel(otInstance *aInstance)
-{
-    otLogLevel logLevel;
-
-#if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
-    Instance &instance = *static_cast<Instance *>(aInstance);
-
-    logLevel = instance.GetDynamicLogLevel();
-#else
-    logLevel = static_cast<otLogLevel>(OPENTHREAD_CONFIG_LOG_LEVEL);
-    OT_UNUSED_VARIABLE(aInstance);
-#endif
-
-    return logLevel;
-}
-
-otError otSetDynamicLogLevel(otInstance *aInstance, otLogLevel aLogLevel)
-{
-    otError error = OT_ERROR_NONE;
-
-#if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
-    Instance &instance = *static_cast<Instance *>(aInstance);
-
-    instance.SetDynamicLogLevel(aLogLevel);
-#else
-    error = OT_ERROR_DISABLED_FEATURE;
-    OT_UNUSED_VARIABLE(aInstance);
-    OT_UNUSED_VARIABLE(aLogLevel);
-#endif
-
-    return error;
-}
-
 const char *otGetVersionString(void)
 {
-/**
- * PLATFORM_VERSION_ATTR_PREFIX and PLATFORM_VERSION_ATTR_SUFFIX are
- * intended to be used to specify compiler directives to indicate
- * what linker section the platform version string should be stored.
- *
- * This is useful for specifying an exact locaiton of where the version
- * string will be located so that it can be easily retrieved from the
- * raw firmware image.
- *
- * If PLATFORM_VERSION_ATTR_PREFIX is unspecified, the keyword `static`
- * is used instead.
- *
- * If both are unspecified, the location of the string in the firmware
- * image will be undefined and may change.
- */
+    /**
+     * PLATFORM_VERSION_ATTR_PREFIX and PLATFORM_VERSION_ATTR_SUFFIX are
+     * intended to be used to specify compiler directives to indicate
+     * what linker section the platform version string should be stored.
+     *
+     * This is useful for specifying an exact location of where the version
+     * string will be located so that it can be easily retrieved from the
+     * raw firmware image.
+     *
+     * If PLATFORM_VERSION_ATTR_PREFIX is unspecified, the keyword `static`
+     * is used instead.
+     *
+     * If both are unspecified, the location of the string in the firmware
+     * image will be undefined and may change.
+     */
 
 #ifdef PLATFORM_VERSION_ATTR_PREFIX
     PLATFORM_VERSION_ATTR_PREFIX
@@ -187,4 +150,15 @@ const char *otGetVersionString(void)
         ; // Trailing semicolon to end statement.
 
     return sVersion;
+}
+
+const char *otGetRadioVersionString(otInstance *aInstance)
+{
+    return otPlatRadioGetVersionString(aInstance);
+}
+
+OT_TOOL_WEAK const char *otPlatRadioGetVersionString(otInstance *aInstance)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    return otGetVersionString();
 }

@@ -161,9 +161,9 @@ void Address::SetIid(const uint8_t *aIid)
     memcpy(mFields.m8 + kInterfaceIdentifierOffset, aIid, kInterfaceIdentifierSize);
 }
 
-void Address::SetIid(const Mac::ExtAddress &aEui64)
+void Address::SetIid(const Mac::ExtAddress &aExtAddress)
 {
-    memcpy(mFields.m8 + kInterfaceIdentifierOffset, aEui64.m8, kInterfaceIdentifierSize);
+    memcpy(mFields.m8 + kInterfaceIdentifierOffset, aExtAddress.m8, kInterfaceIdentifierSize);
     mFields.m8[kInterfaceIdentifierOffset] ^= 0x02;
 }
 
@@ -181,20 +181,26 @@ void Address::ToExtAddress(Mac::Address &aMacAddress) const
 
 uint8_t Address::GetScope(void) const
 {
+    uint8_t rval;
+
     if (IsMulticast())
     {
-        return mFields.m8[1] & 0xf;
+        rval = mFields.m8[1] & 0xf;
     }
     else if (IsLinkLocal())
     {
-        return kLinkLocalScope;
+        rval = kLinkLocalScope;
     }
     else if (IsLoopback())
     {
-        return kNodeLocalScope;
+        rval = kNodeLocalScope;
+    }
+    else
+    {
+        rval = kGlobalScope;
     }
 
-    return kGlobalScope;
+    return rval;
 }
 
 uint8_t Address::PrefixMatch(const uint8_t *aPrefixA, const uint8_t *aPrefixB, uint8_t aMaxLength)
