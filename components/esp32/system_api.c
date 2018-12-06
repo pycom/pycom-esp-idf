@@ -330,6 +330,15 @@ void IRAM_ATTR esp_restart_noos()
             DPORT_TIMERS_RST | DPORT_SPI01_RST | DPORT_UART_RST);
     DPORT_REG_WRITE(DPORT_PERIP_RST_EN_REG, 0);
 
+    // Disconnect external interrupts from both CPUs
+    for (int i = ETS_WIFI_MAC_INTR_SOURCE; i <= ETS_CACHE_IA_INTR_SOURCE; i++) {
+        intr_matrix_set(0, i, ETS_INVALID_INUM);
+#if !CONFIG_FREERTOS_UNICORE
+        intr_matrix_set(1, i, ETS_INVALID_INUM);
+#endif
+    }
+
+
     // Set CPU back to XTAL source, no PLL, same as hard reset
     rtc_clk_cpu_freq_set(RTC_CPU_FREQ_XTAL);
 
