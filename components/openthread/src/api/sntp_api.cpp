@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, The OpenThread Authors.
+ *  Copyright (c) 2018, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,55 +28,32 @@
 
 /**
  * @file
- * @brief
- *   This file includes the platform abstraction for the Thread DHCPv6 client.
+ *   This file implements the OpenThread SNTP API.
  */
 
-#ifndef OPENTHREAD_DHCP6_CLIENT_H_
-#define OPENTHREAD_DHCP6_CLIENT_H_
+#include "openthread-core-config.h"
 
-#include <openthread/ip6.h>
+#include <openthread/sntp.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "common/instance.hpp"
 
-/**
- * @addtogroup api-dhcp6
- *
- * @{
- *
- */
+using namespace ot;
 
-/**
- * This structure represents a DHCPv6 address.
- *
- */
-typedef struct otDhcpAddress
+#if OPENTHREAD_ENABLE_SNTP_CLIENT
+otError otSntpClientQuery(otInstance *          aInstance,
+                          const otSntpQuery *   aQuery,
+                          otSntpResponseHandler aHandler,
+                          void *                aContext)
 {
-    otNetifAddress mAddress;           ///< The network interface address.
-    uint32_t       mPreferredLifetime; ///< The preferred lifetime.
-    uint32_t       mValidLifetime;     ///< The valid lifetime.
-} otDhcpAddress;
+    Instance &instance = *static_cast<Instance *>(aInstance);
 
-/**
- * Update all automatically created IPv6 addresses for prefixes from current Network Data with DHCP procedure.
- *
- * @param[in]     aInstance      A pointer to an OpenThread instance.
- * @param[inout]  aAddresses     A pointer to an array of automatically created IPv6 addresses.
- * @param[in]     aNumAddresses  The number of slots in aAddresses array.
- * @param[in]     aContext       A pointer to data passed to aIidCreate function.
- *
- */
-void otDhcp6ClientUpdate(otInstance *aInstance, otDhcpAddress *aAddresses, uint32_t aNumAddresses, void *aContext);
+    return instance.GetThreadNetif().GetSntpClient().Query(aQuery, aHandler, aContext);
+}
 
-/**
- * @}
- *
- */
+void otSntpClientSetUnixEra(otInstance *aInstance, uint32_t aUnixEra)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
 
-#ifdef __cplusplus
-} // end of extern "C"
+    return instance.GetThreadNetif().GetSntpClient().SetUnixEra(aUnixEra);
+}
 #endif
-
-#endif // OPENTHREAD_DHCP6_CLIENT_H_

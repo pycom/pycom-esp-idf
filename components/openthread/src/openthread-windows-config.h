@@ -34,16 +34,13 @@
 
 /* Define to 1 if you want to enable support for multiple OpenThread
    instances. */
-#define OPENTHREAD_ENABLE_MULTIPLE_INSTANCES 0
+#define OPENTHREAD_ENABLE_MULTIPLE_INSTANCES 1
 
 /* Define to 1 if you want to enable default log output. */
-#define OPENTHREAD_CONFIG_LOG_OUTPUT OPENTHREAD_CONFIG_LOG_OUTPUT_DEBUG_UART
-//OPENTHREAD_CONFIG_LOG_OUTPUT_NONE
-//OPENTHREAD_CONFIG_LOG_OUTPUT_DEBUG_UART
-//#define OPENTHREAD_CONFIG_LOG_OUTPUT OPENTHREAD_CONFIG_LOG_OUTPUT_PLATFORM_DEFINED
+#define OPENTHREAD_CONFIG_LOG_OUTPUT OPENTHREAD_CONFIG_LOG_OUTPUT_PLATFORM_DEFINED
 
 /* Define to 1 to enable the commissioner role. */
-#define OPENTHREAD_ENABLE_COMMISSIONER 0
+#define OPENTHREAD_ENABLE_COMMISSIONER 1
 
 /* Define to 1 if you want to use diagnostics module */
 #define OPENTHREAD_ENABLE_DIAG 0
@@ -52,22 +49,22 @@
 #define OPENTHREAD_ENABLE_LEGACY 0
 
 /* Define to 1 to enable dtls support. */
-#define OPENTHREAD_ENABLE_DTLS 0
+#define OPENTHREAD_ENABLE_DTLS 1
 
 /* Define to 1 to enable the joiner role. */
-#define OPENTHREAD_ENABLE_JOINER 0
+#define OPENTHREAD_ENABLE_JOINER 1
 
 /* Define to 1 to enable the jam detection. */
 #define OPENTHREAD_ENABLE_JAM_DETECTION 0
 
 /* Define to 1 to enable DHCPv6 Client. */
-#define OPENTHREAD_ENABLE_DHCP6_CLIENT 0
+#define OPENTHREAD_ENABLE_DHCP6_CLIENT 1
 
 /* Define to 1 to enable DHCPv6 SERVER. */
-#define OPENTHREAD_ENABLE_DHCP6_SERVER 0
+#define OPENTHREAD_ENABLE_DHCP6_SERVER 1
 
 /* Define to 1 to enable MAC whitelist/blacklist feature. */
-#define OPENTHREAD_ENABLE_MAC_FILTER 0
+#define OPENTHREAD_ENABLE_MAC_FILTER 1
 
 /* Define to 1 to enable TMF proxy feature. */
 #define OPENTHREAD_ENABLE_TMF_PROXY 0
@@ -124,9 +121,7 @@
 #define random rand
 
 // Disable a few warnings that we don't care about
-/*
 #pragma warning(disable:4200)  // nonstandard extension used: zero-sized array in struct/union
 #pragma warning(disable:4201)  // nonstandard extension used : nameless struct/union
 #pragma warning(disable:4291)  // no matching operator delete found
 #pragma warning(disable:4815)  // zero-sized array in stack object will have no elements
-*/

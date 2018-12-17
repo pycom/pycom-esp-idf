@@ -87,6 +87,11 @@ extern "C" void otCliUartOutputFormat(const char *aFmt, ...)
     va_end(aAp);
 }
 
+extern "C" void otCliUartOutput(const char *aString, uint16_t aLength)
+{
+    Uart::sUartServer->Output(aString, aLength);
+}
+
 extern "C" void otCliUartAppendResult(otError aError)
 {
     Uart::sUartServer->GetInterpreter().AppendResult(aError);
@@ -295,13 +300,13 @@ void Uart::SendDoneTask(void)
 
 extern "C" void otCliPlatLogv(otLogLevel aLogLevel, otLogRegion aLogRegion, const char *aFormat, va_list aArgs)
 {
+    OT_UNUSED_VARIABLE(aLogLevel);
+    OT_UNUSED_VARIABLE(aLogRegion);
+
     VerifyOrExit(Uart::sUartServer != NULL);
 
     Uart::sUartServer->OutputFormatV(aFormat, aArgs);
     Uart::sUartServer->OutputFormat("\r\n");
-
-    OT_UNUSED_VARIABLE(aLogLevel);
-    OT_UNUSED_VARIABLE(aLogRegion);
 
 exit:
     return;

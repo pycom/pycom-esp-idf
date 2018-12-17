@@ -92,7 +92,7 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_NUM_MESSAGE_BUFFERS
-#define OPENTHREAD_CONFIG_NUM_MESSAGE_BUFFERS 200
+#define OPENTHREAD_CONFIG_NUM_MESSAGE_BUFFERS 44
 #endif
 
 /**
@@ -227,7 +227,7 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_ATTACH_DATA_POLL_PERIOD
-#define OPENTHREAD_CONFIG_ATTACH_DATA_POLL_PERIOD 1000
+#define OPENTHREAD_CONFIG_ATTACH_DATA_POLL_PERIOD 100
 #endif
 
 /**
@@ -544,6 +544,26 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_SNTP_RESPONSE_TIMEOUT
+ *
+ * Maximum time that SNTP Client waits for response in milliseconds.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_SNTP_RESPONSE_TIMEOUT
+#define OPENTHREAD_CONFIG_SNTP_RESPONSE_TIMEOUT 3000
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_SNTP_MAX_RETRANSMIT
+ *
+ * Maximum number of retransmissions for SNTP client.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_SNTP_MAX_RETRANSMIT
+#define OPENTHREAD_CONFIG_SNTP_MAX_RETRANSMIT 2
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_JOIN_BEACON_VERSION
  *
  * The Beacon version to use when the beacon join flag is set.
@@ -650,17 +670,13 @@
 /**
  * @def OPENTHREAD_CONFIG_LOG_LEVEL
  *
- * The log level (used at compile time).
+ * The log level (used at compile time). If `OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL`
+ * is set, this defines the most verbose log level possible. See
+ *`OPENTHREAD_CONFIG_INITIAL_LOG_LEVEL` to set the initial log level.
  *
  */
 #ifndef OPENTHREAD_CONFIG_LOG_LEVEL
-// #define OT_LOG_LEVEL_NONE 0 ///< None
-// #define OT_LOG_LEVEL_CRIT 1 ///< Critical
-// #define OT_LOG_LEVEL_WARN 2 ///< Warning
-// #define OT_LOG_LEVEL_INFO 3 ///< Info
-// #define OT_LOG_LEVEL_DEBG 4 ///< Debug
-// default: OT_LOG_LEVEL_CRIT
-#define OPENTHREAD_CONFIG_LOG_LEVEL OT_LOG_LEVEL_WARN
+#define OPENTHREAD_CONFIG_LOG_LEVEL OT_LOG_LEVEL_CRIT
 #endif
 
 /**
@@ -675,6 +691,16 @@
  */
 #ifndef OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
 #define OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_INITIAL_LOG_LEVEL
+ *
+ * The initial log level used when OpenThread is initialized. See
+ * `OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL`.
+ */
+#ifndef OPENTHREAD_CONFIG_INITIAL_LOG_LEVEL
+#define OPENTHREAD_CONFIG_INITIAL_LOG_LEVEL OPENTHREAD_CONFIG_LOG_LEVEL
 #endif
 
 /**
@@ -986,7 +1012,7 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ACK_TIMEOUT
-#define OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ACK_TIMEOUT 1
+#define OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ACK_TIMEOUT 0
 #endif
 
 /**
@@ -1022,7 +1048,7 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ENERGY_SCAN
-#define OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ENERGY_SCAN 1
+#define OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ENERGY_SCAN 0
 #endif
 
 /**
@@ -1637,6 +1663,16 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_MLE_CHILD_ROUTER_LINKS
+ *
+ * Specifies the desired number of router links that a REED / FED attempts to maintain.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MLE_CHILD_ROUTER_LINKS
+#define OPENTHREAD_CONFIG_MLE_CHILD_ROUTER_LINKS 3
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_ENABLE_DEBUG_UART
  *
  * Enable the "Debug Uart" platform feature.
@@ -1655,7 +1691,7 @@
  * See #include <openthread/platform/debug_uart.h> for more details
  */
 #ifndef OPENTHREAD_CONFIG_ENABLE_DEBUG_UART
-#define OPENTHREAD_CONFIG_ENABLE_DEBUG_UART 1
+#define OPENTHREAD_CONFIG_ENABLE_DEBUG_UART 0
 #endif
 
 /**
@@ -1806,7 +1842,7 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_FAILED_CHILD_TRANSMISSIONS
-#define OPENTHREAD_CONFIG_FAILED_CHILD_TRANSMISSIONS 6
+#define OPENTHREAD_CONFIG_FAILED_CHILD_TRANSMISSIONS 4
 #endif
 
 /**
@@ -1816,7 +1852,7 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_MINIMUM_POLL_PERIOD
-#define OPENTHREAD_CONFIG_MINIMUM_POLL_PERIOD 1000
+#define OPENTHREAD_CONFIG_MINIMUM_POLL_PERIOD 10
 #endif
 
 /**
@@ -1826,7 +1862,7 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_RETX_POLL_PERIOD
-#define OPENTHREAD_CONFIG_RETX_POLL_PERIOD 2000
+#define OPENTHREAD_CONFIG_RETX_POLL_PERIOD 1000
 #endif
 
 /**
@@ -1871,5 +1907,16 @@
  */
 #ifndef OPENTHREAD_CONFIG_IPV6_DEFAULT_MAX_DATAGRAM
 #define OPENTHREAD_CONFIG_IPV6_DEFAULT_MAX_DATAGRAM 1280
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_TIME_SYNC_JUMP_NOTIF_MIN_US
+ *
+ * This setting sets the minimum amount of time (in microseconds) that the network time must jump due to
+ * a time sync event for listeners to be notified of the new network time.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_TIME_SYNC_JUMP_NOTIF_MIN_US
+#define OPENTHREAD_CONFIG_TIME_SYNC_JUMP_NOTIF_MIN_US 10000
 #endif
 #endif // OPENTHREAD_CORE_DEFAULT_CONFIG_H_

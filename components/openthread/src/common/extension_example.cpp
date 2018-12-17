@@ -28,43 +28,68 @@
 
 /**
  * @file
- *   This file implements the OpenThread logging related APIs.
+ *   This file provides an example on how to implement an OpenThread vendor extension.
  */
-
-#define WPP_NAME "logging_api.tmh"
 
 #include "openthread-core-config.h"
 
-#include <openthread/logging.h>
-#include "common/instance.hpp"
+#include "common/code_utils.hpp"
+#include "common/extension.hpp"
+#include "common/new.hpp"
+#include "utils/wrap_stdbool.h"
+#include "utils/wrap_stdint.h"
 
-using namespace ot;
+namespace ot {
+namespace Extension {
 
-otLogLevel otLoggingGetLevel(void)
-#if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL && !OPENTHREAD_ENABLE_MULTIPLE_INSTANCES
+/**
+ * This class defines the vendor extension object.
+ *
+ */
+class Extension : public ExtensionBase
 {
-    return Instance::Get().GetLogLevel();
-}
-#else
+public:
+    explicit Extension(Instance &aInstance)
+        : ExtensionBase(aInstance)
+    {
+    }
+
+    // TODO: Add vendor extension code (add methods and/or member variables).
+};
+
+// ----------------------------------------------------------------------------
+// `ExtensionBase` API
+// ----------------------------------------------------------------------------
+
+static otDEFINE_ALIGNED_VAR(sExtensionRaw, sizeof(Extension), uint64_t);
+
+ExtensionBase &ExtensionBase::Init(Instance &aInstance)
 {
-    return static_cast<otLogLevel>(OPENTHREAD_CONFIG_LOG_LEVEL);
-}
-#endif
+    ExtensionBase *ext = reinterpret_cast<ExtensionBase *>(&sExtensionRaw);
 
-otError otLoggingSetLevel(otLogLevel aLogLevel)
+    VerifyOrExit(!ext->mIsInitialized);
+
+    ext = new (&sExtensionRaw) Extension(aInstance);
+
+exit:
+    return *ext;
+}
+
+void ExtensionBase::SignalInstanceInit(void)
 {
-    OT_UNUSED_VARIABLE(aLogLevel);
+    // OpenThread instance is initialized and ready.
 
-    otError error = OT_ERROR_DISABLED_FEATURE;
-
-#if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
-#if OPENTHREAD_ENABLE_MULTIPLE_INSTANCES
-#warning "Dynamic log level is not supported along with multiple OT instance feature (`ENABLE_MULTIPLE_INSTANCES`)"
-#else
-    Instance::Get().SetLogLevel(aLogLevel);
-    error = OT_ERROR_NONE;
-#endif
-#endif
-
-    return error;
+    // TODO: Implement vendor extension code here and start interaction with OpenThread instance.
 }
+
+void ExtensionBase::SignalNcpInit(Ncp::NcpBase &aNcpBase)
+{
+    // NCP instance is initialized and ready.
+
+    // TODO: Implement vendor extension code here and start interaction with NCP instance.
+
+    OT_UNUSED_VARIABLE(aNcpBase);
+}
+
+} // namespace Extension
+} // namespace ot

@@ -42,8 +42,7 @@
  *
  */
 #if !defined(OPENTHREAD_CONFIG_FILE)
-//#define OPENTHREAD_CONFIG_FILE <openthread-config-generic.h>
-#define OPENTHREAD_CONFIG_FILE <openthread-windows-config.h>
+#define OPENTHREAD_CONFIG_FILE <openthread-config-generic.h>
 #endif
 
 #include OPENTHREAD_CONFIG_FILE

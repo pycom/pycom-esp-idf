@@ -320,7 +320,7 @@ public:
      * @returns A reference to the application COAP object.
      *
      */
-    Coap::ApplicationCoap &GetApplicationCoap(void) { return mApplicationCoap; }
+    Coap::Coap &GetApplicationCoap(void) { return mApplicationCoap; }
 #endif
 
 #if OPENTHREAD_ENABLE_APPLICATION_COAP_SECURE
@@ -330,7 +330,7 @@ public:
      * @returns A reference to the application COAP Secure object.
      *
      */
-    Coap::ApplicationCoapSecure &GetApplicationCoapSecure(void) { return mApplicationCoapSecure; }
+    Coap::CoapSecure &GetApplicationCoapSecure(void) { return mApplicationCoapSecure; }
 #endif
 
 #if OPENTHREAD_ENABLE_CHANNEL_MONITOR
@@ -383,6 +383,16 @@ public:
 
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 
+#if OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
+    /**
+     * This method returns a reference to LinkRaw object.
+     *
+     * @returns A reference to the LinkRaw object.
+     *
+     */
+    Mac::LinkRaw &GetLinkRaw(void) { return mLinkRaw; }
+#endif
+
     /**
      * This template method returns a reference to a given `Type` object belonging to the OpenThread instance.
      *
@@ -399,16 +409,6 @@ public:
      *
      */
     template <typename Type> inline Type &Get(void);
-
-#if OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
-    /**
-     * This method returns a reference to LinkRaw object.
-     *
-     * @returns A reference to the LinkRaw object.
-     *
-     */
-    LinkRaw &GetLinkRaw(void) { return mLinkRaw; }
-#endif
 
 private:
     Instance(void);
@@ -438,11 +438,11 @@ private:
     ThreadNetif mThreadNetif;
 
 #if OPENTHREAD_ENABLE_APPLICATION_COAP
-    Coap::ApplicationCoap mApplicationCoap;
+    Coap::Coap mApplicationCoap;
 #endif
 
 #if OPENTHREAD_ENABLE_APPLICATION_COAP_SECURE
-    Coap::ApplicationCoapSecure mApplicationCoapSecure;
+    Coap::CoapSecure mApplicationCoapSecure;
 #endif
 
 #if OPENTHREAD_ENABLE_CHANNEL_MONITOR
@@ -460,7 +460,7 @@ private:
     MessagePool mMessagePool;
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 #if OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
-    LinkRaw mLinkRaw;
+    Mac::LinkRaw mLinkRaw;
 #endif // OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
 
 #if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
@@ -518,6 +518,11 @@ template <> inline Ip6::Ip6 &Instance::Get(void)
 template <> inline Mac::Mac &Instance::Get(void)
 {
     return GetThreadNetif().GetMac();
+}
+
+template <> inline Mac::SubMac &Instance::Get(void)
+{
+    return GetThreadNetif().GetMac().GetSubMac();
 }
 
 template <> inline KeyManager &Instance::Get(void)
@@ -587,17 +592,10 @@ template <> inline MeshCoP::PendingDataset &Instance::Get(void)
     return GetThreadNetif().GetPendingDataset();
 }
 
-#if OPENTHREAD_ENABLE_APPLICATION_COAP
-template <> inline Coap::ApplicationCoap &Instance::Get(void)
+#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+template <> inline TimeSync &Instance::Get(void)
 {
-    return GetApplicationCoap();
-}
-#endif
-
-#if OPENTHREAD_ENABLE_APPLICATION_COAP_SECURE
-template <> inline Coap::ApplicationCoapSecure &Instance::Get(void)
-{
-    return GetApplicationCoapSecure();
+    return GetThreadNetif().GetTimeSync();
 }
 #endif
 
@@ -648,6 +646,13 @@ template <> inline Utils::JamDetector &Instance::Get(void)
 }
 #endif
 
+#if OPENTHREAD_ENABLE_SNTP_CLIENT
+template <> inline Sntp::Client &Instance::Get(void)
+{
+    return GetThreadNetif().GetSntpClient();
+}
+#endif
+
 template <> inline Utils::ChildSupervisor &Instance::Get(void)
 {
     return GetThreadNetif().GetChildSupervisor();
@@ -689,10 +694,18 @@ template <> inline AnnounceSender &Instance::Get(void)
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 
 #if OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
-template <> inline LinkRaw &Instance::Get(void)
+template <> inline Mac::LinkRaw &Instance::Get(void)
 {
     return GetLinkRaw();
 }
+
+#if OPENTHREAD_RADIO
+template <> inline Mac::SubMac &Instance::Get(void)
+{
+    return GetLinkRaw().GetSubMac();
+}
+#endif
+
 #endif // OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
 
 template <> inline TaskletScheduler &Instance::Get(void)

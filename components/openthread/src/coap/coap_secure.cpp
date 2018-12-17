@@ -47,27 +47,17 @@
 namespace ot {
 namespace Coap {
 
-CoapSecure::CoapSecure(Instance &aInstance)
-    : CoapBase(aInstance, &CoapSecure::HandleRetransmissionTimer, &CoapSecure::HandleResponsesQueueTimer)
+CoapSecure::CoapSecure(Instance &aInstance, bool aLayerTwoSecurity)
+    : Coap(aInstance)
     , mConnectedCallback(NULL)
     , mConnectedContext(NULL)
     , mTransportCallback(NULL)
     , mTransportContext(NULL)
-    , mLayerTwoSecurity(false)
+    , mTransmitQueue()
+    , mTransmitTask(aInstance, &CoapSecure::HandleTransmit, this)
+    , mLayerTwoSecurity(aLayerTwoSecurity)
 {
 }
-
-#if OPENTHREAD_ENABLE_APPLICATION_COAP_SECURE
-CoapSecure::CoapSecure(Instance &aInstance, Timer::Handler aRetransmissionTimer, Timer::Handler aResponsesQueueTimer)
-    : CoapBase(aInstance, aRetransmissionTimer, aResponsesQueueTimer)
-    , mConnectedCallback(NULL)
-    , mConnectedContext(NULL)
-    , mTransportCallback(NULL)
-    , mTransportContext(NULL)
-    , mLayerTwoSecurity(true)
-{
-}
-#endif // OPENTHREAD_ENABLE_APPLICATION_COAP_SECURE
 
 otError CoapSecure::Start(uint16_t aPort, TransportCallback aCallback, void *aContext)
 {
@@ -81,7 +71,7 @@ otError CoapSecure::Start(uint16_t aPort, TransportCallback aCallback, void *aCo
     // to transmit/receive messages, so do not open it in that case.
     if (mTransportCallback == NULL)
     {
-        error = CoapBase::Start(aPort);
+        error = Coap::Start(aPort);
     }
 
     return error;
@@ -100,10 +90,16 @@ otError CoapSecure::Stop(void)
         Disconnect();
     }
 
+    for (Message *message = mTransmitQueue.GetHead(); message != NULL; message = message->GetNext())
+    {
+        mTransmitQueue.Dequeue(*message);
+        message->Free();
+    }
+
     mTransportCallback = NULL;
     mTransportContext  = NULL;
 
-    return CoapBase::Stop();
+    return Coap::Stop();
 }
 
 otError CoapSecure::Connect(const Ip6::SockAddr &aSockAddr, ConnectedCallback aCallback, void *aContext)
@@ -213,7 +209,7 @@ otError CoapSecure::SendMessage(Message &aMessage, otCoapResponseHandler aHandle
 
     VerifyOrExit(IsConnected(), error = OT_ERROR_INVALID_STATE);
 
-    error = CoapBase::SendMessage(aMessage, mPeerAddress, aHandler, aContext);
+    error = Coap::SendMessage(aMessage, mPeerAddress, aHandler, aContext);
 
 exit:
     return error;
@@ -224,13 +220,16 @@ otError CoapSecure::SendMessage(Message &               aMessage,
                                 otCoapResponseHandler   aHandler,
                                 void *                  aContext)
 {
-    return CoapBase::SendMessage(aMessage, aMessageInfo, aHandler, aContext);
+    return Coap::SendMessage(aMessage, aMessageInfo, aHandler, aContext);
 }
 
 otError CoapSecure::Send(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     OT_UNUSED_VARIABLE(aMessageInfo);
-    return GetNetif().GetDtls().Send(aMessage, aMessage.GetLength());
+
+    mTransmitQueue.Enqueue(aMessage);
+    mTransmitTask.Post();
+    return OT_ERROR_NONE;
 }
 
 void CoapSecure::Receive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
@@ -300,7 +299,7 @@ void CoapSecure::HandleDtlsReceive(uint8_t *aBuf, uint16_t aLength)
     VerifyOrExit((message = GetInstance().GetMessagePool().New(Message::kTypeIp6, 0)) != NULL);
     SuccessOrExit(message->Append(aBuf, aLength));
 
-    CoapBase::Receive(*message, mPeerAddress);
+    Coap::Receive(*message, mPeerAddress);
 
 exit:
 
@@ -351,36 +350,37 @@ exit:
     return error;
 }
 
-void CoapSecure::HandleRetransmissionTimer(Timer &aTimer)
+void CoapSecure::HandleTransmit(Tasklet &aTasklet)
 {
-    aTimer.GetOwner<CoapSecure>().CoapBase::HandleRetransmissionTimer();
+    static_cast<CoapSecure *>(static_cast<TaskletContext &>(aTasklet).GetContext())->HandleTransmit();
 }
 
-void CoapSecure::HandleResponsesQueueTimer(Timer &aTimer)
+void CoapSecure::HandleTransmit(void)
 {
-    aTimer.GetOwner<CoapSecure>().CoapBase::HandleResponsesQueueTimer();
+    otError  error   = OT_ERROR_NONE;
+    Message *message = mTransmitQueue.GetHead();
+
+    VerifyOrExit(message != NULL);
+    mTransmitQueue.Dequeue(*message);
+
+    if (mTransmitQueue.GetHead() != NULL)
+    {
+        mTransmitTask.Post();
+    }
+
+    SuccessOrExit(error = GetDtls().Send(*message, message->GetLength()));
+
+exit:
+    if (error != OT_ERROR_NONE)
+    {
+        otLogNoteMeshCoP("CoapSecure Transmit: %s", otThreadErrorToString(error));
+        message->Free();
+    }
+    else
+    {
+        otLogDebgMeshCoP("CoapSecure Transmit: %s", otThreadErrorToString(error));
+    }
 }
-
-#if OPENTHREAD_ENABLE_APPLICATION_COAP_SECURE
-
-ApplicationCoapSecure::ApplicationCoapSecure(Instance &aInstance)
-    : CoapSecure(aInstance,
-                 &ApplicationCoapSecure::HandleRetransmissionTimer,
-                 &ApplicationCoapSecure::HandleResponsesQueueTimer)
-{
-}
-
-void ApplicationCoapSecure::HandleRetransmissionTimer(Timer &aTimer)
-{
-    aTimer.GetOwner<ApplicationCoapSecure>().CoapBase::HandleRetransmissionTimer();
-}
-
-void ApplicationCoapSecure::HandleResponsesQueueTimer(Timer &aTimer)
-{
-    aTimer.GetOwner<ApplicationCoapSecure>().CoapBase::HandleResponsesQueueTimer();
-}
-
-#endif // OPENTHREAD_ENABLE_APPLICATION_COAP_SECURE
 
 } // namespace Coap
 } // namespace ot

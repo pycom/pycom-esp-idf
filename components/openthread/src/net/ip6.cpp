@@ -67,10 +67,64 @@ Ip6::Ip6(Instance &aInstance)
 {
 }
 
-Message *Ip6::NewMessage(uint16_t aReserved, uint8_t aPriority)
+Message *Ip6::NewMessage(uint16_t aReserved, const otMessageSettings *aSettings)
 {
     return GetInstance().GetMessagePool().New(
-        Message::kTypeIp6, sizeof(Header) + sizeof(HopByHopHeader) + sizeof(OptionMpl) + aReserved, aPriority);
+        Message::kTypeIp6, sizeof(Header) + sizeof(HopByHopHeader) + sizeof(OptionMpl) + aReserved, aSettings);
+}
+
+uint8_t Ip6::DscpToPriority(uint8_t aDscp)
+{
+    uint8_t priority;
+    uint8_t cs = aDscp & kDscpCsMask;
+
+    switch (cs)
+    {
+    case kDscpCs1:
+    case kDscpCs2:
+        priority = Message::kPriorityLow;
+        break;
+
+    case kDscpCs0:
+    case kDscpCs3:
+        priority = Message::kPriorityNormal;
+        break;
+
+    case kDscpCs4:
+    case kDscpCs5:
+    case kDscpCs6:
+    case kDscpCs7:
+        priority = Message::kPriorityHigh;
+        break;
+
+    default:
+        priority = Message::kPriorityNormal;
+        break;
+    }
+
+    return priority;
+}
+
+uint8_t Ip6::PriorityToDscp(uint8_t aPriority)
+{
+    uint8_t dscp = kDscpCs0;
+
+    switch (aPriority)
+    {
+    case Message::kPriorityLow:
+        dscp = kDscpCs1;
+        break;
+
+    case Message::kPriorityNormal:
+        dscp = kDscpCs0;
+        break;
+
+    case Message::kPriorityHigh:
+        dscp = kDscpCs4;
+        break;
+    }
+
+    return dscp;
 }
 
 uint16_t Ip6::UpdateChecksum(uint16_t aChecksum, const Address &aAddress)
@@ -358,6 +412,7 @@ otError Ip6::SendDatagram(Message &aMessage, MessageInfo &aMessageInfo, IpProto 
     const NetifUnicastAddress *source;
 
     header.Init();
+    header.SetDscp(PriorityToDscp(aMessage.GetPriority()));
     header.SetPayloadLength(payloadLength);
     header.SetNextHeader(aIpProto);
     header.SetHopLimit(aMessageInfo.mHopLimit ? aMessageInfo.mHopLimit : static_cast<uint8_t>(kDefaultHopLimit));
@@ -1068,28 +1123,15 @@ const NetifUnicastAddress *Ip6::SelectSourceAddress(MessageInfo &aMessageInfo)
                     rvalPrefixMatched = candidatePrefixMatched;
                 }
             }
-            else if (rvalAddr->GetScope() == Address::kRealmLocalScope)
+            else if ((rvalAddr->GetScope() == Address::kRealmLocalScope) &&
+                     (addr->GetScope() == Address::kRealmLocalScope))
             {
-                // Additional rule: Prefer appropriate realm local address
-                if (overrideScope > Address::kRealmLocalScope)
+                // Additional rule: Prefer EID
+                if (rvalAddr->GetAddress().IsRoutingLocator())
                 {
-                    if (rvalAddr->GetAddress().IsRoutingLocator())
-                    {
-                        // Prefer EID if destination is not realm local.
-                        rvalAddr          = addr;
-                        rvalIface         = candidateId;
-                        rvalPrefixMatched = candidatePrefixMatched;
-                    }
-                }
-                else
-                {
-                    if (candidateAddr->IsRoutingLocator())
-                    {
-                        // Prefer RLOC if destination is realm local.
-                        rvalAddr          = addr;
-                        rvalIface         = candidateId;
-                        rvalPrefixMatched = candidatePrefixMatched;
-                    }
+                    rvalAddr          = addr;
+                    rvalIface         = candidateId;
+                    rvalPrefixMatched = candidatePrefixMatched;
                 }
             }
             else if (addr->mPreferred && !rvalAddr->mPreferred)

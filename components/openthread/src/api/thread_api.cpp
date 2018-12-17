@@ -206,7 +206,7 @@ otError otThreadSetMeshLocalPrefix(otInstance *aInstance, const otMeshLocalPrefi
     VerifyOrExit(instance.GetThreadNetif().GetMle().GetRole() == OT_DEVICE_ROLE_DISABLED,
                  error = OT_ERROR_INVALID_STATE);
 
-    error = instance.GetThreadNetif().GetMle().SetMeshLocalPrefix(*aMeshLocalPrefix);
+    instance.GetThreadNetif().GetMle().SetMeshLocalPrefix(*aMeshLocalPrefix);
     instance.GetThreadNetif().GetActiveDataset().Clear();
     instance.GetThreadNetif().GetPendingDataset().Clear();
 
@@ -550,9 +550,9 @@ otError otThreadRegisterParentResponseCallback(otInstance *                   aI
 
     return OT_ERROR_NONE;
 #else
-    (void)aInstance;
-    (void)aCallback;
-    (void)aContext;
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aCallback);
+    OT_UNUSED_VARIABLE(aContext);
 
     return OT_ERROR_DISABLED_FEATURE;
 #endif

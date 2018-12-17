@@ -322,8 +322,6 @@ otError MleRouter::SetStateRouter(uint16_t aRloc16)
     netif.GetIp6().GetMpl().SetTimerExpirations(kMplRouterDataMessageTimerExpirations);
     netif.GetMac().SetBeaconEnabled(true);
 
-    mRouterTable.Clear();
-
     // remove children that do not have matching RLOC16
     for (ChildTable::Iterator iter(GetInstance(), ChildTable::kInStateValidOrRestoring); !iter.IsDone(); iter++)
     {
@@ -600,7 +598,7 @@ otError MleRouter::HandleLinkRequest(const Message &aMessage, const Ip6::Message
 
     // Version
     SuccessOrExit(error = Tlv::GetTlv(aMessage, Tlv::kVersion, sizeof(version), version));
-    VerifyOrExit(version.IsValid() && version.GetVersion() >= kVersion, error = OT_ERROR_PARSE);
+    VerifyOrExit(version.IsValid() && version.GetVersion() >= kThreadVersion, error = OT_ERROR_PARSE);
 
     // Leader Data
     if (Tlv::GetTlv(aMessage, Tlv::kLeaderData, sizeof(leaderData), leaderData) == OT_ERROR_NONE)
@@ -926,8 +924,8 @@ otError MleRouter::HandleLinkAccept(const Message &         aMessage,
         // Route
         SuccessOrExit(error = Tlv::GetTlv(aMessage, Tlv::kRoute, sizeof(route), route));
         VerifyOrExit(route.IsValid(), error = OT_ERROR_PARSE);
+        mRouterTable.Clear();
         SuccessOrExit(error = ProcessRouteTlv(route));
-
         router = mRouterTable.GetRouter(routerId);
         VerifyOrExit(router != NULL);
 
@@ -938,9 +936,10 @@ otError MleRouter::HandleLinkAccept(const Message &         aMessage,
         else
         {
             SetStateRouter(GetRloc16());
-            mRetrieveNewNetworkData = true;
-            SendDataRequest(aMessageInfo.GetPeerAddr(), dataRequestTlvs, sizeof(dataRequestTlvs), 0);
         }
+
+        mRetrieveNewNetworkData = true;
+        SendDataRequest(aMessageInfo.GetPeerAddr(), dataRequestTlvs, sizeof(dataRequestTlvs), 0);
 
 #if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
         GetNetif().GetTimeSync().HandleTimeSyncMessage(aMessage);
@@ -1203,7 +1202,7 @@ otError MleRouter::HandleAdvertisement(const Message &aMessage, const Ip6::Messa
 
     if (partitionId != mLeaderData.GetPartitionId())
     {
-        otLogNoteMle("Different partition (peer:%d, local:%d)", leaderData.GetPartitionId(),
+        otLogNoteMle("Different partition (peer:%u, local:%u)", leaderData.GetPartitionId(),
                      mLeaderData.GetPartitionId());
 
         VerifyOrExit(linkMargin >= OPENTHREAD_CONFIG_MLE_PARTITION_MERGE_MARGIN_MIN, error = OT_ERROR_LINK_MARGIN_LOW);
@@ -1353,7 +1352,8 @@ otError MleRouter::HandleAdvertisement(const Message &aMessage, const Ip6::Messa
             }
         }
         else if (IsFullThreadDevice() && (router->GetState() != Neighbor::kStateValid) &&
-                 (router->GetState() != Neighbor::kStateLinkRequest))
+                 (router->GetState() != Neighbor::kStateLinkRequest) &&
+                 (mRouterTable.GetActiveLinkCount() < OPENTHREAD_CONFIG_MLE_CHILD_ROUTER_LINKS))
         {
             router->SetExtAddress(macAddr);
             router->GetLinkInfo().Clear();
@@ -1587,6 +1587,9 @@ otError MleRouter::HandleParentRequest(const Message &aMessage, const Ip6::Messa
 
     // A Router MUST NOT send an MLE Parent Response if:
 
+    // 0. It is detached or attempting to another partition
+    VerifyOrExit((mRole != OT_DEVICE_ROLE_DETACHED) && (mAttachState == kAttachStateIdle), error = OT_ERROR_DROP);
+
     // 1. It has no available Child capacity (if Max Child Count minus
     // Child Count would be equal to zero)
     // ==> verified below when allocating a child entry
@@ -1609,7 +1612,7 @@ otError MleRouter::HandleParentRequest(const Message &aMessage, const Ip6::Messa
 
     // Version
     SuccessOrExit(error = Tlv::GetTlv(aMessage, Tlv::kVersion, sizeof(version), version));
-    VerifyOrExit(version.IsValid() && version.GetVersion() >= kVersion, error = OT_ERROR_PARSE);
+    VerifyOrExit(version.IsValid() && version.GetVersion() >= kThreadVersion, error = OT_ERROR_PARSE);
 
     // Scan Mask
     SuccessOrExit(error = Tlv::GetTlv(aMessage, Tlv::kScanMask, sizeof(scanMask), scanMask));
@@ -1686,6 +1689,8 @@ void MleRouter::HandleStateUpdateTimer(Timer &aTimer)
 void MleRouter::HandleStateUpdateTimer(void)
 {
     bool routerStateUpdate = false;
+
+    VerifyOrExit(IsRouterRoleEnabled());
 
     mStateUpdateTimer.Start(kStateUpdatePeriod);
 
@@ -2733,7 +2738,7 @@ otError MleRouter::SendDiscoveryResponse(const Ip6::Address &aDestination, uint1
 
     // Discovery Response TLV
     discoveryResponse.Init();
-    discoveryResponse.SetVersion(kVersion);
+    discoveryResponse.SetVersion(kThreadVersion);
 
     if (netif.GetKeyManager().GetSecurityPolicyFlags() & OT_SECURITY_POLICY_NATIVE_COMMISSIONING)
     {
@@ -3973,8 +3978,9 @@ void MleRouter::HandleAddressSolicitResponse(Coap::Header *          aHeader,
 
     // assign short address
     SetRouterId(routerId);
-    SuccessOrExit(SetStateRouter(GetRloc16(mRouterId)));
 
+    SuccessOrExit(SetStateRouter(GetRloc16(mRouterId)));
+    mRouterTable.Clear();
     mRouterTable.ProcessTlv(routerMaskTlv);
 
     router = mRouterTable.GetRouter(routerId);

@@ -104,7 +104,7 @@ Mle::Mle(Instance &aInstance)
     , mParentSearchBackoffCancelTime(0)
     , mParentSearchTimer(aInstance, &Mle::HandleParentSearchTimer, this)
 #endif
-    , mAnnounceChannel(OT_RADIO_CHANNEL_MIN)
+    , mAnnounceChannel(0)
     , mAlternateChannel(0)
     , mAlternatePanId(Mac::kPanIdBroadcast)
     , mAlternateTimestamp(0)
@@ -133,10 +133,9 @@ Mle::Mle(Instance &aInstance)
     mLinkLocal64.mPrefixLength = 64;
     mLinkLocal64.mPreferred    = true;
     mLinkLocal64.mValid        = true;
-    GetNetif().AddUnicastAddress(mLinkLocal64);
 
     // Leader Aloc
-    mLeaderAloc.mPrefixLength       = 128;
+    mLeaderAloc.mPrefixLength       = 64;
     mLeaderAloc.mPreferred          = true;
     mLeaderAloc.mValid              = true;
     mLeaderAloc.mScopeOverride      = Ip6::Address::kRealmLocalScope;
@@ -149,7 +148,7 @@ Mle::Mle(Instance &aInstance)
     {
         memset(&mServiceAlocs[i], 0, sizeof(mServiceAlocs[i]));
 
-        mServiceAlocs[i].mPrefixLength               = 128;
+        mServiceAlocs[i].mPrefixLength               = 64;
         mServiceAlocs[i].mPreferred                  = true;
         mServiceAlocs[i].mValid                      = true;
         mServiceAlocs[i].mScopeOverride              = Ip6::Address::kRealmLocalScope;
@@ -216,7 +215,7 @@ otError Mle::Enable(void)
     otError       error = OT_ERROR_NONE;
     Ip6::SockAddr sockaddr;
 
-    // memcpy(&sockaddr.mAddr, &mLinkLocal64.GetAddress(), sizeof(sockaddr.mAddr));
+    UpdateLinkLocalAddress();
     sockaddr.mPort = kUdpPort;
     SuccessOrExit(error = mSocket.Open(&Mle::HandleUdpReceive, this));
     SuccessOrExit(error = mSocket.Bind(sockaddr));
@@ -231,6 +230,7 @@ otError Mle::Disable(void)
 
     SuccessOrExit(error = Stop(false));
     SuccessOrExit(error = mSocket.Close());
+    SuccessOrExit(error = GetNetif().RemoveUnicastAddress(mLinkLocal64));
 
 exit:
     return error;
@@ -244,6 +244,9 @@ otError Mle::Start(bool aEnableReattach, bool aAnnounceAttach)
     // cannot bring up the interface if IEEE 802.15.4 promiscuous mode is enabled
     VerifyOrExit(otPlatRadioGetPromiscuous(&netif.GetInstance()) == false, error = OT_ERROR_INVALID_STATE);
     VerifyOrExit(netif.IsUp(), error = OT_ERROR_INVALID_STATE);
+
+    ApplyMeshLocalPrefix();
+    SetRloc16(GetRloc16());
 
     SetStateDetached();
     mAttachCounter = 0;
@@ -291,7 +294,10 @@ otError Mle::Stop(bool aClearNetworkDatasets)
 
     netif.GetKeyManager().Stop();
     SetStateDetached();
+    GetNetif().UnsubscribeMulticast(mRealmLocalAllThreadNodes);
+    GetNetif().UnsubscribeMulticast(mLinkLocalAllThreadNodes);
     netif.RemoveUnicastAddress(mMeshLocal16);
+    netif.RemoveUnicastAddress(mMeshLocal64);
 
     SetRole(OT_DEVICE_ROLE_DISABLED);
 
@@ -382,9 +388,8 @@ otError Mle::Restore(void)
     }
 
     mDeviceMode = networkInfo.mDeviceMode;
-    SetRloc16(networkInfo.mRloc16);
+    netif.GetMac().SetShortAddress(networkInfo.mRloc16);
     netif.GetMac().SetExtAddress(networkInfo.mExtAddress);
-    UpdateLinkLocalAddress();
 
     memcpy(&mMeshLocal64.GetAddress().mFields.m8[OT_IP6_PREFIX_SIZE], networkInfo.mMlIid,
            OT_IP6_ADDRESS_SIZE - OT_IP6_PREFIX_SIZE);
@@ -487,12 +492,12 @@ exit:
     return error;
 }
 
-otError Mle::Discover(uint32_t        aScanChannels,
-                      uint16_t        aPanId,
-                      bool            aJoiner,
-                      bool            aEnableEui64Filtering,
-                      DiscoverHandler aCallback,
-                      void *          aContext)
+otError Mle::Discover(const Mac::ChannelMask &aScanChannels,
+                      uint16_t                aPanId,
+                      bool                    aJoiner,
+                      bool                    aEnableEui64Filtering,
+                      DiscoverHandler         aCallback,
+                      void *                  aContext)
 {
     otError                      error   = OT_ERROR_NONE;
     Message *                    message = NULL;
@@ -522,7 +527,7 @@ otError Mle::Discover(uint32_t        aScanChannels,
 
     // Discovery Request TLV
     discoveryRequest.Init();
-    discoveryRequest.SetVersion(kVersion);
+    discoveryRequest.SetVersion(kThreadVersion);
     discoveryRequest.SetJoiner(aJoiner);
     SuccessOrExit(error = message->Append(&discoveryRequest, sizeof(discoveryRequest)));
 
@@ -864,7 +869,7 @@ otError Mle::UpdateLinkLocalAddress(void)
     return OT_ERROR_NONE;
 }
 
-otError Mle::SetMeshLocalPrefix(const otMeshLocalPrefix &aMeshLocalPrefix)
+void Mle::SetMeshLocalPrefix(const otMeshLocalPrefix &aMeshLocalPrefix)
 {
     ThreadNetif &netif = GetNetif();
 
@@ -874,14 +879,32 @@ otError Mle::SetMeshLocalPrefix(const otMeshLocalPrefix &aMeshLocalPrefix)
         ExitNow();
     }
 
-    // We must remove the old addresses before adding the new ones.
-    netif.RemoveUnicastAddress(mMeshLocal64);
-    netif.RemoveUnicastAddress(mMeshLocal16);
-    netif.UnsubscribeMulticast(mLinkLocalAllThreadNodes);
-    netif.UnsubscribeMulticast(mRealmLocalAllThreadNodes);
+    if (netif.IsUp())
+    {
+        netif.RemoveUnicastAddress(mLeaderAloc);
+        // We must remove the old addresses before adding the new ones.
+        netif.RemoveUnicastAddress(mMeshLocal64);
+        netif.RemoveUnicastAddress(mMeshLocal16);
+        netif.UnsubscribeMulticast(mLinkLocalAllThreadNodes);
+        netif.UnsubscribeMulticast(mRealmLocalAllThreadNodes);
+    }
 
     memcpy(mMeshLocal64.GetAddress().mFields.m8, aMeshLocalPrefix.m8, sizeof(aMeshLocalPrefix));
-    memcpy(mMeshLocal16.GetAddress().mFields.m8, mMeshLocal64.GetAddress().mFields.m8, 8);
+    memcpy(mMeshLocal16.GetAddress().mFields.m8, aMeshLocalPrefix.m8, sizeof(aMeshLocalPrefix));
+    memcpy(mLeaderAloc.GetAddress().mFields.m8, aMeshLocalPrefix.m8, sizeof(aMeshLocalPrefix));
+
+    // Just keep mesh local prefix if network interface is down
+    VerifyOrExit(netif.IsUp());
+
+    ApplyMeshLocalPrefix();
+
+exit:
+    return;
+}
+
+void Mle::ApplyMeshLocalPrefix(void)
+{
+    ThreadNetif &netif = GetNetif();
 
 #if OPENTHREAD_ENABLE_SERVICE
 
@@ -916,16 +939,11 @@ otError Mle::SetMeshLocalPrefix(const otMeshLocalPrefix &aMeshLocalPrefix)
     // update Leader ALOC
     if (mRole == OT_DEVICE_ROLE_LEADER)
     {
-        netif.RemoveUnicastAddress(mLeaderAloc);
-        memcpy(mLeaderAloc.GetAddress().mFields.m8, mMeshLocal64.GetAddress().mFields.m8, 8);
         netif.AddUnicastAddress(mLeaderAloc);
     }
 
     // Changing the prefix also causes the mesh local address to be different.
     GetNotifier().Signal(OT_CHANGED_THREAD_ML_ADDR);
-
-exit:
-    return OT_ERROR_NONE;
 }
 
 uint16_t Mle::GetRloc16(void) const
@@ -1079,13 +1097,13 @@ void Mle::GenerateNonce(const Mac::ExtAddress &aMacAddr,
 
 Message *Mle::NewMleMessage(void)
 {
-    Message *message;
+    Message *         message;
+    otMessageSettings settings = {false, static_cast<otMessagePriority>(kMleMessagePriority)};
 
-    message = mSocket.NewMessage(0, kMleMessagePriority);
+    message = mSocket.NewMessage(0, &settings);
     VerifyOrExit(message != NULL);
 
     message->SetSubType(Message::kSubTypeMleGeneral);
-    message->SetLinkSecurityEnabled(false);
 
 exit:
     return message;
@@ -1237,6 +1255,8 @@ otError Mle::AppendNetworkData(Message &aMessage, bool aStableOnly)
     otError        error = OT_ERROR_NONE;
     NetworkDataTlv tlv;
 
+    VerifyOrExit(!mRetrieveNewNetworkData, error = OT_ERROR_INVALID_STATE);
+
     tlv.Init();
     FillNetworkDataTlv(tlv, aStableOnly);
 
@@ -1286,7 +1306,7 @@ otError Mle::AppendVersion(Message &aMessage)
     VersionTlv tlv;
 
     tlv.Init();
-    tlv.SetVersion(kVersion);
+    tlv.SetVersion(kThreadVersion);
 
     return aMessage.Append(&tlv, sizeof(tlv));
 }
@@ -1489,6 +1509,10 @@ void Mle::HandleStateChanged(otChangedFlags aFlags)
         this->UpdateServiceAlocs();
 #endif
 #endif
+
+#if OPENTHREAD_ENABLE_DHCP6_CLIENT
+        GetNetif().GetDhcp6Client().UpdateAddresses();
+#endif // OPENTHREAD_ENABLE_DHCP6_CLIENT
     }
 
     if (aFlags & (OT_CHANGED_THREAD_ROLE | OT_CHANGED_THREAD_KEY_SEQUENCE_COUNTER))
@@ -1653,7 +1677,7 @@ void Mle::HandleAttachTimer(void)
         {
             SetAttachState(kAttachStateAnnounce);
             SendParentRequest(kParentRequestTypeRoutersAndReeds);
-            mAnnounceChannel = OT_RADIO_CHANNEL_MIN;
+            mAnnounceChannel = Mac::ChannelMask::kChannelIteratorFirst;
             delay            = mAnnounceDelay;
             break;
         }
@@ -1689,31 +1713,14 @@ exit:
 
 bool Mle::PrepareAnnounceState(void)
 {
-    bool                              shouldAnnounce = false;
-    uint16_t                          numChannels    = 0;
-    const MeshCoP::ChannelMaskTlv *   channelMaskTlv;
-    const MeshCoP::ChannelMask0Entry *channelMaskEntry;
-    MeshCoP::Dataset                  dataset(MeshCoP::Tlv::kActiveTimestamp);
+    bool             shouldAnnounce = false;
+    Mac::ChannelMask channelMask;
 
     VerifyOrExit((mRole != OT_DEVICE_ROLE_CHILD) && !IsFullThreadDevice() && (mReattachState == kReattachStop));
 
-    SuccessOrExit(GetNetif().GetActiveDataset().Get(dataset));
+    SuccessOrExit(GetNetif().GetActiveDataset().GetChannelMask(channelMask));
 
-    channelMaskTlv = static_cast<const MeshCoP::ChannelMaskTlv *>(dataset.Get(MeshCoP::Tlv::kChannelMask));
-    VerifyOrExit(channelMaskTlv != NULL);
-
-    channelMaskEntry = channelMaskTlv->GetMask0Entry();
-    VerifyOrExit(channelMaskEntry != NULL);
-
-    for (uint8_t channel = OT_RADIO_CHANNEL_MIN; channel <= OT_RADIO_CHANNEL_MAX; channel++)
-    {
-        if (channelMaskEntry->IsChannelSet(channel))
-        {
-            numChannels++;
-        }
-    }
-
-    mAnnounceDelay = kAnnounceTimeout / (numChannels + 1);
+    mAnnounceDelay = kAnnounceTimeout / (channelMask.GetNumberOfChannels() + 1);
 
     if (mAnnounceDelay < kMinAnnounceDelay)
     {
@@ -2324,7 +2331,7 @@ otError Mle::SendAnnounce(uint8_t aChannel, bool aOrphanAnnounce, const Ip6::Add
     SuccessOrExit(error = AppendHeader(*message, Header::kCommandAnnounce));
 
     channel.Init();
-    channel.SetChannelPage(0);
+    channel.SetChannelPage(OT_RADIO_CHANNEL_PAGE);
     channel.SetChannel(netif.GetMac().GetPanChannel());
     SuccessOrExit(error = message->Append(&channel, sizeof(channel)));
 
@@ -2361,29 +2368,13 @@ exit:
 
 otError Mle::SendOrphanAnnounce(void)
 {
-    otError                           error = OT_ERROR_NONE;
-    const MeshCoP::ChannelMaskTlv *   channelMaskTlv;
-    const MeshCoP::ChannelMask0Entry *channelMaskEntry;
-    MeshCoP::Dataset                  dataset(MeshCoP::Tlv::kActiveTimestamp);
+    otError          error;
+    Mac::ChannelMask channelMask;
 
-    SuccessOrExit(error = GetNetif().GetActiveDataset().Get(dataset));
-
-    channelMaskTlv = static_cast<const MeshCoP::ChannelMaskTlv *>(dataset.Get(MeshCoP::Tlv::kChannelMask));
-    VerifyOrExit(channelMaskTlv != NULL, error = OT_ERROR_NOT_FOUND);
-
-    channelMaskEntry = channelMaskTlv->GetMask0Entry();
-    VerifyOrExit(channelMaskEntry != NULL, error = OT_ERROR_NOT_FOUND);
-
-    VerifyOrExit(mAnnounceChannel <= OT_RADIO_CHANNEL_MAX, error = OT_ERROR_NOT_FOUND);
-
-    while (!channelMaskEntry->IsChannelSet(mAnnounceChannel))
-    {
-        mAnnounceChannel++;
-        VerifyOrExit(mAnnounceChannel <= OT_RADIO_CHANNEL_MAX, error = OT_ERROR_NOT_FOUND);
-    }
+    SuccessOrExit(error = GetNetif().GetActiveDataset().GetChannelMask(channelMask));
+    SuccessOrExit(error = channelMask.GetNextChannel(mAnnounceChannel));
 
     SendAnnounce(mAnnounceChannel, true);
-    mAnnounceChannel++;
 
 exit:
     return error;
@@ -3274,6 +3265,8 @@ exit:
 
 otError Mle::HandleChildIdResponse(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
+    OT_UNUSED_VARIABLE(aMessageInfo);
+
     ThreadNetif &       netif = GetNetif();
     otError             error = OT_ERROR_NONE;
     LeaderDataTlv       leaderData;
@@ -3391,7 +3384,6 @@ exit:
         otLogWarnMleErr(error, "Failed to process Child ID Response");
     }
 
-    OT_UNUSED_VARIABLE(aMessageInfo);
     return error;
 }
 
@@ -3573,6 +3565,8 @@ exit:
 
 otError Mle::HandleAnnounce(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
+    OT_UNUSED_VARIABLE(aMessageInfo);
+
     otError                   error = OT_ERROR_NONE;
     ChannelTlv                channelTlv;
     ActiveTimestampTlv        timestamp;
@@ -3584,7 +3578,7 @@ otError Mle::HandleAnnounce(const Message &aMessage, const Ip6::MessageInfo &aMe
     LogMleMessage("Receive Announce", aMessageInfo.GetPeerAddr());
 
     SuccessOrExit(error = Tlv::GetTlv(aMessage, Tlv::kChannel, sizeof(channelTlv), channelTlv));
-    VerifyOrExit(channelTlv.IsValid(), error = OT_ERROR_PARSE);
+    VerifyOrExit(channelTlv.IsValid() && channelTlv.GetChannelPage() == OT_RADIO_CHANNEL_PAGE, error = OT_ERROR_PARSE);
     channel = static_cast<uint8_t>(channelTlv.GetChannel());
 
     SuccessOrExit(error = Tlv::GetTlv(aMessage, Tlv::kActiveTimestamp, sizeof(timestamp), timestamp));
@@ -3637,7 +3631,6 @@ otError Mle::HandleAnnounce(const Message &aMessage, const Ip6::MessageInfo &aMe
     }
 
 exit:
-    OT_UNUSED_VARIABLE(aMessageInfo);
     return error;
 }
 
@@ -4061,19 +4054,19 @@ void Mle::UpdateParentSearchState(void)
 
 void Mle::LogMleMessage(const char *aLogString, const Ip6::Address &aAddress) const
 {
-    otLogInfoMle("%s (%s)", aLogString, aAddress.ToString().AsCString());
-
     OT_UNUSED_VARIABLE(aLogString);
     OT_UNUSED_VARIABLE(aAddress);
+
+    otLogInfoMle("%s (%s)", aLogString, aAddress.ToString().AsCString());
 }
 
 void Mle::LogMleMessage(const char *aLogString, const Ip6::Address &aAddress, uint16_t aRloc) const
 {
-    otLogInfoMle("%s (%s,0x%04x)", aLogString, aAddress.ToString().AsCString(), aRloc);
-
     OT_UNUSED_VARIABLE(aLogString);
     OT_UNUSED_VARIABLE(aAddress);
     OT_UNUSED_VARIABLE(aRloc);
+
+    otLogInfoMle("%s (%s,0x%04x)", aLogString, aAddress.ToString().AsCString(), aRloc);
 }
 
 const char *Mle::RoleToString(otDeviceRole aRole)

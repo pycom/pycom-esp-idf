@@ -187,14 +187,14 @@ void BorderAgent::HandleCoapResponse(void *               aContext,
                                      const otMessageInfo *aMessageInfo,
                                      otError              aResult)
 {
+    OT_UNUSED_VARIABLE(aMessageInfo);
+
     ForwardContext &forwardContext = *static_cast<ForwardContext *>(aContext);
     BorderAgent &   borderAgent    = forwardContext.GetBorderAgent();
     ThreadNetif &   netif          = borderAgent.GetNetif();
     const Message * message        = static_cast<const Message *>(aMessage);
     Coap::Header    header;
     otError         error;
-
-    OT_UNUSED_VARIABLE(aMessageInfo);
 
     SuccessOrExit(error = aResult);
 
@@ -214,7 +214,7 @@ void BorderAgent::HandleCoapResponse(void *               aContext,
             netif.GetMle().GetCommissionerAloc(borderAgent.mCommissionerAloc.GetAddress(),
                                                sessionIdTlv.GetCommissionerSessionId());
             netif.AddUnicastAddress(borderAgent.mCommissionerAloc);
-            netif.GetIp6().GetUdp().AddReceiver(borderAgent.mProxyReceiver);
+            netif.GetIp6().GetUdp().AddReceiver(borderAgent.mUdpReceiver);
         }
     }
 
@@ -311,20 +311,25 @@ BorderAgent::BorderAgent(Instance &aInstance)
     , mPendingGet(OT_URI_PATH_PENDING_GET, BorderAgent::HandleRequest<&BorderAgent::mPendingGet>, this)
     , mPendingSet(OT_URI_PATH_PENDING_SET, BorderAgent::HandleRequest<&BorderAgent::mPendingSet>, this)
     , mProxyTransmit(OT_URI_PATH_PROXY_TX, BorderAgent::HandleRequest<&BorderAgent::mProxyTransmit>, this)
-    , mProxyReceiver(BorderAgent::HandleProxyReceive, this)
+    , mUdpReceiver(BorderAgent::HandleUdpReceive, this)
     , mTimer(aInstance, HandleTimeout, this)
     , mState(OT_BORDER_AGENT_STATE_STOPPED)
 {
+    mCommissionerAloc.mPrefixLength       = 64;
+    mCommissionerAloc.mPreferred          = true;
+    mCommissionerAloc.mValid              = true;
+    mCommissionerAloc.mScopeOverride      = Ip6::Address::kRealmLocalScope;
+    mCommissionerAloc.mScopeOverrideValid = true;
 }
 
 void BorderAgent::HandleProxyTransmit(const Coap::Header &aHeader, const Message &aMessage)
 {
+    OT_UNUSED_VARIABLE(aHeader);
+
     Message *        message = NULL;
     Ip6::MessageInfo messageInfo;
     uint16_t         offset;
     otError          error;
-
-    OT_UNUSED_VARIABLE(aHeader);
 
     {
         UdpEncapsulationTlv tlv;
@@ -364,7 +369,7 @@ exit:
     }
 }
 
-bool BorderAgent::HandleProxyReceive(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
+bool BorderAgent::HandleUdpReceive(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     Coap::Header header;
     otError      error;
@@ -633,7 +638,7 @@ void BorderAgent::HandleConnected(bool aConnected)
         Coap::CoapSecure &coaps = netif.GetCoapSecure();
 
         otLogInfoMeshCoP("Commissioner disconnected");
-        netif.GetIp6().GetUdp().RemoveReceiver(mProxyReceiver);
+        netif.GetIp6().GetUdp().RemoveReceiver(mUdpReceiver);
         netif.RemoveUnicastAddress(mCommissionerAloc);
         coaps.Stop();
         SetState(OT_BORDER_AGENT_STATE_STARTED);
