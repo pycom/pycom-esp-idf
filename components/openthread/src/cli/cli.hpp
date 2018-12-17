@@ -59,8 +59,8 @@
 #include "common/instance.hpp"
 
 #ifndef OTDLL
-#include <openthread/dhcp6_client.h>
 #include <openthread/dns.h>
+#include <openthread/sntp.h>
 #include "common/timer.hpp"
 #include "net/icmp6.hpp"
 #endif
@@ -312,6 +312,9 @@ private:
     void ProcessRloc16(int argc, char *argv[]);
     void ProcessScan(int argc, char *argv[]);
     void ProcessSingleton(int argc, char *argv[]);
+#if OPENTHREAD_ENABLE_SNTP_CLIENT
+    void ProcessSntp(int argc, char *argv[]);
+#endif
     void ProcessState(int argc, char *argv[]);
     void ProcessThread(int argc, char *argv[]);
 #ifndef OTDLL
@@ -366,6 +369,10 @@ private:
                                     otError       aResult);
 #endif
 
+#if OPENTHREAD_ENABLE_SNTP_CLIENT
+    static void s_HandleSntpResponse(void *aContext, uint64_t aTime, otError aResult);
+#endif
+
 #ifndef OTDLL
     void HandleIcmpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo, const otIcmp6Header &aIcmpHeader);
     void HandlePingTimer();
@@ -386,11 +393,12 @@ private:
     void HandleDiagnosticGetResponse(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 #endif
     void HandleJoinerCallback(otError aError);
-
 #if OPENTHREAD_ENABLE_DNS_CLIENT
     void HandleDnsResponse(const char *aHostname, Ip6::Address &aAddress, uint32_t aTtl, otError aResult);
 #endif
-
+#if OPENTHREAD_ENABLE_SNTP_CLIENT
+    void HandleSntpResponse(uint64_t aTime, otError aResult);
+#endif
     static Interpreter &GetOwner(OwnerLocator &aOwnerLocator);
 
     static const struct Command sCommands[];
@@ -424,14 +432,15 @@ private:
     TimerMilli mPingTimer;
 
     otNetifAddress mSlaacAddresses[OPENTHREAD_CONFIG_NUM_SLAAC_ADDRESSES];
-#if OPENTHREAD_ENABLE_DHCP6_CLIENT
-    otDhcpAddress  mDhcpAddresses[OPENTHREAD_CONFIG_NUM_DHCP_PREFIXES];
-#endif // OPENTHREAD_ENABLE_DHCP6_CLIENT
 
     otIcmp6Handler mIcmpHandler;
 #if OPENTHREAD_ENABLE_DNS_CLIENT
     bool           mResolvingInProgress;
     char           mResolvingHostname[OT_DNS_MAX_HOSTNAME_LENGTH];
+#endif
+
+#if OPENTHREAD_ENABLE_SNTP_CLIENT
+    bool           mSntpQueryingInProgress;
 #endif
 
     UdpExample mUdp;

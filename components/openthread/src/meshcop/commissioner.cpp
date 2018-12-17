@@ -75,6 +75,12 @@ Commissioner::Commissioner(Instance &aInstance)
     , mState(OT_COMMISSIONER_STATE_DISABLED)
 {
     memset(mJoiners, 0, sizeof(mJoiners));
+
+    mCommissionerAloc.mPrefixLength       = 64;
+    mCommissionerAloc.mPreferred          = true;
+    mCommissionerAloc.mValid              = true;
+    mCommissionerAloc.mScopeOverride      = Ip6::Address::kRealmLocalScope;
+    mCommissionerAloc.mScopeOverrideValid = true;
 }
 
 void Commissioner::AddCoapResources(void)
@@ -650,12 +656,12 @@ void Commissioner::HandleLeaderPetitionResponse(Coap::Header *          aHeader,
                                                 const Ip6::MessageInfo *aMessageInfo,
                                                 otError                 aResult)
 {
+    OT_UNUSED_VARIABLE(aMessageInfo);
+
     ThreadNetif &            netif = GetNetif();
     StateTlv                 state;
     CommissionerSessionIdTlv sessionId;
     bool                     retransmit = false;
-
-    OT_UNUSED_VARIABLE(aMessageInfo);
 
     VerifyOrExit(mState == OT_COMMISSIONER_STATE_PETITION, mState = OT_COMMISSIONER_STATE_DISABLED);
     VerifyOrExit(aResult == OT_ERROR_NONE && aHeader->GetCode() == OT_COAP_CODE_CHANGED, retransmit = true);
@@ -756,7 +762,7 @@ void Commissioner::HandleLeaderKeepAliveResponse(Coap::Header *          aHeader
                                                  const Ip6::MessageInfo *aMessageInfo,
                                                  otError                 aResult)
 {
-    (void)aMessageInfo;
+    OT_UNUSED_VARIABLE(aMessageInfo);
 
     StateTlv state;
 
@@ -794,6 +800,8 @@ void Commissioner::HandleRelayReceive(void *               aContext,
 
 void Commissioner::HandleRelayReceive(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
+    OT_UNUSED_VARIABLE(aMessageInfo);
+
     ThreadNetif &          netif = GetNetif();
     otError                error;
     JoinerUdpPortTlv       joinerPort;
@@ -872,8 +880,6 @@ void Commissioner::HandleRelayReceive(Coap::Header &aHeader, Message &aMessage, 
     netif.GetCoapSecure().Receive(aMessage, joinerMessageInfo);
 
 exit:
-    OT_UNUSED_VARIABLE(aMessageInfo);
-
     return;
 }
 
@@ -889,10 +895,11 @@ void Commissioner::HandleDatasetChanged(void *               aContext,
 
 void Commissioner::HandleDatasetChanged(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
+    OT_UNUSED_VARIABLE(aMessage);
+
     VerifyOrExit(aHeader.GetType() == OT_COAP_TYPE_CONFIRMABLE && aHeader.GetCode() == OT_COAP_CODE_POST);
 
     otLogInfoMeshCoP("received dataset changed");
-    OT_UNUSED_VARIABLE(aMessage);
 
     SuccessOrExit(GetNetif().GetCoap().SendEmptyAck(aHeader, aMessageInfo));
 
@@ -915,6 +922,7 @@ void Commissioner::HandleJoinerFinalize(void *               aContext,
 void Commissioner::HandleJoinerFinalize(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     OT_UNUSED_VARIABLE(aMessageInfo);
+
     StateTlv::State    state = StateTlv::kAccept;
     ProvisioningUrlTlv provisioningUrl;
 
@@ -999,6 +1007,8 @@ otError Commissioner::SendRelayTransmit(void *aContext, Message &aMessage, const
 
 otError Commissioner::SendRelayTransmit(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
+    OT_UNUSED_VARIABLE(aMessageInfo);
+
     ThreadNetif &          netif = GetNetif();
     otError                error = OT_ERROR_NONE;
     Coap::Header           header;
@@ -1009,8 +1019,6 @@ otError Commissioner::SendRelayTransmit(Message &aMessage, const Ip6::MessageInf
     Message *              message;
     uint16_t               offset;
     Ip6::MessageInfo       messageInfo;
-
-    OT_UNUSED_VARIABLE(aMessageInfo);
 
     header.Init(OT_COAP_TYPE_NON_CONFIRMABLE, OT_COAP_CODE_POST);
     header.AppendUriPathOptions(OT_URI_PATH_RELAY_TX);

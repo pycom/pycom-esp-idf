@@ -370,14 +370,17 @@ otError otIp6CreateSemanticallyOpaqueIid(otInstance *aInstance, otNetifAddress *
 /**
  * Allocate a new message buffer for sending an IPv6 message.
  *
- * @param[in]  aInstance             A pointer to an OpenThread instance.
- * @param[in]  aLinkSecurityEnabled  TRUE if the message should be secured at Layer 2
+ * @note If @p aSettings is 'NULL', the link layer security is enabled and the message priority is set to
+ * OT_MESSAGE_PRIORITY_NORMAL by default.
  *
- * @returns A pointer to the message buffer or NULL if no message buffers are available.
+ * @param[in]  aInstance  A pointer to an OpenThread instance.
+ * @param[in]  aSettings  A pointer to the message settings or NULL to set default settings.
+ *
+ * @returns A pointer to the message buffer or NULL if no message buffers are available or parameters are invalid.
  *
  * @sa otFreeMessage
  */
-otMessage *otIp6NewMessage(otInstance *aInstance, bool aLinkSecurityEnabled);
+otMessage *otIp6NewMessage(otInstance *aInstance, const otMessageSettings *aSettings);
 
 /**
  * This function pointer is called when an IPv6 datagram is received.
@@ -404,6 +407,31 @@ typedef void (*otIp6ReceiveCallback)(otMessage *aMessage, void *aContext);
  *
  */
 void otIp6SetReceiveCallback(otInstance *aInstance, otIp6ReceiveCallback aCallback, void *aCallbackContext);
+
+/**
+ * This function pointer is called when an internal IPv6 address is added or removed.
+ *
+ * @param[in]   aAddress            A pointer to the IPv6 address.
+ * @param[in]   aPrefixLength       The prefix length if @p aAddress is unicast address, and 128 for multicast address.
+ * @param[in]   aIsAdded            TRUE if the @p aAddress was added, FALSE if @p aAddress was removed.
+ * @param[in]   aContext            A pointer to application-specific context.
+ *
+ */
+typedef void (*otIp6AddressCallback)(const otIp6Address *aAddress,
+                                     uint8_t             aPrefixLength,
+                                     bool                aIsAdded,
+                                     void *              aContext);
+
+/**
+ * This function registers a callback to notify internal IPv6 address changes.
+ *
+ * @param[in]   aInstance           A pointer to an OpenThread instance.
+ * @param[in]   aCallback           A pointer to a function that is called when an internal IPv6 address is added or
+ *                                  removed. NULL to disable the callback.
+ * @param[in]   aCallbackContext    A pointer to application-specific context.
+ *
+ */
+void otIp6SetAddressCallback(otInstance *aInstance, otIp6AddressCallback aCallback, void *aCallbackContext);
 
 /**
  * This function indicates whether or not Thread control traffic is filtered out when delivering IPv6 datagrams
@@ -533,6 +561,17 @@ OTAPI uint8_t OTCALL otIp6PrefixMatch(const otIp6Address *aFirst, const otIp6Add
  *
  */
 bool otIp6IsAddressUnspecified(const otIp6Address *aAddress);
+
+/**
+ * This function perform OpenThread source address selection.
+ *
+ * @param[inout]  aMessageInfo  A pointer to the message information.
+ *
+ * @retval  OT_ERROR_NONE       Found a source address and is filled into mSockAddr of @p aMessageInfo.
+ * @retval  OT_ERROR_NOT_FOUND  No source address was found and @p aMessageInfo is unchanged.
+ *
+ */
+otError otIp6SelectSourceAddress(otInstance *aInstance, otMessageInfo *aMessageInfo);
 
 /**
  * @}

@@ -43,6 +43,7 @@
 #include "common/encoding.hpp"
 #include "common/instance.hpp"
 #include "common/logging.hpp"
+#include "mac/mac.hpp"
 #include "mac/mac_frame.hpp"
 #include "net/netif.hpp"
 #include "thread/mesh_forwarder.hpp"
@@ -123,6 +124,7 @@ otError NetworkDiagnostic::SendDiagnosticGet(const Ip6::Address &aDestination,
         SuccessOrExit(error = message->Append(aTlvTypes, aCount));
     }
 
+    messageInfo.SetSockAddr(GetNetif().GetMle().GetMeshLocal16());
     messageInfo.SetPeerAddr(aDestination);
     messageInfo.SetPeerPort(kCoapUdpPort);
     messageInfo.SetInterfaceId(netif.GetInterfaceId());
@@ -269,6 +271,24 @@ exit:
     return error;
 }
 
+void NetworkDiagnostic::FillMacCountersTlv(MacCountersTlv &aMacCountersTlv)
+{
+    const otMacCounters &macCounters = GetInstance().Get<Mac::Mac>().GetCounters();
+
+    aMacCountersTlv.SetIfInUnknownProtos(macCounters.mRxOther);
+    aMacCountersTlv.SetIfInErrors(macCounters.mRxErrNoFrame + macCounters.mRxErrUnknownNeighbor +
+                                  macCounters.mRxErrInvalidSrcAddr + macCounters.mRxErrSec + macCounters.mRxErrFcs +
+                                  macCounters.mRxErrOther);
+    aMacCountersTlv.SetIfOutErrors(macCounters.mTxErrCca);
+    aMacCountersTlv.SetIfInUcastPkts(macCounters.mRxUnicast);
+    aMacCountersTlv.SetIfInBroadcastPkts(macCounters.mRxBroadcast);
+    aMacCountersTlv.SetIfInDiscards(macCounters.mRxAddressFiltered + macCounters.mRxDestAddrFiltered +
+                                    macCounters.mRxDuplicated);
+    aMacCountersTlv.SetIfOutUcastPkts(macCounters.mTxUnicast);
+    aMacCountersTlv.SetIfOutBroadcastPkts(macCounters.mTxBroadcast);
+    aMacCountersTlv.SetIfOutDiscards(macCounters.mTxErrBusyChannel);
+}
+
 otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
                                              Message &             aResponse,
                                              NetworkDiagnosticTlv &aNetworkDiagnosticTlv)
@@ -377,7 +397,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
             MacCountersTlv tlv;
             memset(&tlv, 0, sizeof(tlv));
             tlv.Init();
-            netif.GetMac().FillMacCountersTlv(tlv);
+            FillMacCountersTlv(tlv);
             SuccessOrExit(error = aResponse.Append(&tlv, tlv.GetSize()));
             break;
         }
@@ -413,7 +433,7 @@ otError NetworkDiagnostic::FillRequestedTlvs(Message &             aRequest,
         {
             ChannelPagesTlv tlv;
             tlv.Init();
-            tlv.GetChannelPages()[0] = 0;
+            tlv.GetChannelPages()[0] = OT_RADIO_CHANNEL_PAGE;
             tlv.SetLength(1);
             SuccessOrExit(error = aResponse.Append(&tlv, tlv.GetSize()));
             break;
@@ -498,6 +518,7 @@ void NetworkDiagnostic::HandleDiagnosticGetQuery(Coap::Header &          aHeader
 
     VerifyOrExit((message = netif.GetCoap().NewMessage(header)) != NULL, error = OT_ERROR_NO_BUFS);
 
+    messageInfo.SetSockAddr(GetNetif().GetMle().GetMeshLocal16());
     messageInfo.SetPeerAddr(aMessageInfo.GetPeerAddr());
     messageInfo.SetPeerPort(kCoapUdpPort);
     messageInfo.SetInterfaceId(netif.GetInterfaceId());
@@ -612,6 +633,7 @@ otError NetworkDiagnostic::SendDiagnosticReset(const Ip6::Address &aDestination,
         SuccessOrExit(error = message->Append(aTlvTypes, aCount));
     }
 
+    messageInfo.SetSockAddr(GetNetif().GetMle().GetMeshLocal16());
     messageInfo.SetPeerAddr(aDestination);
     messageInfo.SetPeerPort(kCoapUdpPort);
     messageInfo.SetInterfaceId(netif.GetInterfaceId());
