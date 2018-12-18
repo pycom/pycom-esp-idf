@@ -412,7 +412,7 @@ private:
         kMaxBE             = 5,  ///< macMaxBE (IEEE 802.15.4-2006).
         kUnitBackoffPeriod = 20, ///< Number of symbols (IEEE 802.15.4-2006).
         kMinBackoff        = 1,  ///< Minimum backoff (milliseconds).
-        kAckTimeout        = 16, ///< Timeout for waiting on an ACK (milliseconds).
+        kAckTimeout        = 2000, ///< Timeout for waiting on an ACK (milliseconds).
 
 #if OPENTHREAD_CONFIG_ENABLE_PLATFORM_USEC_TIMER
         kEnergyScanRssiSampleInterval = 128, ///< RSSI sample interval during energy scan, 128 usec

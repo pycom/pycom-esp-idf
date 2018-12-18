@@ -70,8 +70,8 @@ namespace Mac {
  */
 enum
 {
-    kDataPollTimeout = 100, ///< Timeout for receiving Data Frame (milliseconds).
-    kSleepDelay      = 300, ///< Max sleep delay when frame is pending (milliseconds).
+    kDataPollTimeout = 2000, ///< Timeout for receiving Data Frame (milliseconds).
+    kSleepDelay      = 1000, ///< Max sleep delay when frame is pending (milliseconds).
     kNonceSize       = 13,  ///< Size of IEEE 802.15.4 Nonce (bytes).
 
     kScanDurationDefault = 300, ///< Default interval between channels (milliseconds).

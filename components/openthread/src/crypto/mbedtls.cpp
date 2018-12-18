@@ -54,7 +54,7 @@ static void Free(void *aPointer)
 
 MbedTls::MbedTls(void)
 {
-    mbedtls_platform_set_calloc_free(CAlloc, Free);
+    //mbedtls_platform_set_calloc_free(CAlloc, Free);
 }
 
 } // namespace Crypto
