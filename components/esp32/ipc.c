@@ -19,12 +19,13 @@
 #include "esp_err.h"
 #include "esp_ipc.h"
 #include "esp_attr.h"
+#include "sdkconfig.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
-
+#if !CONFIG_FREERTOS_UNICORE
 static TaskHandle_t s_ipc_tasks[portNUM_PROCESSORS];         // Two high priority tasks, one for each CPU
 static SemaphoreHandle_t s_ipc_mutex;                        // This mutex is used as a global lock for esp_ipc_* APIs
 static SemaphoreHandle_t s_ipc_sem[portNUM_PROCESSORS];      // Two semaphores used to wake each of s_ipc_tasks
@@ -32,17 +33,20 @@ static SemaphoreHandle_t s_ipc_ack;                          // Semaphore used t
                                                              //   or function has finished running
 static volatile esp_ipc_func_t s_func;                       // Function which should be called by high priority task
 static void * volatile s_func_arg;                           // Argument to pass into s_func
+#endif
 typedef enum {
     IPC_WAIT_FOR_START,
     IPC_WAIT_FOR_END
 } esp_ipc_wait_t;
-
+#if !CONFIG_FREERTOS_UNICORE
 static volatile esp_ipc_wait_t s_ipc_wait;                   // This variable tells high priority task when it should give
                                                              //   s_ipc_ack semaphore: before s_func is called, or
                                                              //   after it returns
+#endif
 
 static void IRAM_ATTR ipc_task(void* arg)
 {
+#if !CONFIG_FREERTOS_UNICORE
     const uint32_t cpuid = (uint32_t) arg;
     assert(cpuid == xPortGetCoreID());
     while (true) {
@@ -65,6 +69,7 @@ static void IRAM_ATTR ipc_task(void* arg)
             xSemaphoreGive(s_ipc_ack);
         }
     }
+#endif
     // TODO: currently this is unreachable code. Introduce esp_ipc_uninit
     // function which will signal to both tasks that they can shut down.
     // Not critical at this point, we don't have a use case for stopping
@@ -75,6 +80,7 @@ static void IRAM_ATTR ipc_task(void* arg)
 
 void esp_ipc_init()
 {
+#if !CONFIG_FREERTOS_UNICORE
     s_ipc_mutex = xSemaphoreCreateMutex();
     s_ipc_ack = xSemaphoreCreateBinary();
     char task_name[8];
@@ -85,10 +91,12 @@ void esp_ipc_init()
                                                     configMAX_PRIORITIES - 1, &s_ipc_tasks[i], i);
         assert(res == pdTRUE);
     }
+#endif
 }
 
 static esp_err_t esp_ipc_call_and_wait(uint32_t cpu_id, esp_ipc_func_t func, void* arg, esp_ipc_wait_t wait_for)
 {
+#if !CONFIG_FREERTOS_UNICORE
     if (cpu_id >= portNUM_PROCESSORS) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -104,6 +112,7 @@ static esp_err_t esp_ipc_call_and_wait(uint32_t cpu_id, esp_ipc_func_t func, voi
     xSemaphoreGive(s_ipc_sem[cpu_id]);
     xSemaphoreTake(s_ipc_ack, portMAX_DELAY);
     xSemaphoreGive(s_ipc_mutex);
+#endif
     return ESP_OK;
 }
 

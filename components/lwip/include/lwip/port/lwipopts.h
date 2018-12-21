@@ -34,6 +34,7 @@
 
 #include <stdlib.h>
 #include <time.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/fcntl.h>
@@ -794,18 +795,24 @@ enum {
 #define LWIP_DHCP_MAX_NTP_SERVERS       CONFIG_LWIP_DHCP_MAX_NTP_SERVERS
 #define LWIP_TIMEVAL_PRIVATE            0
 
+extern void mach_rtc_set_us_since_epoch (uint64_t nowus);
+extern uint64_t mach_rtc_get_us_since_epoch (void);
+extern void mach_rtc_synced (void);
+extern uint32_t sntp_update_period;
+
+#define SNTP_SUPPRESS_DELAY_CHECK
+#define SNTP_UPDATE_DELAY               sntp_update_period
+
 #define SNTP_SET_SYSTEM_TIME_US(sec, us)  \
     do { \
-        struct timeval tv = { .tv_sec = sec, .tv_usec = us }; \
-        settimeofday(&tv, NULL); \
+        mach_rtc_set_us_since_epoch((1000000ull * (sec)) + (us)); \
+        mach_rtc_synced(); \
     } while (0);
 
 #define SNTP_GET_SYSTEM_TIME(sec, us) \
     do { \
-        struct timeval tv = { .tv_sec = 0, .tv_usec = 0 }; \
-        gettimeofday(&tv, NULL); \
-        (sec) = tv.tv_sec;  \
-        (us) = tv.tv_usec; \
+        (us) = mach_rtc_get_us_since_epoch() % 1000000ull; \
+        (sec) = mach_rtc_get_us_since_epoch() / 1000000ull; \
     } while (0);
 
 #define SOC_SEND_LOG //printf
