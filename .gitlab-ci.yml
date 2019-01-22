@@ -2,9 +2,9 @@ stages:
   - build
   - assign_test
   - host_test
-  - unit_test
-  - integration_test
+  - target_test
   - deploy
+  - post_check
 
 variables:
 # System environment
@@ -49,6 +49,7 @@ variables:
   python $APPLY_BOT_FILTER_SCRIPT || exit 0
 
 before_script:
+  - source tools/ci/setup_python.sh
   - *git_clean_stale_submodules
   # apply bot filter in before script
   - *apply_bot_filter
@@ -70,6 +71,7 @@ before_script:
 
 .do_nothing_before:
   before_script: &do_nothing_before
+    - source tools/ci/setup_python.sh
     - *git_clean_stale_submodules
     # apply bot filter in before script
     - *apply_bot_filter
@@ -78,6 +80,7 @@ before_script:
 
 .add_gitlab_key_before:
   before_script: &add_gitlab_key_before
+    - source tools/ci/setup_python.sh
     - *git_clean_stale_submodules
     # apply bot filter in before script
     - *apply_bot_filter
@@ -99,13 +102,21 @@ build_template_app:
   variables:
     BATCH_BUILD: "1"
     IDF_CI_BUILD: "1"
+  only:
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_BUILD
+      - $BOT_LABEL_REGULAR_TEST
   script:
-    - git clone https://github.com/espressif/esp-idf-template.git
+    # Set the variable for 'esp-idf-template' testing
+    - ESP_IDF_TEMPLATE_GIT=${ESP_IDF_TEMPLATE_GIT:-"https://github.com/espressif/esp-idf-template.git"}
+    - git clone ${ESP_IDF_TEMPLATE_GIT}
     - cd esp-idf-template
     # Try to use the same branch name for esp-idf-template that we're
     # using on esp-idf. If it doesn't exist then just stick to the default
     # branch
     - python $CHECKOUT_REF_SCRIPT esp-idf-template
+    - make defconfig
     # Test debug build (default)
     - make all V=1
     # Now test release build
@@ -135,6 +146,12 @@ build_template_app:
     expire_in: 1 mos
   variables:
     SSC_CONFIG_FOLDER: "$CI_PROJECT_DIR/SSC/configs/ESP32_IDF"
+  only:
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_BUILD
+      - $BOT_LABEL_INTEGRATION_TEST
+      - $BOT_LABEL_REGULAR_TEST
   script:
     - git clone $SSC_REPOSITORY
     - cd SSC
@@ -161,6 +178,12 @@ build_esp_idf_tests:
       - components/idf_test/unit_test/TestCaseAll.yml
       - components/idf_test/unit_test/CIConfigs/*.yml
     expire_in: 1 mos
+  only:
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_BUILD
+      - $BOT_LABEL_UNIT_TEST
+      - $BOT_LABEL_REGULAR_TEST
   script:
     - cd tools/unit-test-app
     - MAKEFLAGS= make help # make sure kconfig tools are built in single process
@@ -170,7 +193,7 @@ build_esp_idf_tests:
     - make ut-build-all-configs
     - python tools/UnitTestParser.py
 
-.build_examples_template: &build_examples_template
+.build_examples_make_template: &build_examples_make_template
   <<: *build_template
   retry: 1
   artifacts:
@@ -185,7 +208,13 @@ build_esp_idf_tests:
     expire_in: 1 week
   variables:
     IDF_CI_BUILD: "1"
-    LOG_PATH: "$CI_PROJECT_DIR/log_examples"
+    LOG_PATH: "$CI_PROJECT_DIR/log_examples_make"
+  only:
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_BUILD
+      - $BOT_LABEL_EXAMPLE_TEST
+      - $BOT_LABEL_REGULAR_TEST
   script:
     # it's not possible to build 100% out-of-tree and have the "artifacts"
     # mechanism work, but this is the next best thing
@@ -195,36 +224,81 @@ build_esp_idf_tests:
     # build some of examples
     - mkdir -p ${LOG_PATH}
     - ${IDF_PATH}/tools/ci/build_examples.sh "${CI_JOB_NAME}"
-    # and again, with cmake!
-    - rm -rf ../build_examples_cmake
-    - mkdir ../build_examples_cmake
-    - cd ../build_examples_cmake
-    - mkdir -p ${LOG_PATH}_cmake
-    - LOG_PATH=${LOG_PATH}_cmake ${IDF_PATH}/tools/ci/build_examples_cmake.sh "${CI_JOB_NAME}"
 
-build_examples_00:
-  <<: *build_examples_template
+# same as above, but for CMake
+.build_examples_cmake_template: &build_examples_cmake_template
+  <<: *build_template
+  retry: 1
+  artifacts:
+    when: always
+    paths:
+      - build_examples_cmake/*/*/*/build/*.bin
+      - build_examples_cmake/*/*/*/build/*.elf
+      - build_examples_cmake/*/*/*/build/*.map
+      - build_examples_cmake/*/*/*/build/download.config
+      - build_examples_cmake/*/*/*/build/bootloader/*.bin
+      - $LOG_PATH
+    expire_in: 1 week
+  variables:
+    IDF_CI_BUILD: "1"
+    LOG_PATH: "$CI_PROJECT_DIR/log_examples_cmake"
+  script:
+    # it's not possible to build 100% out-of-tree and have the "artifacts"
+    # mechanism work, but this is the next best thing
+    - rm -rf build_examples_cmake
+    - mkdir build_examples_cmake
+    - cd build_examples_cmake
+    # build some of examples
+    - mkdir -p ${LOG_PATH}
+    - ${IDF_PATH}/tools/ci/build_examples_cmake.sh "${CI_JOB_NAME}"
 
-build_examples_01:
-  <<: *build_examples_template
+build_examples_make_00:
+  <<: *build_examples_make_template
 
-build_examples_02:
-  <<: *build_examples_template
+build_examples_make_01:
+  <<: *build_examples_make_template
 
-build_examples_03:
-  <<: *build_examples_template
+build_examples_make_02:
+  <<: *build_examples_make_template
 
-build_examples_04:
-  <<: *build_examples_template
+build_examples_make_03:
+  <<: *build_examples_make_template
 
-build_examples_05:
-  <<: *build_examples_template
+build_examples_make_04:
+  <<: *build_examples_make_template
 
-build_examples_06:
-  <<: *build_examples_template
+build_examples_make_05:
+  <<: *build_examples_make_template
 
-build_examples_07:
-  <<: *build_examples_template
+build_examples_make_06:
+  <<: *build_examples_make_template
+
+build_examples_make_07:
+  <<: *build_examples_make_template
+
+build_examples_cmake_00:
+  <<: *build_examples_cmake_template
+
+build_examples_cmake_01:
+  <<: *build_examples_cmake_template
+
+build_examples_cmake_02:
+  <<: *build_examples_cmake_template
+
+build_examples_cmake_03:
+  <<: *build_examples_cmake_template
+
+build_examples_cmake_04:
+  <<: *build_examples_cmake_template
+
+build_examples_cmake_05:
+  <<: *build_examples_cmake_template
+
+build_examples_cmake_06:
+  <<: *build_examples_cmake_template
+
+build_examples_cmake_07:
+  <<: *build_examples_cmake_template
 
 # If you want to add new build example jobs, please add it into dependencies of `.example_test_template`
 
@@ -247,6 +321,12 @@ build_docs:
       - docs/zh_CN/sphinx-warning-log-sanitized.txt
       - docs/zh_CN/_build/html
     expire_in: 1 mos
+  only:
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_BUILD
+      - $BOT_LABEL_BUILD_DOCS
+      - $BOT_LABEL_REGULAR_TEST
   script:
     - cd docs
     - ./check_lang_folder_sync.sh
@@ -262,6 +342,11 @@ build_docs:
 verify_cmake_style:
   stage: build
   image: $CI_DOCKER_REGISTRY/esp32-ci-env$BOT_DOCKER_IMAGE_TAG
+  only:
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_BUILD
+      - $BOT_LABEL_REGULAR_TEST
   script:
     tools/cmake/run_cmake_lint.sh
 
@@ -271,6 +356,11 @@ verify_cmake_style:
   tags:
     - host_test
   dependencies: []
+  only:
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_HOST_TEST
+      - $BOT_LABEL_REGULAR_TEST
 
 test_nvs_on_host:
   <<: *host_test_template
@@ -284,10 +374,10 @@ test_nvs_coverage:
     paths:
       - components/nvs_flash/test_nvs_host/coverage_report
   only:
-    - triggers
-  # This job takes a few hours to finish, so only run it on demand
-  variables:
-    BOT_NEEDS_TRIGGER_BY_NAME: 1
+    refs:
+      - triggers
+    variables:
+      - $BOT_LABEL_NVS_COVERAGE
   script:
     - cd components/nvs_flash/test_nvs_host
     - make coverage_report
@@ -386,15 +476,19 @@ push_to_github:
     - tools/ci/push_to_github.sh
 
 deploy_docs:
-  stage: host_test
+  stage: deploy
   image: $CI_DOCKER_REGISTRY/esp32-ci-env$BOT_DOCKER_IMAGE_TAG
   tags:
     - deploy
   only:
-   - master
-   - /^release\/v/
-   - /^v\d+\.\d+(\.\d+)?($|-)/
-   - triggers
+    refs:
+      - master
+      - /^release\/v/
+      - /^v\d+\.\d+(\.\d+)?($|-)/
+      - triggers
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_BUILD_DOCS
   dependencies:
     - build_docs
   before_script: *do_nothing_before
@@ -426,8 +520,12 @@ check_doc_links:
   tags:
     - check_doc_links
   only:
-    # can only be triggered
-    - triggers
+    refs:
+      # can only be triggered
+      - triggers
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_BUILD_DOCS
   artifacts:
     paths:
       - docs/_build/linkcheck
@@ -502,6 +600,21 @@ check_submodule_sync:
     # check if all submodules are correctly synced to public repostory
     - git submodule update --init --recursive
 
+check_pipeline_triggered_by_label:
+  stage: post_check
+  image: $CI_DOCKER_REGISTRY/esp32-ci-env$BOT_DOCKER_IMAGE_TAG
+  dependencies: []
+  before_script: *do_nothing_before
+  tags:
+    - build
+  only:
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL
+  script:
+    # If the pipeline is triggered with label, the pipeline will only succeeded if "regular_test" label is added.
+    # We want to make sure some jobs are always executed to detect regression.
+    - test "$BOT_LABEL_REGULAR_TEST" = "true" || exit -1
+
 assign_test:
   tags:
     - assign_test
@@ -523,6 +636,12 @@ assign_test:
       - components/idf_test/*/TC.sqlite
       - $EXAMPLE_CONFIG_OUTPUT_PATH
     expire_in: 1 mos
+  only:
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_UNIT_TEST
+      - $BOT_LABEL_INTEGRATION_TEST
+      - $BOT_LABEL_EXAMPLE_TEST
   before_script: *add_gitlab_key_before
   script:
     # assign example tests
@@ -537,29 +656,43 @@ assign_test:
     - python CIAssignTestCases.py -t $IDF_PATH/components/idf_test/integration_test -c $IDF_PATH/.gitlab-ci.yml -b $IDF_PATH/SSC/ssc_bin
 
 .example_test_template: &example_test_template
-  stage: integration_test
+  stage: target_test
   when: on_success
   only:
-    - master
-    - /^release\/v/
-    - /^v\d+\.\d+(\.\d+)?($|-)/
-    - triggers
-    - schedules
+    refs:
+      - master
+      - /^release\/v/
+      - /^v\d+\.\d+(\.\d+)?($|-)/
+      - triggers
+      - schedules
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_EXAMPLE_TEST
   dependencies:
     - assign_test
-    - build_examples_00
-    - build_examples_01
-    - build_examples_02
-    - build_examples_03
-    - build_examples_04
-    - build_examples_05
-    - build_examples_06
-    - build_examples_07
+    - build_examples_make_00
+    - build_examples_make_01
+    - build_examples_make_02
+    - build_examples_make_03
+    - build_examples_make_04
+    - build_examples_make_05
+    - build_examples_make_06
+    - build_examples_make_07
+    - build_examples_cmake_00
+    - build_examples_cmake_01
+    - build_examples_cmake_02
+    - build_examples_cmake_03
+    - build_examples_cmake_04
+    - build_examples_cmake_05
+    - build_examples_cmake_06
+    - build_examples_cmake_07
   artifacts:
     when: always
     paths:
       - $LOG_PATH
-    expire_in: 1 mos
+    expire_in: 1 week
+    reports:
+        junit: $LOG_PATH/*/XUNIT_RESULT.xml
   variables:
     TEST_FW_PATH: "$CI_PROJECT_DIR/tools/tiny-test-fw"
     TEST_CASE_PATH: "$CI_PROJECT_DIR/examples"
@@ -579,10 +712,20 @@ assign_test:
 
 .unit_test_template: &unit_test_template
   <<: *example_test_template
-  stage: unit_test
+  stage: target_test
   dependencies:
     - assign_test
     - build_esp_idf_tests
+  only:
+    refs:
+      - master
+      - /^release\/v/
+      - /^v\d+\.\d+(\.\d+)?($|-)/
+      - triggers
+      - schedules
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_UNIT_TEST
   variables:
     TEST_FW_PATH: "$CI_PROJECT_DIR/tools/tiny-test-fw"
     TEST_CASE_PATH: "$CI_PROJECT_DIR/tools/unit-test-app"
@@ -591,14 +734,18 @@ assign_test:
     ENV_FILE: "$CI_PROJECT_DIR/ci-test-runner-configs/$CI_RUNNER_DESCRIPTION/EnvConfig.yml"
 
 .test_template: &test_template
-  stage: integration_test
+  stage: target_test
   when: on_success
   only:
-    - master
-    - /^release\/v/
-    - /^v\d+\.\d+(\.\d+)?($|-)/
-    - triggers
-    - schedules
+    refs:
+      - master
+      - /^release\/v/
+      - /^v\d+\.\d+(\.\d+)?($|-)/
+      - triggers
+      - schedules
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_INTEGRATION_TEST
   dependencies:
     - assign_test
     - build_ssc_00
@@ -663,6 +810,16 @@ example_test_001_01:
 
 example_test_002_01:
   <<: *example_test_template
+  tags:
+    - ESP32
+    - Example_ShieldBox_Basic
+
+example_test_006_01:
+  <<: *example_test_template
+  image: $CI_DOCKER_REGISTRY/ubuntu-test-env$BOT_DOCKER_IMAGE_TAG
+  only:
+    variables:
+      - $BOT_LABEL_IPERF_STRESS_TEST
   tags:
     - ESP32
     - Example_ShieldBox
@@ -853,6 +1010,18 @@ UT_001_31:
     - ESP32_IDF
     - UT_T1_1
 
+UT_001_32:
+  <<: *unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T1_1
+
+UT_001_32:
+  <<: *unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T1_1
+
 UT_002_01:
   <<: *unit_test_template
   tags:
@@ -959,6 +1128,13 @@ UT_004_10:
     - UT_T1_1
     - psram
 
+UT_004_11:
+  <<: *unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T1_1
+    - psram
+
 UT_005_01:
   <<: *unit_test_template
   tags:
@@ -1048,7 +1224,51 @@ UT_010_04:
     - UT_T1_RMT
     - psram
 
+UT_017_01:
+  <<: *unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T2_1
+
+UT_017_02:
+  <<: *unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T2_1
+
+UT_017_03:
+  <<: *unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T2_1
+
+UT_017_04:
+  <<: *unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T2_1
+    - psram
+
+UT_017_05:
+  <<: *unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T2_1
+    - 8Mpsram
+
 UT_601_01:
+  <<: *unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T1_1
+
+UT_601_02:
+  <<: *unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T1_1
+
+UT_601_03:
   <<: *unit_test_template
   tags:
     - ESP32_IDF

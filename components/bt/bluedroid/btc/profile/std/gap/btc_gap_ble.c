@@ -452,6 +452,10 @@ static void btc_ble_start_advertising (esp_ble_adv_params_t *ble_adv_params, tBT
         status = ESP_BT_STATUS_PARM_INVALID;
         BTC_TRACE_ERROR("Invalid advertisting channel map parameters.\n");
     }
+    if (!BLE_ISVALID_PARAM(ble_adv_params->peer_addr_type, BLE_ADDR_TYPE_PUBLIC, BLE_ADDR_TYPE_RANDOM)) {
+        status = ESP_BT_STATUS_PARM_INVALID;
+        BTC_TRACE_ERROR("Invalid advertisting peer address type parameters.\n");
+    }
     if(status != ESP_BT_STATUS_SUCCESS) {
         if(start_adv_cback) {
             start_adv_cback(status);
@@ -831,7 +835,7 @@ static void btc_ble_set_rand_addr (BD_ADDR rand_addr, tBTA_SET_RAND_ADDR_CBACK *
             BTA_DmSetRandAddress(rand_addr, btc_set_rand_addr_callback);
         } else {
             btc_set_rand_addr_callback(BTM_INVALID_STATIC_RAND_ADDR);
-            BTC_TRACE_ERROR("Invalid random address, the high bit should be 0b11, all bits of the random part shall not be to 1 or 0");
+            BTC_TRACE_ERROR("Invalid random address, the high bit should be 0b11, bits of the random part shall not be all 1 or 0");
         }
     } else {
         btc_set_rand_addr_callback(BTM_INVALID_STATIC_RAND_ADDR);
@@ -1114,6 +1118,25 @@ void btc_gap_ble_call_handler(btc_msg_t *msg)
                 uint8_t key_size = 0;
                 STREAM_TO_UINT8(key_size, value);
                 bta_dm_co_ble_set_max_key_size(key_size);
+                break;
+            }
+            case ESP_BLE_SM_SET_STATIC_PASSKEY: {
+                uint32_t passkey = 0;
+                for(uint8_t i = 0; i < arg->set_security_param.len; i++)
+                {
+                    passkey += (((uint8_t *)value)[i]<<(8*i));
+                }
+                BTA_DmBleSetStaticPasskey(true, passkey);
+                break;
+            }
+            case ESP_BLE_SM_CLEAR_STATIC_PASSKEY: {
+                BTA_DmBleSetStaticPasskey(false, 0);
+                break;
+            }
+            case ESP_BLE_SM_ONLY_ACCEPT_SPECIFIED_SEC_AUTH: {
+                uint8_t enable = 0;
+                STREAM_TO_UINT8(enable, value);
+                bta_dm_co_ble_set_accept_auth_enable(enable);
                 break;
             }
             default:

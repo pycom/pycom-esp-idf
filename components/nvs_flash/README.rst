@@ -47,9 +47,9 @@ Please note that the namespaces with same name in different NVS partitions are c
 Security, tampering, and robustness
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-NVS library doesn't implement tamper prevention measures. It is possible for anyone with physical access to the flash chip to alter, erase, or add key-value pairs.
+NVS is not directly compatible with the ESP32 flash encryption system. However, data can still be stored in encrypted form if NVS encryption is used together with ESP32 flash encryption. Please refer to :ref:`nvs_encryption` for more details.
 
-NVS is not currently compatible with the ESP32 flash encryption system.
+If NVS encryption is not used, it is possible for anyone with physical access to the flash chip to alter, erase, or add key-value pairs. With NVS encryption enabled, it is not possible to alter or add a key-value pair and get recognized as a valid pair without knowing corresponding NVS encryption keys. However, there is no tamper-resistance against erase operation.
 
 The library does try to recover from conditions when flash memory is in an inconsistent state. In particular, one should be able to power off the device at any point and time and then power it back on. This should not result in loss of data, expect for the new key-value pair if it was being written at the moment of power off. The library should also be able to initialize properly with any random data present in flash memory.
 
@@ -243,3 +243,44 @@ To reduce the number of reads performed from flash memory, each member of Page c
 
 Each node in hash list contains a 24-bit hash and 8-bit item index. Hash is calculated based on item namespace, key name and ChunkIndex. CRC32 is used for calculation, result is truncated to 24 bits. To reduce overhead of storing 32-bit entries in a linked list, list is implemented as a doubly-linked list of arrays. Each array holds 29 entries, for the total size of 128 bytes, together with linked list pointers and 32-bit count field. Minimal amount of extra RAM useage per page is therefore 128 bytes, maximum is 640 bytes.
 
+.. _nvs_encryption:
+
+NVS Encryption
+--------------
+
+Data stored in NVS partitions can be encrypted using AES-XTS in the manner similar to one mentioned in disc encryption standard IEEE P1619. For the purpose of encryption, each entry is considered as one `sector` and relative address of the entry (w.r.t. partition-start) is fed to the encryption algorithm as `sector-number`. The keys required for nvs encryption are stored in yet another partition, which is protected using :doc:`Flash Encryption <../../security/flash-encryption>`. Therefore, enabling :doc:`Flash Encryption <../../security/flash-encryption>` is a prerequisite for NVS encryption.
+
+.. _nvs_key_partition:
+
+NVS key partition
+^^^^^^^^^^^^^^^^^
+
+An application requiring NVS encryption support needs to be compiled with a key-partition of type `data` and subtype `key`. This partition should be marked as `encrypted`. Refer to :doc:`Partition Tables <../../api-guides/partition-tables>` for more details. The size of the partition should be 4096 bytes (minimum partition size). The structure of this partition is depicted below. 
+
+::
+
+    +-----------+--------------+-------------+----+
+    |              XTS encryption key(32)         |
+    +---------------------------------------------+
+    |              XTS tweak key (32)             |
+    +---------------------------------------------+
+    |                  CRC32(4)                   |
+    +---------------------------------------------+
+
+This partition can be generated using `nvs partition generator` utility and flashed onto the device. Since the partition is marked `encrypted` and :doc:`Flash Encryption <../../security/flash-encryption>` is enabled, bootloader will encrypt this partition using flash encryption key on first boot. Alternatively, the keys can be generated after startup using ``nvs_flash_generate_keys`` API provided by ``nvs_flash.h``, which will then write those keys onto the key-partition in encrypted form.
+
+It is possible for an application to use different keys for different NVS partitions and thereby have multiple key-partitions. However, it is a responsibilty of the application to provide correct key-partition/keys for the purpose of encryption/decryption.
+
+Encrypted Read/Write
+^^^^^^^^^^^^^^^^^^^^
+
+The same NVS APIs ``nvs_read_*`` or ``nvs_write_*`` can be used for reading and writing of encrypted nvs partition as well. However, the APIs for initialising NVS partitions are different. ``nvs_flash_secure_init`` and ``nvs_flash_secure_init_partition`` are used for initialising instead of ``nvs_flash_init`` and ``nvs_flash_init_partition`` respectively. ``nvs_sec_cfg_t`` structure required for these APIs can be populated using ``nvs_flash_generate_keys`` or ``nvs_flash_read_security_cfg``.
+
+Applications are expected to follow the following steps in order to perform NVS read/write operations with encryption enabled.
+
+    1. Find key partition and NVS data partition using ``esp_partition_find*`` APIs.
+    2. Populate ``nvs_sec_cfg_t`` struct using ``nvs_flash_read_security_cfg`` or ``nvs_flash_generate_keys`` APIs.
+    3. Initialise NVS flash partition using ``nvs_flash_secure_init`` or ``nvs_flash_secure_init_partition`` APIs.
+    4. Open a namespace using ``nvs_open`` or ``nvs_open_from_part`` APIs
+    5. Perform NVS read/write operations using ``nvs_read_*`` or ``nvs_write_*``
+    6. Deinitialise NVS partition using ``nvs_flash_deinit``.

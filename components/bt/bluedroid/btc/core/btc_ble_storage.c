@@ -38,14 +38,9 @@ static void _btc_storage_save(void)
         //store the next iter, if remove section, then will not loss the point
 
         const char *section = btc_config_section_name(iter);
-        if (!string_is_bdaddr(section) ||
-            !btc_config_get_int(section, BTC_BLE_STORAGE_DEV_TYPE_STR, (int *)&device_type) ||
-            ((device_type & BT_DEVICE_TYPE_BLE) != BT_DEVICE_TYPE_BLE)) {
-            iter = btc_config_section_next(iter);
-            continue;
-        }
 
-        if (!btc_config_exist(section, BTC_BLE_STORAGE_DEV_TYPE_STR) && 
+        if (string_is_bdaddr(section) &&
+                !btc_config_exist(section, BTC_BLE_STORAGE_DEV_TYPE_STR) &&
                 !btc_config_exist(section, BTC_BLE_STORAGE_ADDR_TYPE_STR) &&
                 !btc_config_exist(section, BTC_BLE_STORAGE_LINK_KEY_STR) &&
                 !btc_config_exist(section, BTC_BLE_STORAGE_LE_KEY_PENC_STR) &&
@@ -57,6 +52,14 @@ static void _btc_storage_save(void)
             btc_config_remove_section(section);
             continue;
         }
+
+        if (!string_is_bdaddr(section) ||
+            !btc_config_get_int(section, BTC_BLE_STORAGE_DEV_TYPE_STR, (int *)&device_type) ||
+            ((device_type & BT_DEVICE_TYPE_BLE) != BT_DEVICE_TYPE_BLE)) {
+            iter = btc_config_section_next(iter);
+            continue;
+        }
+
         if(addr_section_count == BONED_DEVICES_MAX_COUNT) {
             need_remove_iter = iter;
         }
@@ -238,6 +241,9 @@ static bt_status_t _btc_storage_remove_ble_bonding_keys(bt_bdaddr_t *remote_bd_a
     }
     if (btc_config_exist(bdstr, BTC_BLE_STORAGE_LE_KEY_LCSRK_STR)) {
         ret |= btc_config_remove(bdstr, BTC_BLE_STORAGE_LE_KEY_LCSRK_STR);
+    }
+    if (btc_config_exist(bdstr, BTC_BLE_STORAGE_LE_KEY_LID_STR)) {
+        ret |= btc_config_remove(bdstr, BTC_BLE_STORAGE_LE_KEY_LID_STR);
     }
     //here don't remove section, because config_save will check it
     _btc_storage_save();
@@ -547,6 +553,91 @@ bt_status_t btc_storage_remove_ble_dev_type(bt_bdaddr_t *remote_bd_addr, bool fl
     return ret;
 }
 
+static bt_status_t _btc_storage_set_ble_dev_auth_mode(bt_bdaddr_t *remote_bd_addr, uint8_t auth_mode, bool flush)
+{
+    int ret;
+    bdstr_t bdstr;
+
+    bdaddr_to_string(remote_bd_addr, bdstr, sizeof(bdstr_t));
+    ret = btc_config_set_int(bdstr, BTC_BLE_STORAGE_LE_AUTH_MODE_STR, (int)auth_mode);
+    if (ret == false) {
+        return BT_STATUS_FAIL;
+    }
+
+    if (flush) {
+        _btc_storage_save();
+    }
+
+    return BT_STATUS_SUCCESS;
+}
+
+bt_status_t btc_storage_set_ble_dev_auth_mode(bt_bdaddr_t *remote_bd_addr, uint8_t auth_mode, bool flush)
+{
+    bt_status_t ret;
+
+    btc_config_lock();
+    ret = _btc_storage_set_ble_dev_auth_mode(remote_bd_addr, auth_mode, flush);
+    btc_config_unlock();
+
+    return ret;
+}
+
+static bt_status_t _btc_storage_get_ble_dev_auth_mode(bt_bdaddr_t *remote_bd_addr, int* auth_mode)
+{
+    bdstr_t bdstr;
+    bdaddr_to_string(remote_bd_addr, bdstr, sizeof(bdstr));
+    int ret = btc_config_get_int(bdstr, BTC_BLE_STORAGE_LE_AUTH_MODE_STR, auth_mode);
+    return ret ? BT_STATUS_SUCCESS : BT_STATUS_FAIL;
+}
+
+bt_status_t btc_storage_get_ble_dev_auth_mode(bt_bdaddr_t *remote_bd_addr, int* auth_mode)
+{
+    bt_status_t ret;
+
+    btc_config_lock();
+    ret = _btc_storage_get_ble_dev_auth_mode(remote_bd_addr, auth_mode);
+    btc_config_unlock();
+
+    return ret;
+}
+
+static bt_status_t _btc_storage_remove_ble_dev_auth_mode(bt_bdaddr_t *remote_bd_addr, bool flush)
+{
+    bool ret = true;
+    bdstr_t bdstr;
+    uint32_t auth_mode = 0;
+
+    bdaddr_to_string(remote_bd_addr, bdstr, sizeof(bdstr));
+
+    ret = btc_config_get_int(bdstr, BTC_BLE_STORAGE_LE_AUTH_MODE_STR, (int *)&auth_mode);
+    if (ret == false) {
+        //cannot find the key, just return SUCCESS, indicate already removed
+        return BT_STATUS_SUCCESS;
+    }
+
+    ret = btc_config_remove(bdstr, BTC_BLE_STORAGE_LE_AUTH_MODE_STR);
+    if (ret == false) {
+        return BT_STATUS_FAIL;
+    }
+
+    if (flush) {
+        _btc_storage_save();
+    }
+
+    return  BT_STATUS_SUCCESS;
+}
+
+bt_status_t btc_storage_remove_ble_dev_auth_mode(bt_bdaddr_t *remote_bd_addr, bool flush)
+{
+    bt_status_t ret;
+
+    btc_config_lock();
+    ret = _btc_storage_remove_ble_dev_auth_mode(remote_bd_addr, flush);
+    btc_config_unlock();
+
+    return ret;
+}
+
 static bt_status_t _btc_storage_set_remote_addr_type(bt_bdaddr_t *remote_bd_addr, uint8_t addr_type, bool flush)
 {
     int ret;
@@ -651,7 +742,11 @@ static void _btc_read_le_key(const uint8_t key_type, const size_t key_len, bt_bd
             bdcpy(bta_bd_addr, bd_addr.address);
 
             if (!*device_added) {
-                BTA_DmAddBleDevice(bta_bd_addr, addr_type, BT_DEVICE_TYPE_BLE);
+                int auth_mode = 0;
+                if(_btc_storage_get_ble_dev_auth_mode(&bd_addr, &auth_mode) != BT_STATUS_SUCCESS) {
+                    BTC_TRACE_WARNING("%s Failed to get auth mode from flash, please erase flash and download the firmware again", __func__);
+                }
+                BTA_DmAddBleDevice(bta_bd_addr, addr_type, auth_mode, BT_DEVICE_TYPE_BLE);
                 *device_added = true;
             }
 
@@ -761,7 +856,6 @@ bt_status_t btc_storage_load_bonded_ble_devices(void)
 bt_status_t btc_storage_get_bonded_ble_devices_list(esp_ble_bond_dev_t *bond_dev, int dev_num)
 {
     bt_bdaddr_t bd_addr;
-    uint32_t device_type = 0;
     char buffer[sizeof(tBTM_LE_KEY_VALUE)] = {0};
 
     btc_config_lock();
@@ -771,12 +865,13 @@ bt_status_t btc_storage_get_bonded_ble_devices_list(esp_ble_bond_dev_t *bond_dev
         if (dev_num-- <= 0) {
             break;
         }
-
+        uint32_t device_type = 0;
         const char *name = btc_config_section_name(iter);
 
         if (!string_is_bdaddr(name) ||
                 !btc_config_get_int(name, BTC_BLE_STORAGE_DEV_TYPE_STR, (int *)&device_type) ||
                 !(device_type & BT_DEVICE_TYPE_BLE)) {
+            dev_num ++;
             continue;
         }
 
