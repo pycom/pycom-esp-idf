@@ -2642,9 +2642,7 @@ static UINT8 bta_dm_authorize_cback (BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NA
     }
 }
 
-
-
-
+#if (BTM_LOCAL_IO_CAPS != BTM_IO_CAP_NONE)
 /*******************************************************************************
 **
 ** Function         bta_dm_pinname_cback
@@ -2701,6 +2699,7 @@ static UINT8 bta_dm_authorize_cback (BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NA
         bta_dm_cb.p_sec_cback(event, &sec_event);
     }
 }
+#endif //(BTM_LOCAL_IO_CAPS != BTM_IO_CAP_NONE)
 
 /*******************************************************************************
 **
@@ -2718,18 +2717,6 @@ static UINT8 bta_dm_pin_cback (BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NAME bd_
 
     if (!bta_dm_cb.p_sec_cback) {
         return BTM_NOT_AUTHORIZED;
-    }
-
-    /* If the device name is not known, save bdaddr and devclass and initiate a name request */
-    if (bd_name[0] == 0) {
-        bta_dm_cb.pin_evt = BTA_DM_PIN_REQ_EVT;
-        bdcpy(bta_dm_cb.pin_bd_addr, bd_addr);
-        BTA_COPY_DEVICE_CLASS(bta_dm_cb.pin_dev_class, dev_class);
-        if ((BTM_ReadRemoteDeviceName(bd_addr, bta_dm_pinname_cback, BT_TRANSPORT_BR_EDR)) == BTM_CMD_STARTED) {
-            return BTM_CMD_STARTED;
-        }
-
-        APPL_TRACE_WARNING(" bta_dm_pin_cback() -> Failed to start Remote Name Request  ");
     }
 
     bdcpy(sec_event.pin_req.bd_addr, bd_addr);
@@ -4249,9 +4236,8 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
 
     memset(&sec_event, 0, sizeof(tBTA_DM_SEC));
     switch (event) {
-    case BTM_LE_IO_REQ_EVT:
-        // #if (BTM_LOCAL_IO_CAPS != BTM_IO_CAP_NONE)
-
+    case BTM_LE_IO_REQ_EVT: {
+        // #if (BT_SSP_INCLUDED == TRUE)
         bta_dm_co_ble_io_req(bda,
                              &p_data->io_req.io_cap,
                              &p_data->io_req.oob_data,
@@ -4266,6 +4252,7 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
         APPL_TRACE_EVENT("io mitm: %d oob_data:%d\n", p_data->io_req.auth_req, p_data->io_req.oob_data);
 
         break;
+    }
 
     case BTM_LE_SEC_REQUEST_EVT:
         bdcpy(sec_event.ble_req.bd_addr, bda);
@@ -4341,7 +4328,7 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
 
             }
         }
-
+        sec_event.auth_cmpl.auth_mode = p_data->complt.auth_mode;
         if (bta_dm_cb.p_sec_cback) {
             //bta_dm_cb.p_sec_cback(BTA_DM_AUTH_CMPL_EVT, &sec_event);
             bta_dm_cb.p_sec_cback(BTA_DM_BLE_AUTH_CMPL_EVT, &sec_event);
@@ -4430,7 +4417,8 @@ void bta_dm_add_ble_device (tBTA_DM_MSG *p_data)
 {
     if (!BTM_SecAddBleDevice (p_data->add_ble_device.bd_addr, NULL,
                               p_data->add_ble_device.dev_type  ,
-                              p_data->add_ble_device.addr_type)) {
+                              p_data->add_ble_device.addr_type,
+                              p_data->add_ble_device.auth_mode)) {
         APPL_TRACE_ERROR ("BTA_DM: Error adding BLE Device for device %08x%04x",
                           (p_data->add_ble_device.bd_addr[0] << 24) + (p_data->add_ble_device.bd_addr[1] << 16) + \
                           (p_data->add_ble_device.bd_addr[2] << 8) + p_data->add_ble_device.bd_addr[3],
@@ -4459,6 +4447,10 @@ void bta_dm_ble_passkey_reply (tBTA_DM_MSG *p_data)
 
 }
 
+void bta_dm_ble_set_static_passkey(tBTA_DM_MSG *p_data)
+{
+    BTM_BleSetStaticPasskey(p_data->ble_set_static_passkey.add, p_data->ble_set_static_passkey.static_passkey);
+}
 /*******************************************************************************
 **
 ** Function         bta_dm_ble_confirm_reply

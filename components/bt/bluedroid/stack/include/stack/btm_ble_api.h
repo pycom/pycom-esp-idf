@@ -903,13 +903,14 @@ void BTM_BleRegiseterConnParamCallback(tBTM_UPDATE_CONN_PARAM_CBACK *update_conn
 **                  bd_name          - Name of the peer device.  NULL if unknown.
 **                  dev_type         - Remote device's device type.
 **                  addr_type        - LE device address type.
+**                  auth_mode        - auth mode
 **
 ** Returns          TRUE if added OK, else FALSE
 **
 *******************************************************************************/
 //extern
 BOOLEAN BTM_SecAddBleDevice (BD_ADDR bd_addr, BD_NAME bd_name,
-                             tBT_DEVICE_TYPE dev_type, tBLE_ADDR_TYPE addr_type);
+                             tBT_DEVICE_TYPE dev_type, tBLE_ADDR_TYPE addr_type, UINT32 auth_mode);
 
 /*******************************************************************************
 **
@@ -1314,6 +1315,21 @@ void BTM_SecurityGrant(BD_ADDR bd_addr, UINT8 res);
 *******************************************************************************/
 //extern
 void BTM_BlePasskeyReply (BD_ADDR bd_addr, UINT8 res, UINT32 passkey);
+
+/*******************************************************************************
+**
+** Function         BTM_BleSetStaticPasskey
+**
+** Description      This function is called to set static passkey
+**
+**
+** Parameters:      add          - set static passkey when add is TRUE
+**                                 clear static passkey when add is FALSE
+**                  passkey      - static passkey
+**
+**
+*******************************************************************************/
+void BTM_BleSetStaticPasskey(BOOLEAN add, UINT32 passkey);
 
 /*******************************************************************************
 **

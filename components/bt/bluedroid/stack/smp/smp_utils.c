@@ -877,16 +877,21 @@ void smp_xor_128(BT_OCTET16 a, BT_OCTET16 b)
 ** Returns          void
 **
 *******************************************************************************/
-void smp_cb_cleanup(tSMP_CB   *p_cb)
+void smp_cb_cleanup(tSMP_CB *p_cb)
 {
     tSMP_CALLBACK   *p_callback = p_cb->p_callback;
     UINT8           trace_level = p_cb->trace_level;
-
+    UINT32          static_passkey = p_cb->static_passkey;
+    BOOLEAN         use_static_passkey = p_cb->use_static_passkey;
     SMP_TRACE_EVENT("smp_cb_cleanup\n");
 
     memset(p_cb, 0, sizeof(tSMP_CB));
     p_cb->p_callback = p_callback;
     p_cb->trace_level = trace_level;
+    if(use_static_passkey) {
+        p_cb->use_static_passkey = use_static_passkey;
+        p_cb->static_passkey = static_passkey;
+    }
 }
 
 /*******************************************************************************
@@ -951,15 +956,23 @@ void smp_proc_pairing_cmpl(tSMP_CB *p_cb)
     tSMP_EVT_DATA   evt_data = {0};
     tSMP_CALLBACK   *p_callback = p_cb->p_callback;
     BD_ADDR         pairing_bda;
-    tBTM_SEC_DEV_REC    *p_rec;
+    tBTM_SEC_DEV_REC    *p_rec = btm_find_dev (p_cb->pairing_bda);
 
     SMP_TRACE_DEBUG ("smp_proc_pairing_cmpl \n");
 
     evt_data.cmplt.reason = p_cb->status;
     evt_data.cmplt.smp_over_br = p_cb->smp_over_br;
-
+    evt_data.cmplt.auth_mode = 0;
     if (p_cb->status == SMP_SUCCESS) {
         evt_data.cmplt.sec_level = p_cb->sec_level;
+        if (p_cb->auth_mode) { // the first encryption
+            evt_data.cmplt.auth_mode = p_cb->auth_mode;
+            if (p_rec) {
+                p_rec->ble.auth_mode = p_cb->auth_mode;
+            }
+        } else if (p_rec) {
+            evt_data.cmplt.auth_mode =  p_rec->ble.auth_mode;
+        }
     }
 
     evt_data.cmplt.is_pair_cancel  = FALSE;
@@ -976,7 +989,6 @@ void smp_proc_pairing_cmpl(tSMP_CB *p_cb)
     memcpy (pairing_bda, p_cb->pairing_bda, BD_ADDR_LEN);
 
     if (p_cb->role == HCI_ROLE_SLAVE) {
-        p_rec = btm_find_dev (p_cb->pairing_bda);
         if(p_rec && p_rec->ble.skip_update_conn_param) {
             //clear flag
             p_rec->ble.skip_update_conn_param = false;
