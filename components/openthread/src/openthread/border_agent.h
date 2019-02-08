@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2017, The OpenThread Authors.
+ *  Copyright (c) 2018, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,45 +28,57 @@
 
 /**
  * @file
- *   This file implements the OpenThread TMF proxy API.
+ * @brief
+ *   This file includes functions for the Thread Border Agent role.
  */
 
-#include "openthread-core-config.h"
+#ifndef OPENTHREAD_BORDER_AGENT_H_
+#define OPENTHREAD_BORDER_AGENT_H_
 
-#include <openthread/tmf_proxy.h>
+#include <openthread/instance.h>
 
-#include "common/instance.hpp"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-#if OPENTHREAD_FTD && OPENTHREAD_ENABLE_TMF_PROXY
+/**
+ * @addtogroup api-border-agent
+ *
+ * @brief
+ *   This module includes functions for the Thread Border Agent role.
+ *
+ * @{
+ *
+ */
 
-using namespace ot;
-
-otError otTmfProxyStart(otInstance *aInstance, otTmfProxyStreamHandler aTmfProxyCallback, void *aContext)
+/**
+ * This enumeration defines the Border Agent state.
+ *
+ */
+typedef enum otBorderAgentState
 {
-    Instance &instance = *static_cast<Instance *>(aInstance);
+    OT_BORDER_AGENT_STATE_STOPPED = 0, ///< Border agent role is disabled.
+    OT_BORDER_AGENT_STATE_STARTED = 1, ///< Border agent is started.
+    OT_BORDER_AGENT_STATE_ACTIVE  = 2, ///< Border agent is connected with external commissioner.
+} otBorderAgentState;
 
-    return instance.GetThreadNetif().GetTmfProxy().Start(aTmfProxyCallback, aContext);
-}
+/**
+ * This function gets the state of Thread Border Agent role.
+ *
+ * @param[in]  aInstance         A pointer to an OpenThread instance.
+ *
+ * @returns State of the Border Agent.
+ *
+ */
+otBorderAgentState otBorderAgentGetState(otInstance *aInstance);
 
-otError otTmfProxyStop(otInstance *aInstance)
-{
-    Instance &instance = *static_cast<Instance *>(aInstance);
+/**
+ * @}
+ *
+ */
 
-    return instance.GetThreadNetif().GetTmfProxy().Stop();
-}
+#ifdef __cplusplus
+} // end of extern "C"
+#endif
 
-otError otTmfProxySend(otInstance *aInstance, otMessage *aMessage, uint16_t aLocator, uint16_t aPort)
-{
-    Instance &instance = *static_cast<Instance *>(aInstance);
-
-    return instance.GetThreadNetif().GetTmfProxy().Send(*static_cast<ot::Message *>(aMessage), aLocator, aPort);
-}
-
-bool otTmfProxyIsEnabled(otInstance *aInstance)
-{
-    Instance &instance = *static_cast<Instance *>(aInstance);
-
-    return instance.GetThreadNetif().GetTmfProxy().IsEnabled();
-}
-
-#endif // OPENTHREAD_FTD && OPENTHREAD_ENABLE_TMF_PROXY
+#endif // OPENTHREAD_BORDER_AGENT_H_

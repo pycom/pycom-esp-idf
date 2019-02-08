@@ -70,7 +70,7 @@ otError PanIdQueryClient::SendQuery(uint16_t                            aPanId,
     otError                           error = OT_ERROR_NONE;
     Coap::Header                      header;
     MeshCoP::CommissionerSessionIdTlv sessionId;
-    MeshCoP::ChannelMask0Tlv          channelMask;
+    MeshCoP::ChannelMaskTlv           channelMask;
     MeshCoP::PanIdTlv                 panId;
     Ip6::MessageInfo                  messageInfo;
     Message *                         message = NULL;
@@ -89,6 +89,7 @@ otError PanIdQueryClient::SendQuery(uint16_t                            aPanId,
     SuccessOrExit(error = message->Append(&sessionId, sizeof(sessionId)));
 
     channelMask.Init();
+    channelMask.SetChannelPage(OT_RADIO_CHANNEL_PAGE);
     channelMask.SetMask(aChannelMask);
     SuccessOrExit(error = message->Append(&channelMask, sizeof(channelMask)));
 
@@ -102,7 +103,7 @@ otError PanIdQueryClient::SendQuery(uint16_t                            aPanId,
     messageInfo.SetInterfaceId(netif.GetInterfaceId());
     SuccessOrExit(error = netif.GetCoap().SendMessage(*message, messageInfo));
 
-    otLogInfoMeshCoP(GetInstance(), "sent panid query");
+    otLogInfoMeshCoP("sent panid query");
 
     mCallback = aCallback;
     mContext  = aContext;
@@ -129,20 +130,20 @@ void PanIdQueryClient::HandleConflict(void *               aContext,
 
 void PanIdQueryClient::HandleConflict(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
-    ThreadNetif &            netif = GetNetif();
-    MeshCoP::PanIdTlv        panId;
-    MeshCoP::ChannelMask0Tlv channelMask;
-    Ip6::MessageInfo         responseInfo(aMessageInfo);
+    ThreadNetif &           netif = GetNetif();
+    MeshCoP::PanIdTlv       panId;
+    MeshCoP::ChannelMaskTlv channelMask;
+    Ip6::MessageInfo        responseInfo(aMessageInfo);
 
     VerifyOrExit(aHeader.GetType() == OT_COAP_TYPE_CONFIRMABLE && aHeader.GetCode() == OT_COAP_CODE_POST);
 
-    otLogInfoMeshCoP(GetInstance(), "received panid conflict");
+    otLogInfoMeshCoP("received panid conflict");
 
     SuccessOrExit(MeshCoP::Tlv::GetTlv(aMessage, MeshCoP::Tlv::kPanId, sizeof(panId), panId));
     VerifyOrExit(panId.IsValid());
 
     SuccessOrExit(MeshCoP::Tlv::GetTlv(aMessage, MeshCoP::Tlv::kChannelMask, sizeof(channelMask), channelMask));
-    VerifyOrExit(channelMask.IsValid());
+    VerifyOrExit(channelMask.IsValid() && (channelMask.GetChannelPage() == OT_RADIO_CHANNEL_PAGE));
 
     if (mCallback != NULL)
     {
@@ -151,7 +152,7 @@ void PanIdQueryClient::HandleConflict(Coap::Header &aHeader, Message &aMessage, 
 
     SuccessOrExit(netif.GetCoap().SendEmptyAck(aHeader, responseInfo));
 
-    otLogInfoMeshCoP(GetInstance(), "sent panid query conflict response");
+    otLogInfoMeshCoP("sent panid query conflict response");
 
 exit:
     return;

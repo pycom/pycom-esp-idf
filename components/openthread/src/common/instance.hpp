@@ -39,12 +39,12 @@
 #include "utils/wrap_stdbool.h"
 #include "utils/wrap_stdint.h"
 
-#include <openthread/types.h>
+#include <openthread/error.h>
 #include <openthread/platform/logging.h>
 
 #if OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
-#include "api/link_raw.hpp"
 #include "common/message.hpp"
+#include "mac/link_raw.hpp"
 #endif
 #if OPENTHREAD_FTD || OPENTHREAD_MTD
 #include "coap/coap.hpp"
@@ -55,6 +55,7 @@
 #endif
 #include "common/notifier.hpp"
 #include "common/settings.hpp"
+#include "meshcop/border_agent.hpp"
 #include "net/ip6.hpp"
 #include "thread/announce_sender.hpp"
 #include "thread/link_quality.hpp"
@@ -66,6 +67,9 @@
 #include "utils/channel_monitor.hpp"
 #endif
 #endif // OPENTHREAD_FTD || OPENTHREAD_MTD
+#if OPENTHREAD_ENABLE_VENDOR_EXTENSION
+#include "common/extension.hpp"
+#endif
 
 /**
  * @addtogroup core-instance
@@ -176,25 +180,33 @@ public:
      */
     TaskletScheduler &GetTaskletScheduler(void) { return mTaskletScheduler; }
 
+    /**
+     * This method returns the active log level.
+     *
+     * @returns The log level.
+     *
+     */
+    otLogLevel GetLogLevel(void) const
 #if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
-    /**
-     * This method returns the current dynamic log level.
-     *
-     * @returns the currently set dynamic log level.
-     *
-     */
-    otLogLevel GetDynamicLogLevel(void) const { return mLogLevel; }
-
-    /**
-     * This method sets the dynamic log level.
-     *
-     * @param[in]  aLogLevel The dynamic log level.
-     *
-     */
-    void SetDynamicLogLevel(otLogLevel aLogLevel) { mLogLevel = aLogLevel; }
+    {
+        return mLogLevel;
+    }
+#else
+    {
+        return static_cast<otLogLevel>(OPENTHREAD_CONFIG_LOG_LEVEL);
+    }
 #endif
 
-#if OPENTHREAD_MTD || OPENTHREAD_FTD
+#if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
+    /**
+     * This method sets the log level.
+     *
+     * @param[in] aLogLevel  A log level.
+     *
+     */
+    void SetLogLevel(otLogLevel aLogLevel) { mLogLevel = aLogLevel; }
+#endif
+
     /**
      * This method finalizes the OpenThread instance.
      *
@@ -203,6 +215,7 @@ public:
      */
     void Finalize(void);
 
+#if OPENTHREAD_MTD || OPENTHREAD_FTD
     /**
      * This method deletes all the settings stored in non-volatile memory, and then triggers a platform reset.
      *
@@ -307,7 +320,17 @@ public:
      * @returns A reference to the application COAP object.
      *
      */
-    Coap::ApplicationCoap &GetApplicationCoap(void) { return mApplicationCoap; }
+    Coap::Coap &GetApplicationCoap(void) { return mApplicationCoap; }
+#endif
+
+#if OPENTHREAD_ENABLE_APPLICATION_COAP_SECURE
+    /**
+     * This method returns a reference to application COAP Secure object.
+     *
+     * @returns A reference to the application COAP Secure object.
+     *
+     */
+    Coap::CoapSecure &GetApplicationCoapSecure(void) { return mApplicationCoapSecure; }
 #endif
 
 #if OPENTHREAD_ENABLE_CHANNEL_MONITOR
@@ -347,7 +370,28 @@ public:
      *
      */
     MessagePool &GetMessagePool(void) { return mMessagePool; }
+
+#if OPENTHREAD_ENABLE_VENDOR_EXTENSION
+    /**
+     * This method returns a reference to vendor extension object.
+     *
+     * @returns A reference to the vendor extension object.
+     *
+     */
+    Extension::ExtensionBase &GetExtension(void) { return mExtension; }
+#endif
+
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
+
+#if OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
+    /**
+     * This method returns a reference to LinkRaw object.
+     *
+     * @returns A reference to the LinkRaw object.
+     *
+     */
+    Mac::LinkRaw &GetLinkRaw(void) { return mLinkRaw; }
+#endif
 
     /**
      * This template method returns a reference to a given `Type` object belonging to the OpenThread instance.
@@ -364,17 +408,7 @@ public:
      * @returns A reference to the `Type` object of the instance.
      *
      */
-    template <typename Type> Type &Get(void);
-
-#if OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
-    /**
-     * This method returns a reference to LinkRaw object.
-     *
-     * @returns A reference to the LinkRaw object.
-     *
-     */
-    LinkRaw &GetLinkRaw(void) { return mLinkRaw; }
-#endif
+    template <typename Type> inline Type &Get(void);
 
 private:
     Instance(void);
@@ -404,7 +438,11 @@ private:
     ThreadNetif mThreadNetif;
 
 #if OPENTHREAD_ENABLE_APPLICATION_COAP
-    Coap::ApplicationCoap mApplicationCoap;
+    Coap::Coap mApplicationCoap;
+#endif
+
+#if OPENTHREAD_ENABLE_APPLICATION_COAP_SECURE
+    Coap::CoapSecure mApplicationCoapSecure;
 #endif
 
 #if OPENTHREAD_ENABLE_CHANNEL_MONITOR
@@ -422,13 +460,265 @@ private:
     MessagePool mMessagePool;
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 #if OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
-    LinkRaw mLinkRaw;
+    Mac::LinkRaw mLinkRaw;
 #endif // OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
+
 #if OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
     otLogLevel mLogLevel;
 #endif
+#if OPENTHREAD_ENABLE_VENDOR_EXTENSION
+    Extension::ExtensionBase &mExtension;
+#endif
     bool mIsInitialized;
 };
+
+// Specializations of the `Get<Type>()` method.
+
+#if OPENTHREAD_MTD || OPENTHREAD_FTD
+template <> inline Notifier &Instance::Get(void)
+{
+    return GetNotifier();
+}
+
+template <> inline MeshForwarder &Instance::Get(void)
+{
+    return GetThreadNetif().GetMeshForwarder();
+}
+
+template <> inline Mle::Mle &Instance::Get(void)
+{
+    return GetThreadNetif().GetMle();
+}
+
+template <> inline Mle::MleRouter &Instance::Get(void)
+{
+    return GetThreadNetif().GetMle();
+}
+
+template <> inline ChildTable &Instance::Get(void)
+{
+    return GetThreadNetif().GetMle().GetChildTable();
+}
+
+template <> inline RouterTable &Instance::Get(void)
+{
+    return GetThreadNetif().GetMle().GetRouterTable();
+}
+
+template <> inline Ip6::Netif &Instance::Get(void)
+{
+    return GetThreadNetif();
+}
+
+template <> inline Ip6::Ip6 &Instance::Get(void)
+{
+    return GetIp6();
+}
+
+template <> inline Mac::Mac &Instance::Get(void)
+{
+    return GetThreadNetif().GetMac();
+}
+
+template <> inline Mac::SubMac &Instance::Get(void)
+{
+    return GetThreadNetif().GetMac().GetSubMac();
+}
+
+template <> inline KeyManager &Instance::Get(void)
+{
+    return GetThreadNetif().GetKeyManager();
+}
+
+#if OPENTHREAD_FTD
+template <> inline AddressResolver &Instance::Get(void)
+{
+    return GetThreadNetif().GetAddressResolver();
+}
+
+template <> inline MeshCoP::Leader &Instance::Get(void)
+{
+    return GetThreadNetif().GetLeader();
+}
+
+template <> inline MeshCoP::JoinerRouter &Instance::Get(void)
+{
+    return GetThreadNetif().GetJoinerRouter();
+}
+#endif // OPENTHREAD_FTD
+
+template <> inline AnnounceBeginServer &Instance::Get(void)
+{
+    return GetThreadNetif().GetAnnounceBeginServer();
+}
+
+template <> inline DataPollManager &Instance::Get(void)
+{
+    return GetThreadNetif().GetMeshForwarder().GetDataPollManager();
+}
+
+template <> inline EnergyScanServer &Instance::Get(void)
+{
+    return GetThreadNetif().GetEnergyScanServer();
+}
+
+template <> inline PanIdQueryServer &Instance::Get(void)
+{
+    return GetThreadNetif().GetPanIdQueryServer();
+}
+
+template <> inline NetworkData::Leader &Instance::Get(void)
+{
+    return GetThreadNetif().GetNetworkDataLeader();
+}
+
+template <> inline Ip6::Mpl &Instance::Get(void)
+{
+    return GetIp6().GetMpl();
+}
+
+template <> inline Coap::Coap &Instance::Get(void)
+{
+    return GetThreadNetif().GetCoap();
+}
+
+template <> inline MeshCoP::ActiveDataset &Instance::Get(void)
+{
+    return GetThreadNetif().GetActiveDataset();
+}
+
+template <> inline MeshCoP::PendingDataset &Instance::Get(void)
+{
+    return GetThreadNetif().GetPendingDataset();
+}
+
+#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+template <> inline TimeSync &Instance::Get(void)
+{
+    return GetThreadNetif().GetTimeSync();
+}
+#endif
+
+#if OPENTHREAD_ENABLE_COMMISSIONER && OPENTHREAD_FTD
+template <> inline MeshCoP::Commissioner &Instance::Get(void)
+{
+    return GetThreadNetif().GetCommissioner();
+}
+#endif
+
+#if OPENTHREAD_ENABLE_JOINER
+template <> inline MeshCoP::Joiner &Instance::Get(void)
+{
+    return GetThreadNetif().GetJoiner();
+}
+#endif
+
+#if OPENTHREAD_ENABLE_DNS_CLIENT
+template <> inline Dns::Client &Instance::Get(void)
+{
+    return GetThreadNetif().GetDnsClient();
+}
+#endif
+
+#if OPENTHREAD_ENABLE_DTLS
+template <> inline MeshCoP::Dtls &Instance::Get(void)
+{
+    return GetThreadNetif().GetDtls();
+}
+
+template <> inline Coap::CoapSecure &Instance::Get(void)
+{
+    return GetThreadNetif().GetCoapSecure();
+}
+#endif
+
+#if OPENTHREAD_ENABLE_DHCP6_CLIENT
+template <> inline Dhcp6::Dhcp6Client &Instance::Get(void)
+{
+    return GetThreadNetif().GetDhcp6Client();
+}
+#endif
+
+#if OPENTHREAD_ENABLE_JAM_DETECTION
+template <> inline Utils::JamDetector &Instance::Get(void)
+{
+    return GetThreadNetif().GetJamDetector();
+}
+#endif
+
+#if OPENTHREAD_ENABLE_SNTP_CLIENT
+template <> inline Sntp::Client &Instance::Get(void)
+{
+    return GetThreadNetif().GetSntpClient();
+}
+#endif
+
+template <> inline Utils::ChildSupervisor &Instance::Get(void)
+{
+    return GetThreadNetif().GetChildSupervisor();
+}
+
+template <> inline Utils::SupervisionListener &Instance::Get(void)
+{
+    return GetThreadNetif().GetSupervisionListener();
+}
+
+#if OPENTHREAD_ENABLE_CHANNEL_MONITOR
+template <> inline Utils::ChannelMonitor &Instance::Get(void)
+{
+    return GetChannelMonitor();
+}
+#endif
+
+#if OPENTHREAD_ENABLE_CHANNEL_MANAGER
+template <> inline Utils::ChannelManager &Instance::Get(void)
+{
+    return GetChannelManager();
+}
+#endif
+
+#if OPENTHREAD_ENABLE_BORDER_AGENT
+template <> inline MeshCoP::BorderAgent &Instance::Get(void)
+{
+    return GetThreadNetif().GetBorderAgent();
+}
+#endif
+
+#if OPENTHREAD_CONFIG_ENABLE_ANNOUNCE_SENDER
+template <> inline AnnounceSender &Instance::Get(void)
+{
+    return GetAnnounceSender();
+}
+#endif
+
+#endif // OPENTHREAD_MTD || OPENTHREAD_FTD
+
+#if OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
+template <> inline Mac::LinkRaw &Instance::Get(void)
+{
+    return GetLinkRaw();
+}
+
+#if OPENTHREAD_RADIO
+template <> inline Mac::SubMac &Instance::Get(void)
+{
+    return GetLinkRaw().GetSubMac();
+}
+#endif
+
+#endif // OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
+
+template <> inline TaskletScheduler &Instance::Get(void)
+{
+    return GetTaskletScheduler();
+}
+
+#if OPENTHREAD_ENABLE_VENDOR_EXTENSION
+template <> inline Extension::ExtensionBase &Instance::Get(void)
+{
+    return GetExtension();
+}
+#endif
 
 /**
  * @}

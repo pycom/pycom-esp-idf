@@ -91,7 +91,7 @@ enum
 OT_TOOL_PACKED_BEGIN
 class CoapMetadata
 {
-    friend class CoapBase;
+    friend class Coap;
 
 public:
     /**
@@ -198,7 +198,7 @@ private:
  */
 class Resource : public otCoapResource
 {
-    friend class CoapBase;
+    friend class Coap;
 
 public:
     enum
@@ -228,6 +228,14 @@ public:
      *
      */
     Resource *GetNext(void) const { return static_cast<Resource *>(mNext); };
+
+    /**
+     * This method returns a pointer to the Uri-Path.
+     *
+     * @returns A Pointer to the Uri-Path.
+     *
+     */
+    const char *GetUriPath(void) const { return mUriPath; };
 
 private:
     void HandleRequest(Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo) const
@@ -296,7 +304,9 @@ public:
      */
     static void RemoveFrom(Message &aMessage)
     {
-        assert(aMessage.SetLength(aMessage.GetLength() - sizeof(EnqueuedResponseHeader)) == OT_ERROR_NONE);
+        otError error = aMessage.SetLength(aMessage.GetLength() - sizeof(EnqueuedResponseHeader));
+        assert(error == OT_ERROR_NONE);
+        OT_UNUSED_VARIABLE(error);
     }
 
     /**
@@ -342,11 +352,9 @@ public:
      * Default class constructor.
      *
      * @param[in]  aInstance  A reference to the OpenThread instance.
-     * @param[in]  aHandler   A timer handler provided by owner of `RespponseQueue`.
-     * @param[in]  aContext   A pointer to arbitrary context information (used along with timer handler).
      *
      */
-    ResponsesQueue(Instance &aInstance, Timer::Handler aHandler, void *aContext);
+    explicit ResponsesQueue(Instance &aInstance);
 
     /**
      * Add given response to the cache.
@@ -410,15 +418,6 @@ public:
      */
     const MessageQueue &GetResponses(void) const { return mQueue; }
 
-    /**
-     * Callback handler for timer.
-     *
-     * This method must be invoked by the owner of `ResponsesQueue` instance when the timer expires from the `aHandler`
-     * callback function provided in the constructor.
-     *
-     */
-    void HandleTimer(void);
-
 private:
     enum
     {
@@ -431,15 +430,18 @@ private:
         aMessage.Free();
     }
 
-    MessageQueue mQueue;
-    TimerMilli   mTimer;
+    static void HandleTimer(Timer &aTimer);
+    void        HandleTimer(void);
+
+    MessageQueue      mQueue;
+    TimerMilliContext mTimer;
 };
 
 /**
- * This class implements the common base for CoAP client and server.
+ * This class implements the CoAP client and server.
  *
  */
-class CoapBase : public InstanceLocator
+class Coap : public InstanceLocator
 {
     friend class ResponsesQueue;
 
@@ -460,6 +462,14 @@ public:
     typedef otError (*Interceptor)(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo, void *aContext);
 
     /**
+     * This constructor initializes the object.
+     *
+     * @param[in]  aInstance    A reference to the OpenThread instance.
+     *
+     */
+    explicit Coap(Instance &aInstance);
+
+    /**
      * This method starts the CoAP service.
      *
      * @param[in]  aPort  The local UDP port to bind to.
@@ -476,14 +486,6 @@ public:
      *
      */
     otError Stop(void);
-
-    /**
-     * This method returns a port number used by CoAP service.
-     *
-     * @returns A port number.
-     *
-     */
-    uint16_t GetPort(void) { return mSocket.GetSockName().mPort; };
 
     /**
      * This method adds a resource to the CoAP server.
@@ -514,13 +516,16 @@ public:
     /**
      * This method creates a new message with a CoAP header.
      *
-     * @param[in]  aHeader      A reference to a CoAP header that is used to create the message.
-     * @param[in]  aPrority     The message priority level.
+     * @note If @p aSettings is 'NULL', the link layer security is enabled and the message priority is set to
+     * OT_MESSAGE_PRIORITY_NORMAL by default.
+     *
+     * @param[in]  aHeader    A reference to a CoAP header that is used to create the message.
+     * @param[in]  aSettings  A pointer to the message settings or NULL to set default settings.
      *
      * @returns A pointer to the message or NULL if failed to allocate message.
      *
      */
-    Message *NewMessage(const Header &aHeader, uint8_t aPriority = kDefaultCoapMessagePriority);
+    Message *NewMessage(const Header &aHeader, const otMessageSettings *aSettings = NULL);
 
     /**
      * This method sends a CoAP message.
@@ -584,7 +589,7 @@ public:
      * @retval OT_ERROR_INVALID_ARGS  The @p aRequestHeader header is not of confirmable type.
      *
      */
-    otError SendAck(Header &aRequestHeader, const Ip6::MessageInfo &aMessageInfo)
+    otError SendAck(const Header &aRequestHeader, const Ip6::MessageInfo &aMessageInfo)
     {
         return SendEmptyMessage(OT_COAP_TYPE_ACKNOWLEDGMENT, aRequestHeader, aMessageInfo);
     };
@@ -667,36 +672,6 @@ public:
 
 protected:
     /**
-     * This constructor initializes the object.
-     *
-     * @param[in]  aInstance                      A reference to the OpenThread instance.
-     * @param[in]  aRetransmissionTimerHandler    A timer handler provided by sub-class for `mRetranmissionTimer`.
-     * @param[in]  aResponsesQueueTimerHandler    A timer handler provided by sub-class for `mReponsesQueue` timer.
-     *
-     */
-    CoapBase(Instance &     aInstance,
-             Timer::Handler aRetransmissionTimerHandler,
-             Timer::Handler aResponsesQueueTimerHandler);
-
-    /**
-     * Retransmission timer handler.
-     *
-     * This method must be invoked by sub-class when the timer expires from the `aRetransmissionTimerHandler`
-     * callback function provided in the constructor.
-     *
-     */
-    void HandleRetransmissionTimer(void);
-
-    /**
-     * `ResponsesQueue` timer handler.
-     *
-     * This method must be invoked by sub-class when the timer expires from the `aResponsesQueueTimerHandler`
-     * callback function provided in the constructor.
-     *
-     */
-    void HandleResponsesQueueTimer(void) { mResponsesQueue.HandleTimer(); }
-
-    /**
      * This method sends a message.
      *
      * @param[in]  aMessage      A reference to the message to send.
@@ -717,10 +692,8 @@ protected:
     Ip6::UdpSocket mSocket;
 
 private:
-    enum
-    {
-        kDefaultCoapMessagePriority = Message::kPriorityLow,
-    };
+    static void HandleRetransmissionTimer(Timer &aTimer);
+    void        HandleRetransmissionTimer(void);
 
     static void HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
 
@@ -743,9 +716,9 @@ private:
     otError SendCopy(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     otError SendEmptyMessage(Header::Type aType, const Header &aRequestHeader, const Ip6::MessageInfo &aMessageInfo);
 
-    MessageQueue mPendingRequests;
-    uint16_t     mMessageId;
-    TimerMilli   mRetransmissionTimer;
+    MessageQueue      mPendingRequests;
+    uint16_t          mMessageId;
+    TimerMilliContext mRetransmissionTimer;
 
     Resource *mResources;
 
@@ -756,50 +729,6 @@ private:
     otCoapRequestHandler mDefaultHandler;
     void *               mDefaultHandlerContext;
 };
-
-/**
- * This class implements the CoAP client and server.
- *
- */
-class Coap : public CoapBase
-{
-public:
-    /**
-     * This constructor initializes the object.
-     *
-     * @param[in] aInstance      A reference to the OpenThread instance.
-     *
-     */
-    explicit Coap(Instance &aInstance);
-
-private:
-    static void HandleRetransmissionTimer(Timer &aTimer);
-    static void HandleResponsesQueueTimer(Timer &aTimer);
-};
-
-#if OPENTHREAD_ENABLE_APPLICATION_COAP
-
-/**
- * This class implements the application CoAP client and server.
- *
- */
-class ApplicationCoap : public CoapBase
-{
-public:
-    /**
-     * This constructor initializes the object.
-     *
-     * @param[in] aInstance      A reference to the OpenThread instance.
-     *
-     */
-    explicit ApplicationCoap(Instance &aInstance);
-
-private:
-    static void HandleRetransmissionTimer(Timer &aTimer);
-    static void HandleResponsesQueueTimer(Timer &aTimer);
-};
-
-#endif
 
 } // namespace Coap
 } // namespace ot

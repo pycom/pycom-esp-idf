@@ -36,10 +36,9 @@
 
 #include "openthread-core-config.h"
 
-#include <openthread/types.h>
-
 #include "common/locator.hpp"
 #include "common/tasklet.hpp"
+#include "mac/channel_mask.hpp"
 #include "mac/mac.hpp"
 #include "net/ip6.hpp"
 #include "thread/address_resolver.hpp"
@@ -71,6 +70,8 @@ enum
  */
 class MeshForwarder : public InstanceLocator
 {
+    friend class Mac::Mac;
+
 public:
     /**
      * This constructor initializes the object.
@@ -137,10 +138,11 @@ public:
     /**
      * This method sets the scan parameters for MLE Discovery Request messages.
      *
-     * @param[in]  aScanChannels  A bit vector indicating which channels to scan.
+     * @param[in]  aScanChannels  A reference to channel mask indicating which channels to scan.
+     *                            If @p aScanChannels is empty, then all channels are used instead.
      *
      */
-    void SetDiscoverParameters(uint32_t aScanChannels);
+    void SetDiscoverParameters(const Mac::ChannelMask &aScanChannels);
 
     /**
      * This method frees any indirect messages queued for a specific child.
@@ -173,13 +175,15 @@ public:
     void RemoveDataResponseMessages(void);
 
     /**
-     * This method evicts the first indirect message in the indirect send queue.
+     * This method evicts the message with lowest priority in the send queue.
      *
-     * @retval OT_ERROR_NONE       Successfully evicted an indirect message.
-     * @retval OT_ERROR_NOT_FOUND  No indirect messages available to evict.
+     * @param[in]  aPriority  The highest priority level of the evicted message.
+     *
+     * @retval OT_ERROR_NONE       Successfully evicted a low priority message.
+     * @retval OT_ERROR_NOT_FOUND  No low priority messages available to evict.
      *
      */
-    otError EvictIndirectMessage(void);
+    otError EvictMessage(uint8_t aPriority);
 
     /**
      * This method returns a reference to the send queue.
@@ -273,6 +277,19 @@ private:
                          const Mac::Address &aMeshSource,
                          const Mac::Address &aMeshDest);
 
+    otError  SkipMeshHeader(const uint8_t *&aFrame, uint8_t &aFrameLength);
+    otError  DecompressIp6Header(const uint8_t *     aFrame,
+                                 uint8_t             aFrameLength,
+                                 const Mac::Address &aMacSource,
+                                 const Mac::Address &aMacDest,
+                                 Ip6::Header &       aIp6Header,
+                                 uint8_t &           aHeaderLength,
+                                 bool &              aNextHeaderCompressed);
+    otError  GetIp6Header(const uint8_t *     aFrame,
+                          uint8_t             aFrameLength,
+                          const Mac::Address &aMacSource,
+                          const Mac::Address &aMacDest,
+                          Ip6::Header &       aIp6Header);
     otError  GetMacDestinationAddress(const Ip6::Address &aIp6Addr, Mac::Address &aMacAddr);
     otError  GetMacSourceAddress(const Ip6::Address &aIp6Addr, Mac::Address &aMacAddr);
     Message *GetDirectTransmission(void);
@@ -307,25 +324,29 @@ private:
     void     ClearReassemblyList(void);
     otError  RemoveMessageFromSleepyChild(Message &aMessage, Child &aChild);
     void     RemoveMessage(Message &aMessage);
+    void     HandleDiscoverComplete(void);
 
-    static void    HandleReceivedFrame(Mac::Receiver &aReceiver, Mac::Frame &aFrame);
-    void           HandleReceivedFrame(Mac::Frame &aFrame);
-    static otError HandleFrameRequest(Mac::Sender &aSender, Mac::Frame &aFrame);
-    otError        HandleFrameRequest(Mac::Frame &aFrame);
-    static void    HandleSentFrame(Mac::Sender &aSender, Mac::Frame &aFrame, otError aError);
-    void           HandleSentFrame(Mac::Frame &aFrame, otError aError);
-    void           HandleSentFrameToChild(const Mac::Frame &aFrame, otError aError, const Mac::Address &macDest);
-    static void    HandleDiscoverTimer(Timer &aTimer);
-    void           HandleDiscoverTimer(void);
-    static void    HandleReassemblyTimer(Timer &aTimer);
-    void           HandleReassemblyTimer(void);
-    static void    ScheduleTransmissionTask(Tasklet &aTasklet);
-    void           ScheduleTransmissionTask(void);
-    static void    HandleDataPollTimeout(Mac::Receiver &aReceiver);
+    void    HandleReceivedFrame(Mac::Frame &aFrame);
+    otError HandleFrameRequest(Mac::Frame &aFrame);
+    void    HandleSentFrame(Mac::Frame &aFrame, otError aError);
+    void    HandleSentFrameToChild(const Mac::Frame &aFrame, otError aError, const Mac::Address &macDest);
+
+    static void HandleDiscoverTimer(Timer &aTimer);
+    void        HandleDiscoverTimer(void);
+    static void HandleReassemblyTimer(Timer &aTimer);
+    void        HandleReassemblyTimer(void);
+    static void ScheduleTransmissionTask(Tasklet &aTasklet);
+    void        ScheduleTransmissionTask(void);
+
+    otError GetFramePriority(uint8_t *           aFrame,
+                             uint8_t             aFrameLength,
+                             const Mac::Address &aMacSource,
+                             const Mac::Address &aMacDest,
+                             uint8_t &           aPriority);
 
     otError GetDestinationRlocByServiceAloc(uint16_t aServiceAloc, uint16_t &aMeshDest);
 
-    void LogIp6Message(MessageAction aAction, const Message &aMessage, const Mac::Address *aMacAddress, otError aError);
+    void LogMessage(MessageAction aAction, const Message &aMessage, const Mac::Address *aAddress, otError aError);
     void LogFrame(const char *aActionText, const Mac::Frame &aFrame, otError aError);
     void LogFragmentFrameDrop(otError                       aError,
                               uint8_t                       aFrameLength,
@@ -339,10 +360,56 @@ private:
                               const Mac::Address &aMacDest,
                               bool                aIsSecure);
 
-    Mac::Receiver mMacReceiver;
-    Mac::Sender   mMacSender;
-    TimerMilli    mDiscoverTimer;
-    TimerMilli    mReassemblyTimer;
+#if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_NOTE) && (OPENTHREAD_CONFIG_LOG_MAC == 1)
+    const char *MessageActionToString(MessageAction aAction, otError aError);
+    const char *MessagePriorityToString(const Message &aMessage);
+
+    otError ParseIp6UdpTcpHeader(const Message &aMessage,
+                                 Ip6::Header &  aIp6Header,
+                                 uint16_t &     aChecksum,
+                                 uint16_t &     aSourcePort,
+                                 uint16_t &     aDestPort);
+#if OPENTHREAD_FTD
+    otError DecompressIp6UdpTcpHeader(const Message &     aMessage,
+                                      uint16_t            aOffset,
+                                      const Mac::Address &aMeshSource,
+                                      const Mac::Address &aMeshDest,
+                                      Ip6::Header &       aIp6Header,
+                                      uint16_t &          aChecksum,
+                                      uint16_t &          aSourcePort,
+                                      uint16_t &          aDestPort);
+    otError LogMeshFragmentHeader(MessageAction       aAction,
+                                  const Message &     aMessage,
+                                  const Mac::Address *aMacAddress,
+                                  otError             aError,
+                                  uint16_t &          aOffset,
+                                  Mac::Address &      aMeshSource,
+                                  Mac::Address &      aMeshDest,
+                                  otLogLevel          aLogLevel);
+    void    LogMeshIpHeader(const Message &     aMessage,
+                            uint16_t            aOffset,
+                            const Mac::Address &aMeshSource,
+                            const Mac::Address &aMeshDest,
+                            otLogLevel          aLogLevel);
+    void    LogMeshMessage(MessageAction       aAction,
+                           const Message &     aMessage,
+                           const Mac::Address *aAddress,
+                           otError             aError,
+                           otLogLevel          aLogLevel);
+#endif
+    void LogIp6SourceDestAddresses(Ip6::Header &aIp6Header,
+                                   uint16_t     aSourcePort,
+                                   uint16_t     aDestPort,
+                                   otLogLevel   aLogLevel);
+    void LogIp6Message(MessageAction       aAction,
+                       const Message &     aMessage,
+                       const Mac::Address *aAddress,
+                       otError             aError,
+                       otLogLevel          aLogLevel);
+#endif // #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_NOTE) && (OPENTHREAD_CONFIG_LOG_MAC == 1)
+
+    TimerMilli mDiscoverTimer;
+    TimerMilli mReassemblyTimer;
 
     PriorityQueue mSendQueue;
     MessageQueue  mReassemblyList;
@@ -351,7 +418,8 @@ private:
 
     Message *mSendMessage;
     bool     mSendMessageIsARetransmission;
-    uint8_t  mSendMessageMaxMacTxAttempts;
+    uint8_t  mSendMessageMaxCsmaBackoffs;
+    uint8_t  mSendMessageMaxFrameRetries;
 
     Mac::Address mMacSource;
     Mac::Address mMacDest;
@@ -364,11 +432,11 @@ private:
     Tasklet mScheduleTransmissionTask;
     bool    mEnabled;
 
-    uint32_t mScanChannels;
-    uint8_t  mScanChannel;
-    uint16_t mMacRadioAcquisitionId;
-    uint16_t mRestorePanId;
-    bool     mScanning;
+    Mac::ChannelMask mScanChannels;
+    uint8_t          mScanChannel;
+    uint16_t         mMacRadioAcquisitionId;
+    uint16_t         mRestorePanId;
+    bool             mScanning;
 
     otIpCounters mIpCounters;
 

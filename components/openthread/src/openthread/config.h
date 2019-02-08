@@ -41,12 +41,8 @@
  * The OpenThread feature configuration file.
  *
  */
-
-//#define OPENTHREAD_MTD 1
-//#define OPENTHREAD_FTD 1
-#include <openthread/platform/esp_hooks.h>
-
 #if !defined(OPENTHREAD_CONFIG_FILE)
+//#define OPENTHREAD_CONFIG_FILE <openthread-config-generic.h>
 #define OPENTHREAD_CONFIG_FILE <openthread-windows-config.h>
 #endif
 

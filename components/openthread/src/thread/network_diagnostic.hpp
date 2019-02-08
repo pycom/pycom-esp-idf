@@ -36,8 +36,6 @@
 
 #include "openthread-core-config.h"
 
-#include <openthread/types.h>
-
 #include "coap/coap.hpp"
 #include "common/locator.hpp"
 #include "net/udp6.hpp"
@@ -103,6 +101,7 @@ public:
 private:
     otError AppendIp6AddressList(Message &aMessage);
     otError AppendChildTable(Message &aMessage);
+    void    FillMacCountersTlv(MacCountersTlv &aMacCountersTlv);
     otError FillRequestedTlvs(Message &aRequest, Message &aResponse, NetworkDiagnosticTlv &aNetworkDiagnosticTlv);
 
     static void HandleDiagnosticGetRequest(void *               aContext,

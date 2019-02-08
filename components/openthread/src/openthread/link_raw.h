@@ -35,7 +35,6 @@
 #ifndef OPENTHREAD_LINK_RAW_H_
 #define OPENTHREAD_LINK_RAW_H_
 
-#include <openthread/types.h>
 #include <openthread/platform/radio.h>
 
 #ifdef __cplusplus
@@ -97,6 +96,18 @@ bool otLinkRawGetPromiscuous(otInstance *aInstance);
  *
  */
 otError otLinkRawSetPromiscuous(otInstance *aInstance, bool aEnable);
+
+/**
+ * Set the Short Address for address filtering.
+ *
+ * @param[in] aInstance      A pointer to an OpenThread instance.
+ * @param[in] aShortAddress  The IEEE 802.15.4 Short Address.
+ *
+ * @retval OT_ERROR_NONE             If successful.
+ * @retval OT_ERROR_INVALID_STATE    If the raw link-layer isn't enabled.
+ *
+ */
+otError OTCALL otLinkRawSetShortAddress(otInstance *aInstance, uint16_t aShortAddress);
 
 /**
  * Transition the radio from Receive to Sleep.
@@ -178,14 +189,13 @@ typedef void (*otLinkRawTransmitDone)(otInstance *  aInstance,
  * 2. Transmits the PSDU on the given channel and at the given transmit power.
  *
  * @param[in]  aInstance    A pointer to an OpenThread instance.
- * @param[in]  aFrame       A pointer to the frame that was transmitted.
  * @param[in]  aCallback    A pointer to a function called on completion of the transmission.
  *
  * @retval OT_ERROR_NONE          Successfully transitioned to Transmit.
  * @retval OT_ERROR_INVALID_STATE The radio was not in the Receive state.
  *
  */
-otError otLinkRawTransmit(otInstance *aInstance, otRadioFrame *aFrame, otLinkRawTransmitDone aCallback);
+otError otLinkRawTransmit(otInstance *aInstance, otLinkRawTransmitDone aCallback);
 
 /**
  * Get the most recent RSSI measurement.

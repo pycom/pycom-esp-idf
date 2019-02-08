@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, The OpenThread Authors.
+ *  Copyright (c) 2018, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,55 +28,24 @@
 
 /**
  * @file
- * @brief
- *   This file includes the platform abstraction for the Thread DHCPv6 client.
+ *   This file implements the OpenThread Border Agent API.
  */
 
-#ifndef OPENTHREAD_DHCP6_CLIENT_H_
-#define OPENTHREAD_DHCP6_CLIENT_H_
+#include "openthread-core-config.h"
 
-#include <openthread/types.h>
+#include <openthread/border_agent.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "common/instance.hpp"
 
-/**
- * @addtogroup api-dhcp6
- *
- * @{
- *
- */
+#if OPENTHREAD_ENABLE_BORDER_AGENT
 
-/**
- * This structure represents a DHCPv6 address.
- *
- */
-typedef struct otDhcpAddress
+using namespace ot;
+
+otBorderAgentState otBorderAgentGetState(otInstance *aInstance)
 {
-    otNetifAddress mAddress;           ///< The network interface address.
-    uint32_t       mPreferredLifetime; ///< The preferred lifetime.
-    uint32_t       mValidLifetime;     ///< The valid lifetime.
-} otDhcpAddress;
+    Instance &instance = *static_cast<Instance *>(aInstance);
 
-/**
- * Update all automatically created IPv6 addresses for prefixes from current Network Data with DHCP procedure.
- *
- * @param[in]     aInstance      A pointer to an OpenThread instance.
- * @param[inout]  aAddresses     A pointer to an array of automatically created IPv6 addresses.
- * @param[in]     aNumAddresses  The number of slots in aAddresses array.
- * @param[in]     aContext       A pointer to data passed to aIidCreate function.
- *
- */
-void otDhcp6ClientUpdate(otInstance *aInstance, otDhcpAddress *aAddresses, uint32_t aNumAddresses, void *aContext);
+    return instance.GetThreadNetif().GetBorderAgent().GetState();
+}
 
-/**
- * @}
- *
- */
-
-#ifdef __cplusplus
-} // end of extern "C"
-#endif
-
-#endif // OPENTHREAD_DHCP6_CLIENT_H_
+#endif // OPENTHREAD_ENABLE_BORDER_AGENT

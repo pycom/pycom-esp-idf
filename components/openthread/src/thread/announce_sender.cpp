@@ -122,23 +122,6 @@ void AnnounceSender::HandleTimer(Timer &aTimer)
     aTimer.GetOwner<AnnounceSender>().AnnounceSenderBase::HandleTimer();
 }
 
-otError AnnounceSender::GetActiveDatasetChannelMask(Mac::ChannelMask &aMask) const
-{
-    otError                         error = OT_ERROR_NONE;
-    const MeshCoP::ChannelMask0Tlv *channelMaskTlv;
-    MeshCoP::Dataset                dataset(MeshCoP::Tlv::kActiveTimestamp);
-
-    SuccessOrExit(error = GetNetif().GetActiveDataset().Get(dataset));
-
-    channelMaskTlv = static_cast<const MeshCoP::ChannelMask0Tlv *>(dataset.Get(MeshCoP::Tlv::kChannelMask));
-    VerifyOrExit(channelMaskTlv != NULL, error = OT_ERROR_NOT_FOUND);
-
-    aMask.SetMask(channelMaskTlv->GetMask());
-
-exit:
-    return error;
-}
-
 void AnnounceSender::CheckState(void)
 {
     Mle::MleRouter & mle      = GetInstance().Get<Mle::MleRouter>();
@@ -168,9 +151,7 @@ void AnnounceSender::CheckState(void)
         ExitNow();
     }
 
-    VerifyOrExit(GetActiveDatasetChannelMask(channelMask) == OT_ERROR_NONE, Stop());
-    channelMask.Intersect(OT_RADIO_SUPPORTED_CHANNELS);
-    VerifyOrExit(!channelMask.IsEmpty(), Stop());
+    SuccessOrExit(GetNetif().GetActiveDataset().GetChannelMask(channelMask) == OT_ERROR_NONE, Stop());
 
     period = interval / channelMask.GetNumberOfChannels();
 
@@ -183,7 +164,7 @@ void AnnounceSender::CheckState(void)
 
     SendAnnounce(channelMask, 0, period, kMaxJitter);
 
-    otLogInfoMle(GetInstance(), "Starting periodic MLE Announcements tx, period %u, mask %s", period,
+    otLogInfoMle("Starting periodic MLE Announcements tx, period %u, mask %s", period,
                  channelMask.ToString().AsCString());
 
 exit:
@@ -193,15 +174,15 @@ exit:
 void AnnounceSender::Stop(void)
 {
     AnnounceSenderBase::Stop();
-    otLogInfoMle(GetInstance(), "Stopping periodic MLE Announcements tx");
+    otLogInfoMle("Stopping periodic MLE Announcements tx");
 }
 
-void AnnounceSender::HandleStateChanged(Notifier::Callback &aCallback, uint32_t aFlags)
+void AnnounceSender::HandleStateChanged(Notifier::Callback &aCallback, otChangedFlags aFlags)
 {
     aCallback.GetOwner<AnnounceSender>().HandleStateChanged(aFlags);
 }
 
-void AnnounceSender::HandleStateChanged(uint32_t aFlags)
+void AnnounceSender::HandleStateChanged(otChangedFlags aFlags)
 {
     if ((aFlags & OT_CHANGED_THREAD_ROLE) != 0)
     {

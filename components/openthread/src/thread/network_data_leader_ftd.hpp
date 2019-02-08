@@ -66,6 +66,16 @@ class Leader : public LeaderBase
 {
 public:
     /**
+     * This enumeration defines the match mode constants to compare two RLOC16 values.
+     *
+     */
+    enum MatchMode
+    {
+        kMatchModeRloc16,   ///< Perform exact RLOC16 match.
+        kMatchModeRouterId, ///< Perform Router ID match (match the router and any of its children).
+    };
+
+    /**
      * This constructor initializes the object.
      *
      * @param[in]  aInstance     A reference to the OpenThread instance.
@@ -122,12 +132,13 @@ public:
     otError SetContextIdReuseDelay(uint32_t aDelay);
 
     /**
-     * This method removes Network Data associated with a given RLOC16.
+     * This method removes Network Data entries matching with a given RLOC16.
      *
-     * @param[in]  aRloc16  A RLOC16 value.
+     * @param[in]  aRloc16    A RLOC16 value.
+     * @param[in]  aMatchMode A match mode (@sa MatchMode).
      *
      */
-    void RemoveBorderRouter(uint16_t aRloc16);
+    void RemoveBorderRouter(uint16_t aRloc16, MatchMode aMatchMode);
 
     /**
      * This method sends a Server Data Notification message to the Leader indicating an invalid RLOC16.
@@ -139,6 +150,14 @@ public:
      *
      */
     otError SendServerDataNotification(uint16_t aRloc16);
+
+    /**
+     * This method synchronizes internal 6LoWPAN Context ID Set with recently obtained Thread Network Data.
+     *
+     * Note that this method should be called only by the Leader once after reset.
+     *
+     */
+    void UpdateContextsAfterReset(void);
 
 #if OPENTHREAD_ENABLE_SERVICE
     /**
@@ -174,22 +193,33 @@ private:
 
     int     AllocateContext(void);
     otError FreeContext(uint8_t aContextId);
+    void    StartContextReuseTimer(uint8_t aContextId);
+    void    StopContextReuseTimer(uint8_t aContextId);
 
     otError RemoveContext(uint8_t aContextId);
     otError RemoveContext(PrefixTlv &aPrefix, uint8_t aContextId);
 
     otError RemoveCommissioningData(void);
 
-    otError RemoveRloc(uint16_t aRloc16);
-    otError RemoveRloc(PrefixTlv &aPrefix, uint16_t aRloc16);
+    otError RemoveRloc(uint16_t aRloc16, MatchMode aMatchMode);
+    otError RemoveRloc(PrefixTlv &aPrefix, uint16_t aRloc16, MatchMode aMatchMode);
 #if OPENTHREAD_ENABLE_SERVICE
-    otError RemoveRloc(ServiceTlv &service, uint16_t aRloc16);
+    otError RemoveRloc(ServiceTlv &service, uint16_t aRloc16, MatchMode aMatchMode);
 #endif
-    otError RemoveRloc(PrefixTlv &aPrefix, HasRouteTlv &aHasRoute, uint16_t aRloc16);
-    otError RemoveRloc(PrefixTlv &aPrefix, BorderRouterTlv &aBorderRouter, uint16_t aRloc16);
+    otError RemoveRloc(PrefixTlv &aPrefix, HasRouteTlv &aHasRoute, uint16_t aRloc16, MatchMode aMatchMode);
+    otError RemoveRloc(PrefixTlv &aPrefix, BorderRouterTlv &aBorderRouter, uint16_t aRloc16, MatchMode aMatchMode);
 
-    otError RlocLookup(uint16_t aRloc16, bool &aIn, bool &aStable, uint8_t *aTlvs, uint8_t aTlvsLength);
-    bool    IsStableUpdated(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aTlvsBase, uint8_t aTlvsBaseLength);
+    static bool RlocMatch(uint16_t aFirstRloc16, uint16_t aSecondRloc16, MatchMode aMatchMode);
+
+    otError RlocLookup(uint16_t  aRloc16,
+                       bool &    aIn,
+                       bool &    aStable,
+                       uint8_t * aTlvs,
+                       uint8_t   aTlvsLength,
+                       MatchMode aMatchMode,
+                       bool      aAllowOtherEntries = true);
+
+    bool IsStableUpdated(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aTlvsBase, uint8_t aTlvsBaseLength);
 
     static void HandleCommissioningSet(void *               aContext,
                                        otCoapHeader *       aHeader,
@@ -212,7 +242,7 @@ private:
                                       MeshCoP::StateTlv::State aState);
 
     /**
-     * Thread Specification Constants
+     * Thread Specification Constants.
      *
      */
     enum
@@ -220,8 +250,9 @@ private:
         kMinContextId        = 1,            ///< Minimum Context ID (0 is used for Mesh Local)
         kNumContextIds       = 15,           ///< Maximum Context ID
         kContextIdReuseDelay = 48 * 60 * 60, ///< CONTEXT_ID_REUSE_DELAY (seconds)
-        kStateUpdatePeriod   = 1000,         ///< State update period in milliseconds
+        kStateUpdatePeriod   = 60 * 1000,    ///< State update period in milliseconds
     };
+
     uint16_t   mContextUsed;
     uint32_t   mContextLastUsed[kNumContextIds];
     uint32_t   mContextIdReuseDelay;

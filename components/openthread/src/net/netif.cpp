@@ -87,6 +87,8 @@ Netif::Netif(Instance &aInstance, int8_t aInterfaceId)
     , mInterfaceId(aInterfaceId)
     , mMulticastPromiscuous(false)
     , mNext(NULL)
+    , mAddressCallback(NULL)
+    , mAddressCallbackContext(NULL)
 {
     for (size_t i = 0; i < OT_ARRAY_LENGTH(mExtUnicastAddresses); i++)
     {
@@ -99,9 +101,6 @@ Netif::Netif(Instance &aInstance, int8_t aInterfaceId)
         // To mark the address as unused/available, set the `mNext` to point back to itself.
         mExtMulticastAddresses[i].mNext = &mExtMulticastAddresses[i];
     }
-
-    mMulticastAddresses = static_cast<NetifMulticastAddress *>(
-        const_cast<otNetifMulticastAddress *>(&kLinkLocalAllNodesMulticastAddress));
 }
 
 bool Netif::IsMulticastSubscribed(const Address &aAddress) const
@@ -118,6 +117,43 @@ bool Netif::IsMulticastSubscribed(const Address &aAddress) const
 
 exit:
     return rval;
+}
+
+void Netif::SubscribeAllNodesMulticast(void)
+{
+    assert(mMulticastAddresses == NULL);
+
+    mMulticastAddresses = static_cast<NetifMulticastAddress *>(
+        const_cast<otNetifMulticastAddress *>(&kLinkLocalAllNodesMulticastAddress));
+
+    if (mAddressCallback != NULL)
+    {
+        for (const otNetifMulticastAddress *entry = &kLinkLocalAllNodesMulticastAddress; entry != NULL;
+             entry                                = entry->mNext)
+        {
+            mAddressCallback(&entry->mAddress, kMulticastPrefixLength, true, mAddressCallbackContext);
+        }
+    }
+
+    GetNotifier().Signal(OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED);
+}
+
+void Netif::UnsubscribeAllNodesMulticast(void)
+{
+    assert(mMulticastAddresses == NULL || mMulticastAddresses == &kLinkLocalAllNodesMulticastAddress);
+
+    mMulticastAddresses = NULL;
+
+    if (mAddressCallback != NULL)
+    {
+        for (const otNetifMulticastAddress *entry = &kLinkLocalAllNodesMulticastAddress; entry != NULL;
+             entry                                = entry->mNext)
+        {
+            mAddressCallback(&entry->mAddress, kMulticastPrefixLength, false, mAddressCallbackContext);
+        }
+    }
+
+    GetNotifier().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED);
 }
 
 otError Netif::SubscribeAllRoutersMulticast(void)
@@ -146,7 +182,16 @@ otError Netif::SubscribeAllRoutersMulticast(void)
         }
     }
 
-    GetNotifier().SetFlags(OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED);
+    if (mAddressCallback != NULL)
+    {
+        for (const otNetifMulticastAddress *entry                = &kLinkLocalAllRoutersMulticastAddress;
+             entry != &kLinkLocalAllNodesMulticastAddress; entry = entry->mNext)
+        {
+            mAddressCallback(&entry->mAddress, kMulticastPrefixLength, true, mAddressCallbackContext);
+        }
+    }
+
+    GetNotifier().Signal(OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED);
 
 exit:
     return error;
@@ -178,7 +223,16 @@ exit:
 
     if (error != OT_ERROR_NOT_FOUND)
     {
-        GetNotifier().SetFlags(OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED);
+        if (mAddressCallback != NULL)
+        {
+            for (const otNetifMulticastAddress *entry                = &kLinkLocalAllRoutersMulticastAddress;
+                 entry != &kLinkLocalAllNodesMulticastAddress; entry = entry->mNext)
+            {
+                mAddressCallback(&entry->mAddress, kMulticastPrefixLength, false, mAddressCallbackContext);
+            }
+        }
+
+        GetNotifier().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED);
     }
 
     return error;
@@ -198,7 +252,13 @@ otError Netif::SubscribeMulticast(NetifMulticastAddress &aAddress)
 
     aAddress.mNext      = mMulticastAddresses;
     mMulticastAddresses = &aAddress;
-    GetNotifier().SetFlags(OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED);
+
+    if (mAddressCallback != NULL)
+    {
+        mAddressCallback(&aAddress.mAddress, kMulticastPrefixLength, true, mAddressCallbackContext);
+    }
+
+    GetNotifier().Signal(OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED);
 
 exit:
     return error;
@@ -231,7 +291,12 @@ exit:
 
     if (error != OT_ERROR_NOT_FOUND)
     {
-        GetNotifier().SetFlags(OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED);
+        if (mAddressCallback != NULL)
+        {
+            mAddressCallback(&aAddress.mAddress, kMulticastPrefixLength, false, mAddressCallbackContext);
+        }
+
+        GetNotifier().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED);
     }
 
     return error;
@@ -290,7 +355,7 @@ otError Netif::SubscribeExternalMulticast(const Address &aAddress)
     entry->mAddress     = aAddress;
     entry->mNext        = mMulticastAddresses;
     mMulticastAddresses = entry;
-    GetNotifier().SetFlags(OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED);
+    GetNotifier().Signal(OT_CHANGED_IP6_MULTICAST_SUBSRCRIBED);
 
 exit:
     return error;
@@ -330,7 +395,7 @@ otError Netif::UnsubscribeExternalMulticast(const Address &aAddress)
     // To mark the address entry as unused/available, set the `mNext` pointer back to the entry itself.
     entry->mNext = entry;
 
-    GetNotifier().SetFlags(OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED);
+    GetNotifier().Signal(OT_CHANGED_IP6_MULTICAST_UNSUBSRCRIBED);
 
 exit:
     return error;
@@ -350,6 +415,12 @@ void Netif::UnsubscribeAllExternalMulticastAddresses(void)
     }
 }
 
+void Netif::SetAddressCallback(otIp6AddressCallback aCallback, void *aCallbackContext)
+{
+    mAddressCallback        = aCallback;
+    mAddressCallbackContext = aCallbackContext;
+}
+
 otError Netif::AddUnicastAddress(NetifUnicastAddress &aAddress)
 {
     otError error = OT_ERROR_NONE;
@@ -365,7 +436,12 @@ otError Netif::AddUnicastAddress(NetifUnicastAddress &aAddress)
     aAddress.mNext    = mUnicastAddresses;
     mUnicastAddresses = &aAddress;
 
-    GetNotifier().SetFlags(aAddress.mRloc ? OT_CHANGED_THREAD_RLOC_ADDED : OT_CHANGED_IP6_ADDRESS_ADDED);
+    if (mAddressCallback != NULL)
+    {
+        mAddressCallback(&aAddress.mAddress, aAddress.mPrefixLength, true, mAddressCallbackContext);
+    }
+
+    GetNotifier().Signal(aAddress.mRloc ? OT_CHANGED_THREAD_RLOC_ADDED : OT_CHANGED_IP6_ADDRESS_ADDED);
 
 exit:
     return error;
@@ -398,7 +474,12 @@ exit:
 
     if (error != OT_ERROR_NOT_FOUND)
     {
-        GetNotifier().SetFlags(aAddress.mRloc ? OT_CHANGED_THREAD_RLOC_REMOVED : OT_CHANGED_IP6_ADDRESS_REMOVED);
+        if (mAddressCallback != NULL)
+        {
+            mAddressCallback(&aAddress.mAddress, aAddress.mPrefixLength, false, mAddressCallbackContext);
+        }
+
+        GetNotifier().Signal(aAddress.mRloc ? OT_CHANGED_THREAD_RLOC_REMOVED : OT_CHANGED_IP6_ADDRESS_REMOVED);
     }
 
     return error;
@@ -443,7 +524,7 @@ otError Netif::AddExternalUnicastAddress(const NetifUnicastAddress &aAddress)
     entry->mNext      = mUnicastAddresses;
     mUnicastAddresses = entry;
 
-    GetNotifier().SetFlags(OT_CHANGED_IP6_ADDRESS_ADDED);
+    GetNotifier().Signal(OT_CHANGED_IP6_ADDRESS_ADDED);
 
 exit:
     return error;
@@ -483,7 +564,7 @@ otError Netif::RemoveExternalUnicastAddress(const Address &aAddress)
     // To mark the address entry as unused/available, set the `mNext` pointer back to the entry itself.
     entry->mNext = entry;
 
-    GetNotifier().SetFlags(OT_CHANGED_IP6_ADDRESS_REMOVED);
+    GetNotifier().Signal(OT_CHANGED_IP6_ADDRESS_REMOVED);
 
 exit:
     return error;

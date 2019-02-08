@@ -56,13 +56,13 @@ UdpExample::UdpExample(Interpreter &aInterpreter)
 
 otError UdpExample::ProcessHelp(int argc, char *argv[])
 {
+    OT_UNUSED_VARIABLE(argc);
+    OT_UNUSED_VARIABLE(argv);
+
     for (unsigned int i = 0; i < OT_ARRAY_LENGTH(sCommands); i++)
     {
         mInterpreter.mServer->OutputFormat("%s\r\n", sCommands[i].mName);
     }
-
-    OT_UNUSED_VARIABLE(argc);
-    OT_UNUSED_VARIABLE(argv);
 
     return OT_ERROR_NONE;
 }
@@ -158,7 +158,7 @@ otError UdpExample::ProcessSend(int argc, char *argv[])
         messageInfo.mInterfaceId = OT_NETIF_INTERFACE_ID_THREAD;
     }
 
-    message = otUdpNewMessage(mInterpreter.mInstance, true);
+    message = otUdpNewMessage(mInterpreter.mInstance, NULL);
     VerifyOrExit(message != NULL, error = OT_ERROR_NO_BUFS);
 
     error = otMessageAppend(message, argv[curArg], static_cast<uint16_t>(strlen(argv[curArg])));
@@ -180,15 +180,22 @@ otError UdpExample::Process(int argc, char *argv[])
 {
     otError error = OT_ERROR_PARSE;
 
-    for (size_t i = 0; i < OT_ARRAY_LENGTH(sCommands); i++)
+    if (argc < 1)
     {
-        if (strcmp(argv[0], sCommands[i].mName) == 0)
+        ProcessHelp(0, NULL);
+        error = OT_ERROR_INVALID_ARGS;
+    }
+    else
+    {
+        for (size_t i = 0; i < OT_ARRAY_LENGTH(sCommands); i++)
         {
-            error = (this->*sCommands[i].mCommand)(argc - 1, argv + 1);
-            break;
+            if (strcmp(argv[0], sCommands[i].mName) == 0)
+            {
+                error = (this->*sCommands[i].mCommand)(argc - 1, argv + 1);
+                break;
+            }
         }
     }
-
     return error;
 }
 

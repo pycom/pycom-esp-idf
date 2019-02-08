@@ -170,6 +170,13 @@ void otIp6SetReceiveCallback(otInstance *aInstance, otIp6ReceiveCallback aCallba
     instance.GetIp6().SetReceiveDatagramCallback(aCallback, aCallbackContext);
 }
 
+void otIp6SetAddressCallback(otInstance *aInstance, otIp6AddressCallback aCallback, void *aCallbackContext)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    instance.GetThreadNetif().SetAddressCallback(aCallback, aCallbackContext);
+}
+
 bool otIp6IsReceiveFilterEnabled(otInstance *aInstance)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
@@ -194,16 +201,19 @@ otError otIp6Send(otInstance *aInstance, otMessage *aMessage)
     return error;
 }
 
-otMessage *otIp6NewMessage(otInstance *aInstance, bool aLinkSecurityEnabled)
+otMessage *otIp6NewMessage(otInstance *aInstance, const otMessageSettings *aSettings)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
-    Message * message  = instance.GetMessagePool().New(Message::kTypeIp6, 0);
+    Message * message;
 
-    if (message)
+    if (aSettings != NULL)
     {
-        message->SetLinkSecurityEnabled(aLinkSecurityEnabled);
+        VerifyOrExit(aSettings->mPriority <= OT_MESSAGE_PRIORITY_HIGH, message = NULL);
     }
 
+    message = instance.GetMessagePool().New(Message::kTypeIp6, 0, aSettings);
+
+exit:
     return message;
 }
 
@@ -219,6 +229,13 @@ otError otIp6RemoveUnsecurePort(otInstance *aInstance, uint16_t aPort)
     Instance &instance = *static_cast<Instance *>(aInstance);
 
     return instance.GetThreadNetif().GetIp6Filter().RemoveUnsecurePort(aPort);
+}
+
+void otIp6RemoveAllUnsecurePorts(otInstance *aInstance)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    instance.GetThreadNetif().GetIp6Filter().RemoveAllUnsecurePorts();
 }
 
 const uint16_t *otIp6GetUnsecurePorts(otInstance *aInstance, uint8_t *aNumEntries)
@@ -253,4 +270,18 @@ exit:
 bool otIp6IsAddressUnspecified(const otIp6Address *aAddress)
 {
     return static_cast<const Ip6::Address *>(aAddress)->IsUnspecified();
+}
+
+otError otIp6SelectSourceAddress(otInstance *aInstance, otMessageInfo *aMessageInfo)
+{
+    otError                         error    = OT_ERROR_NONE;
+    Instance &                      instance = *static_cast<Instance *>(aInstance);
+    const Ip6::NetifUnicastAddress *netifAddr;
+
+    netifAddr = instance.GetIp6().SelectSourceAddress(*static_cast<Ip6::MessageInfo *>(aMessageInfo));
+    VerifyOrExit(netifAddr != NULL, error = OT_ERROR_NOT_FOUND);
+    memcpy(&aMessageInfo->mSockAddr, &netifAddr->mAddress, sizeof(aMessageInfo->mSockAddr));
+
+exit:
+    return error;
 }

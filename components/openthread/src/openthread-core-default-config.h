@@ -92,7 +92,7 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_NUM_MESSAGE_BUFFERS
-#define OPENTHREAD_CONFIG_NUM_MESSAGE_BUFFERS 40
+#define OPENTHREAD_CONFIG_NUM_MESSAGE_BUFFERS 50
 #endif
 
 /**
@@ -126,37 +126,82 @@
 #endif
 
 /**
- * @def OPENTHREAD_CONFIG_MAX_TX_ATTEMPTS_DIRECT
+ * @def OPENTHREAD_CONFIG_MAC_MAX_CSMA_BACKOFFS_DIRECT
  *
- * Maximum number of MAC layer transmit attempts for an outbound direct frame.
- * Per IEEE 802.15.4-2006, default value is set to (macMaxFrameRetries + 1) with macMaxFrameRetries = 3.
+ * The maximum number of backoffs the CSMA-CA algorithm will attempt before declaring a channel access failure.
+ *
+ * Equivalent to macMaxCSMABackoffs in IEEE 802.15.4-2006, default value is 4.
  *
  */
-#ifndef OPENTHREAD_CONFIG_MAX_TX_ATTEMPTS_DIRECT
-#define OPENTHREAD_CONFIG_MAX_TX_ATTEMPTS_DIRECT 4
+#ifndef OPENTHREAD_CONFIG_MAC_MAX_CSMA_BACKOFFS_DIRECT
+#define OPENTHREAD_CONFIG_MAC_MAX_CSMA_BACKOFFS_DIRECT 32
 #endif
 
 /**
- * @def OPENTHREAD_CONFIG_MAX_TX_ATTEMPTS_INDIRECT_PER_POLL
+ * @def OPENTHREAD_CONFIG_MAC_MAX_CSMA_BACKOFFS_INDIRECT
  *
- * Maximum number of MAC layer transmit attempts for an outbound indirect frame (to a sleepy child) after receiving
- * a data request command (data poll) from the child.
+ * The maximum number of backoffs the CSMA-CA algorithm will attempt before declaring a channel access failure.
+ *
+ * Equivalent to macMaxCSMABackoffs in IEEE 802.15.4-2006, default value is 4.
  *
  */
-#ifndef OPENTHREAD_CONFIG_MAX_TX_ATTEMPTS_INDIRECT_PER_POLL
-#define OPENTHREAD_CONFIG_MAX_TX_ATTEMPTS_INDIRECT_PER_POLL 1
+#ifndef OPENTHREAD_CONFIG_MAC_MAX_CSMA_BACKOFFS_INDIRECT
+#define OPENTHREAD_CONFIG_MAC_MAX_CSMA_BACKOFFS_INDIRECT 4
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_MAC_MAX_FRAME_RETRIES_DIRECT
+ *
+ * The maximum number of retries allowed after a transmission failure for direct transmissions.
+ *
+ * Equivalent to macMaxFrameRetries, default value is 3.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_MAX_FRAME_RETRIES_DIRECT
+#define OPENTHREAD_CONFIG_MAC_MAX_FRAME_RETRIES_DIRECT 3
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_MAC_MAX_FRAME_RETRIES_INDIRECT
+ *
+ * The maximum number of retries allowed after a transmission failure for indirect transmissions.
+ *
+ * Equivalent to macMaxFrameRetries, default value is 0.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MAC_MAX_FRAME_RETRIES_INDIRECT
+#define OPENTHREAD_CONFIG_MAC_MAX_FRAME_RETRIES_INDIRECT 0
 #endif
 
 /**
  * @def OPENTHREAD_CONFIG_MAX_TX_ATTEMPTS_INDIRECT_POLLS
  *
- * Maximum number of transmit attempts for an outbound indirect frame (for a sleepy child) each triggered by the
- * reception of a new data request command (a new data poll) from the sleepy child. Each data poll triggered attempt is
- * retried by the MAC layer up to `OPENTHREAD_CONFIG_MAX_TX_ATTEMPTS_INDIRECT_PER_POLL` times.
+ * Maximum number of received IEEE 802.15.4 Data Requests for a queued indirect transaction.
+ *
+ * The indirect frame remains in the transaction queue until it is successfully transmitted or until the indirect
+ * transmission fails after the maximum number of IEEE 802.15.4 Data Request messages have been received.
+ *
+ * Takes the place of macTransactionPersistenceTime. The time period is specified in units of IEEE 802.15.4 Data
+ * Request receptions, rather than being governed by macBeaconOrder.
+ *
+ * @sa OPENTHREAD_CONFIG_MAC_MAX_FRAME_RETRIES_INDIRECT
  *
  */
 #ifndef OPENTHREAD_CONFIG_MAX_TX_ATTEMPTS_INDIRECT_POLLS
 #define OPENTHREAD_CONFIG_MAX_TX_ATTEMPTS_INDIRECT_POLLS 4
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_TX_NUM_BCAST
+ *
+ * The number of times each IEEE 802.15.4 broadcast frame is transmitted.
+ *
+ * The minimum value is 1. Values larger than 1 may improve broadcast reliability by increasing redundancy, but may also
+ * increase congestion.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_TX_NUM_BCAST
+#define OPENTHREAD_CONFIG_TX_NUM_BCAST 1
 #endif
 
 /**
@@ -499,6 +544,26 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_SNTP_RESPONSE_TIMEOUT
+ *
+ * Maximum time that SNTP Client waits for response in milliseconds.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_SNTP_RESPONSE_TIMEOUT
+#define OPENTHREAD_CONFIG_SNTP_RESPONSE_TIMEOUT 3000
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_SNTP_MAX_RETRANSMIT
+ *
+ * Maximum number of retransmissions for SNTP client.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_SNTP_MAX_RETRANSMIT
+#define OPENTHREAD_CONFIG_SNTP_MAX_RETRANSMIT 2
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_JOIN_BEACON_VERSION
  *
  * The Beacon version to use when the beacon join flag is set.
@@ -573,8 +638,10 @@
  *
  * There are several options available
  * - @sa OPENTHREAD_CONFIG_LOG_OUTPUT_NONE
- * - @sa OPENTHREAD_CONFIG_LOG_OUTPUT_PLATFORM_DEFINED
  * - @sa OPENTHREAD_CONFIG_LOG_OUTPUT_DEBUG_UART
+ * - @sa OPENTHREAD_CONFIG_LOG_OUTPUT_APP
+ * - @sa OPENTHREAD_CONFIG_LOG_OUTPUT_PLATFORM_DEFINED
+ * - @sa OPENTHREAD_CONFIG_LOG_OUTPUT_NCP_SPINEL
  * - and others
  *
  * Note:
@@ -603,17 +670,18 @@
 /**
  * @def OPENTHREAD_CONFIG_LOG_LEVEL
  *
- * The log level (used at compile time).
+ * The log level (used at compile time). If `OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL`
+ * is set, this defines the most verbose log level possible. See
+ *`OPENTHREAD_CONFIG_INITIAL_LOG_LEVEL` to set the initial log level.
  *
  */
 #ifndef OPENTHREAD_CONFIG_LOG_LEVEL
-#define OPENTHREAD_CONFIG_LOG_LEVEL OT_LOG_LEVEL_NONE
 // #define OT_LOG_LEVEL_NONE 0 ///< None
 // #define OT_LOG_LEVEL_CRIT 1 ///< Critical
 // #define OT_LOG_LEVEL_WARN 2 ///< Warning
 // #define OT_LOG_LEVEL_INFO 3 ///< Info
 // #define OT_LOG_LEVEL_DEBG 4 ///< Debug
-// default: OT_LOG_LEVEL_CRIT
+#define OPENTHREAD_CONFIG_LOG_LEVEL OT_LOG_LEVEL_NONE
 #endif
 
 /**
@@ -628,6 +696,16 @@
  */
 #ifndef OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL
 #define OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_INITIAL_LOG_LEVEL
+ *
+ * The initial log level used when OpenThread is initialized. See
+ * `OPENTHREAD_CONFIG_ENABLE_DYNAMIC_LOG_LEVEL`.
+ */
+#ifndef OPENTHREAD_CONFIG_INITIAL_LOG_LEVEL
+#define OPENTHREAD_CONFIG_INITIAL_LOG_LEVEL OPENTHREAD_CONFIG_LOG_LEVEL
 #endif
 
 /**
@@ -951,7 +1029,19 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_ENABLE_SOFTWARE_RETRANSMIT
-#define OPENTHREAD_CONFIG_ENABLE_SOFTWARE_RETRANSMIT 1
+#define OPENTHREAD_CONFIG_ENABLE_SOFTWARE_RETRANSMIT 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_ENABLE_SOFTWARE_CSMA_BACKOFF
+ *
+ * Define to 1 if you want to enable software CSMA-CA backoff logic.
+ *
+ * Applicable only if raw link layer API is enabled (i.e., `OPENTHREAD_ENABLE_RAW_LINK_API` is set).
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_ENABLE_SOFTWARE_CSMA_BACKOFF
+#define OPENTHREAD_CONFIG_ENABLE_SOFTWARE_CSMA_BACKOFF 0
 #endif
 
 /**
@@ -963,7 +1053,7 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ENERGY_SCAN
-#define OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ENERGY_SCAN 1
+#define OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ENERGY_SCAN 0
 #endif
 
 /**
@@ -1016,8 +1106,12 @@
  *
  */
 #ifndef OPENTHREAD_CONFIG_HEAP_SIZE
+#if OPENTHREAD_ENABLE_APPLICATION_COAP_SECURE
+#define OPENTHREAD_CONFIG_HEAP_SIZE (3072 * sizeof(void *))
+#else
 #define OPENTHREAD_CONFIG_HEAP_SIZE (1536 * sizeof(void *))
-#endif
+#endif // OPENTHREAD_ENABLE_APPLICATION_COAP_SECURE
+#endif // OPENTHREAD_CONFIG_HEAP_SIZE
 
 /**
  * @def OPENTHREAD_CONFIG_HEAP_SIZE_NO_DTLS
@@ -1027,6 +1121,16 @@
  */
 #ifndef OPENTHREAD_CONFIG_HEAP_SIZE_NO_DTLS
 #define OPENTHREAD_CONFIG_HEAP_SIZE_NO_DTLS 384
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_DTLS_APPLICATION_DATA_MAX_LENGTH
+ *
+ * The size of dtls application data when the CoAP Secure API is enabled.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_DTLS_APPLICATION_DATA_MAX_LENGTH
+#define OPENTHREAD_CONFIG_DTLS_APPLICATION_DATA_MAX_LENGTH 1400
 #endif
 
 /**
@@ -1564,6 +1668,16 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_MLE_CHILD_ROUTER_LINKS
+ *
+ * Specifies the desired number of router links that a REED / FED attempts to maintain.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MLE_CHILD_ROUTER_LINKS
+#define OPENTHREAD_CONFIG_MLE_CHILD_ROUTER_LINKS 3
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_ENABLE_DEBUG_UART
  *
  * Enable the "Debug Uart" platform feature.
@@ -1599,13 +1713,13 @@
 #endif
 
 /**
- * @def OPENTHREAD_CONFIG_DISABLE_CCA_ON_LAST_ATTEMPT
+ * @def OPENTHREAD_CONFIG_DISABLE_CSMA_CA_ON_LAST_ATTEMPT
  *
- * Define as 1 to disable CCA on the last transmit attempt
+ * Define as 1 to disable CSMA-CA on the last transmit attempt
  *
  */
-#ifndef OPENTHREAD_CONFIG_DISABLE_CCA_ON_LAST_ATTEMPT
-#define OPENTHREAD_CONFIG_DISABLE_CCA_ON_LAST_ATTEMPT 0
+#ifndef OPENTHREAD_CONFIG_DISABLE_CSMA_CA_ON_LAST_ATTEMPT
+#define OPENTHREAD_CONFIG_DISABLE_CSMA_CA_ON_LAST_ATTEMPT 0
 #endif
 
 /**
@@ -1638,4 +1752,176 @@
 #define OPENTHREAD_CONFIG_DIAG_CMD_LINE_BUFFER_SIZE 256
 #endif
 
+/**
+ * @def OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+ *
+ * Define as 1 to enable the time synchronization service feature.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+#define OPENTHREAD_CONFIG_ENABLE_TIME_SYNC 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_TIME_SYNC_REQUIRED
+ *
+ * Define as 1 to require time synchronization when attaching to a network. If the device is router capable
+ * and cannot find a neighboring router supporting time synchronization, the device will form a new partition.
+ * If the device is not router capable, the device will remain an orphan.
+ *
+ * Applicable only if time synchronization service feature is enabled (i.e., OPENTHREAD_CONFIG_ENABLE_TIME_SYNC is set)
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_TIME_SYNC_REQUIRED
+#define OPENTHREAD_CONFIG_TIME_SYNC_REQUIRED 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_TIME_SYNC_PERIOD
+ *
+ * Specifies the default period of time synchronization, in seconds.
+ *
+ * Applicable only if time synchronization service feature is enabled (i.e., OPENTHREAD_CONFIG_ENABLE_TIME_SYNC is set)
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_TIME_SYNC_PERIOD
+#define OPENTHREAD_CONFIG_TIME_SYNC_PERIOD 30
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_TIME_SYNC_XTAL_THRESHOLD
+ *
+ * Specifies the default XTAL threshold for a device to become Router in time synchronization enabled network, in PPM.
+ *
+ * Applicable only if time synchronization service feature is enabled (i.e., OPENTHREAD_CONFIG_ENABLE_TIME_SYNC is set)
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_TIME_SYNC_XTAL_THRESHOLD
+#define OPENTHREAD_CONFIG_TIME_SYNC_XTAL_THRESHOLD 300
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_HEADER_IE_SUPPORT
+ *
+ * Define as 1 to support IEEE 802.15.4-2015 Header IE (Information Element) generation and parsing, it must be set
+ * to support following features:
+ *    1. Time synchronization service feature (i.e., OPENTHREAD_CONFIG_ENABLE_TIME_SYNC is set).
+ *
+ * @note If it's enabled, platform must support interrupt context and concurrent access AES.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_HEADER_IE_SUPPORT
+#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+#define OPENTHREAD_CONFIG_HEADER_IE_SUPPORT 1
+#else
+#define OPENTHREAD_CONFIG_HEADER_IE_SUPPORT 0
+#endif
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_ENABLE_LONG_ROUTES
+ *
+ * Enable experimental mode for 'deep' networks, allowing packet routes up to 32 nodes.
+ * This mode is incompatible with Thread 1.1.1 and older.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_ENABLE_LONG_ROUTES
+#define OPENTHREAD_CONFIG_ENABLE_LONG_ROUTES 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_POSIX_SETTINGS_PATH
+ *
+ * The settings storage path on posix platform.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_POSIX_SETTINGS_PATH
+#define OPENTHREAD_CONFIG_POSIX_SETTINGS_PATH "tmp"
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_FAILED_CHILD_TRANSMISSIONS
+ *
+ * This setting configures the number of consecutive MCPS.DATA-Confirms having Status NO_ACK
+ * that cause a Child-to-Parent link to be considered broken.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_FAILED_CHILD_TRANSMISSIONS
+#define OPENTHREAD_CONFIG_FAILED_CHILD_TRANSMISSIONS 6
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_MINIMUM_POLL_PERIOD
+ *
+ * This setting configures the minimum poll period in milliseconds.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_MINIMUM_POLL_PERIOD
+#define OPENTHREAD_CONFIG_MINIMUM_POLL_PERIOD 1000
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_RETX_POLL_PERIOD
+ *
+ * This setting configures the retx poll period in milliseconds.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_RETX_POLL_PERIOD
+#define OPENTHREAD_CONFIG_RETX_POLL_PERIOD 2000
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_DEFAULT_SED_BUFFER_SIZE
+ *
+ * This setting configures the default buffer size for IPv6 datagram destined for an attached SED.
+ * A Thread Router MUST be able to buffer at least one 1280-octet IPv6 datagram for an attached SED according to
+ * the Thread Conformance Specification.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_DEFAULT_SED_BUFFER_SIZE
+#define OPENTHREAD_CONFIG_DEFAULT_SED_BUFFER_SIZE 1280
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_DEFAULT_SED_DATAGRAM_COUNT
+ *
+ * This setting configures the default datagram count of 106-octet IPv6 datagram per attached SED.
+ * A Thread Router MUST be able to buffer at least one 106-octet IPv6 datagram per attached SED according to
+ * the Thread Conformance Specification.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_DEFAULT_SED_DATAGRAM_COUNT
+#define OPENTHREAD_CONFIG_DEFAULT_SED_DATAGRAM_COUNT 1
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_IPV6_DEFAULT_HOP_LIMIT
+ *
+ * This setting configures the default hop limit of IPv6.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_IPV6_DEFAULT_HOP_LIMIT
+#define OPENTHREAD_CONFIG_IPV6_DEFAULT_HOP_LIMIT 64
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_IPV6_DEFAULT_MAX_DATAGRAM
+ *
+ * This setting configures the max datagram length of IPv6.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_IPV6_DEFAULT_MAX_DATAGRAM
+#define OPENTHREAD_CONFIG_IPV6_DEFAULT_MAX_DATAGRAM 1280
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_TIME_SYNC_JUMP_NOTIF_MIN_US
+ *
+ * This setting sets the minimum amount of time (in microseconds) that the network time must jump due to
+ * a time sync event for listeners to be notified of the new network time.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_TIME_SYNC_JUMP_NOTIF_MIN_US
+#define OPENTHREAD_CONFIG_TIME_SYNC_JUMP_NOTIF_MIN_US 10000
+#endif
 #endif // OPENTHREAD_CORE_DEFAULT_CONFIG_H_

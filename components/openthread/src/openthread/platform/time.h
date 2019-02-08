@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, The OpenThread Authors.
+ *  Copyright (c) 2018, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -28,38 +28,52 @@
 
 /**
  * @file
- *   This file includes definitions for manipulating Thread Network Data managed by the Thread Leader.
+ * @brief
+ *   This file includes the platform abstraction for the time service.
  */
 
-#ifndef NETWORK_DATA_LEADER_MTD_HPP_
-#define NETWORK_DATA_LEADER_MTD_HPP_
+#ifndef TIME_H_
+#define TIME_H_
 
-#include "openthread-core-config.h"
+#include <stdint.h>
 
-#include "utils/wrap_stdint.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace ot {
+/**
+ * @addtogroup plat-time
+ *
+ * @brief
+ *   This module includes the platform abstraction for the time service.
+ *
+ * @{
+ *
+ */
 
-namespace NetworkData {
+/**
+ * Get the current time (64bits width).
+ *
+ * @returns The current time in microseconds.
+ *
+ */
+uint64_t otPlatTimeGet(void);
 
-class Leader : public LeaderBase
-{
-public:
-    explicit Leader(Instance &aInstance)
-        : LeaderBase(aInstance)
-    {
-    }
+/**
+ * Get the device's XTAL accuracy.
+ *
+ * @returns The device's XTAL accuracy, in ppm.
+ *
+ */
+uint16_t otPlatTimeGetXtalAccuracy(void);
 
-    void Start(void) {}
-    void Stop(void) {}
+/**
+ * @}
+ *
+ */
 
-    void IncrementVersion(void) {}
-    void IncrementStableVersion(void) {}
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
-    otError SendServerDataNotification(uint16_t) { return OT_ERROR_NOT_IMPLEMENTED; }
-};
-
-} // namespace NetworkData
-} // namespace ot
-
-#endif // NETWORK_DATA_LEADER_MTD_HPP_
+#endif // TIME_H_

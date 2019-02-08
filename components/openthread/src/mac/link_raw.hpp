@@ -38,18 +38,24 @@
 
 #include <openthread/link_raw.h>
 
-#include "common/timer.hpp"
-
-#if OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ACK_TIMEOUT || OPENTHREAD_CONFIG_ENABLE_SOFTWARE_RETRANSMIT || \
-    OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ENERGY_SCAN
-#define OPENTHREAD_LINKRAW_TIMER_REQUIRED 1
-#else
-#define OPENTHREAD_LINKRAW_TIMER_REQUIRED 0
-#endif
+#include "common/locator.hpp"
+#include "mac/mac_frame.hpp"
+#include "mac/sub_mac.hpp"
 
 namespace ot {
+namespace Mac {
 
-class LinkRaw
+#if OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
+
+/**
+ * This class defines the raw link-layer object.
+ *
+ */
+class LinkRaw : public InstanceLocator
+#if OPENTHREAD_RADIO
+    ,
+                public SubMac::Callbacks
+#endif
 {
 public:
     /**
@@ -59,6 +65,14 @@ public:
      *
      */
     explicit LinkRaw(Instance &aInstance);
+
+    /**
+     * This method gets the associated `SubMac` object.
+     *
+     * @returns A reference to the `SubMac` object.
+     *
+     */
+    SubMac &GetSubMac(void) { return mSubMac; }
 
     /**
      * This method returns true if the raw link-layer is enabled.
@@ -74,7 +88,8 @@ public:
      * @param[in]   aEnabled    Whether enable raw link-layer.
      *
      * @retval OT_ERROR_INVALID_STATE   Thread stack is enabled.
-     * @retval OT_ERROR_NONE            Successfully enabled raw link.
+     * @retval OT_ERROR_FAILED          The radio could not be enabled.
+     * @retval OT_ERROR_NONE            Successfully enabled/disabled raw link.
      *
      */
     otError SetEnabled(bool aEnabled);
@@ -82,10 +97,10 @@ public:
     /**
      * This method returns the capabilities of the raw link-layer.
      *
-     * @returns The radio capability bit vector. The stack enables or disables some functions based on this value.
+     * @returns The radio capability bit vector.
      *
      */
-    otRadioCaps GetCaps(void) const;
+    otRadioCaps GetCaps(void) const { return mSubMac.GetCaps(); }
 
     /**
      * This method starts a (recurring) Receive on the link-layer.
@@ -102,40 +117,49 @@ public:
      * This method invokes the mReceiveDoneCallback, if set.
      *
      * @param[in]  aFrame    A pointer to the received frame or NULL if the receive operation failed.
-     * @param[in]  aError    OT_ERROR_NONE when successfully received a frame, OT_ERROR_ABORT when reception
-     *                       was aborted and a frame was not received, OT_ERROR_NO_BUFS when a frame could not be
-     *                       received due to lack of rx buffer space.
+     * @param[in]  aError    OT_ERROR_NONE when successfully received a frame,
+     *                       OT_ERROR_ABORT when reception was aborted and a frame was not received,
+     *                       OT_ERROR_NO_BUFS when a frame could not be received due to lack of rx buffer space.
      *
      */
-    void InvokeReceiveDone(otRadioFrame *aFrame, otError aError);
+    void InvokeReceiveDone(Frame *aFrame, otError aError);
+
+    /**
+     * This method gets the radio transmit frame.
+     *
+     * @returns The transmit frame.
+     *
+     */
+    Frame &GetTransmitFrame(void) { return mSubMac.GetTransmitFrame(); }
 
     /**
      * This method starts a (single) Transmit on the link-layer.
      *
-     * @param[in]  aFrame               A pointer to the frame that was transmitted.
+     * @note The callback @p aCallback will not be called if this call does not return OT_ERROR_NONE.
+     *
      * @param[in]  aCallback            A pointer to a function called on completion of the transmission.
      *
      * @retval OT_ERROR_NONE            Successfully transitioned to Transmit.
      * @retval OT_ERROR_INVALID_STATE   The radio was not in the Receive state.
      *
      */
-    otError Transmit(otRadioFrame *aFrame, otLinkRawTransmitDone aCallback);
+    otError Transmit(otLinkRawTransmitDone aCallback);
 
     /**
      * This method invokes the mTransmitDoneCallback, if set.
      *
-     * @param[in]  aFrame     A pointer to the frame that was transmitted.
+     * @param[in]  aFrame     The transmitted frame.
      * @param[in]  aAckFrame  A pointer to the ACK frame, NULL if no ACK was received.
-     * @param[in]  aError     OT_ERROR_NONE when the frame was transmitted, OT_ERROR_NO_ACK when the frame was
-     *                        transmitted but no ACK was received, OT_ERROR_CHANNEL_ACCESS_FAILURE when the transmission
-     *                        could not take place due to activity on the channel, OT_ERROR_ABORT when transmission was
-     *                        aborted for other reasons.
+     * @param[in]  aError     OT_ERROR_NONE when the frame was transmitted,
+     *                        OT_ERROR_NO_ACK when the frame was transmitted but no ACK was received,
+     *                        OT_ERROR_CHANNEL_ACCESS_FAILURE tx failed due to activity on the channel,
+     *                        OT_ERROR_ABORT when transmission was aborted for other reasons.
      *
      */
-    void InvokeTransmitDone(otRadioFrame *aFrame, otRadioFrame *aAckFrame, otError aError);
+    void InvokeTransmitDone(Frame &aFrame, Frame *aAckFrame, otError aError);
 
     /**
-     * This method starts a (single) Enery Scan on the link-layer.
+     * This method starts a (single) Energy Scan on the link-layer.
      *
      * @param[in]  aScanChannel     The channel to perform the energy scan on.
      * @param[in]  aScanDuration    The duration, in milliseconds, for the channel to be scanned.
@@ -157,20 +181,12 @@ public:
     void InvokeEnergyScanDone(int8_t aEnergyScanMaxRssi);
 
     /**
-     * This method is called when the transmission has started.
-     *
-     * @param[in]  aFrame     A pointer to the frame that is being transmitted.
-     *
-     */
-    void TransmitStarted(otRadioFrame *aFrame);
-
-    /**
      * This function returns the short address.
      *
      * @returns short address.
      *
      */
-    uint16_t GetShortAddress(void) const { return mShortAddress; }
+    ShortAddress GetShortAddress(void) const { return mSubMac.GetShortAddress(); }
 
     /**
      * This method updates short address.
@@ -181,7 +197,7 @@ public:
      * @retval OT_ERROR_INVALID_STATE    If the raw link-layer isn't enabled.
      *
      */
-    otError SetShortAddress(uint16_t aShortAddress);
+    otError SetShortAddress(ShortAddress aShortAddress);
 
     /**
      * This function returns PANID.
@@ -189,7 +205,7 @@ public:
      * @returns PANID.
      *
      */
-    uint16_t GetPanId(void) const { return mPanId; }
+    PanId GetPanId(void) const { return mPanId; }
 
     /**
      * This method updates PANID.
@@ -200,7 +216,7 @@ public:
      * @retval OT_ERROR_INVALID_STATE    If the raw link-layer isn't enabled.
      *
      */
-    otError SetPanId(uint16_t aPanId);
+    otError SetPanId(PanId aPanId);
 
     /**
      * This method gets the current receiving channel.
@@ -224,7 +240,7 @@ public:
      * @returns A reference to the extended address.
      *
      */
-    const otExtAddress &GetExtAddress(void) const { return mExtAddress; }
+    const ExtAddress &GetExtAddress(void) const { return mSubMac.GetExtAddress(); }
 
     /**
      * This method updates extended address.
@@ -235,66 +251,26 @@ public:
      * @retval OT_ERROR_INVALID_STATE    If the raw link-layer isn't enabled.
      *
      */
-    otError SetExtAddress(const otExtAddress &aExtAddress);
+    otError SetExtAddress(const ExtAddress &aExtAddress);
 
 private:
-    otInstance &mInstance;
-
-#if OPENTHREAD_LINKRAW_TIMER_REQUIRED
-
-    enum TimerReason
-    {
-        kTimerReasonNone,
-        kTimerReasonAckTimeout,
-        kTimerReasonRetransmitTimeout,
-        kTimerReasonEnergyScanComplete,
-    };
-
-    TimerMilli  mTimer;
-    TimerReason mTimerReason;
-#if OPENTHREAD_CONFIG_ENABLE_PLATFORM_USEC_TIMER
-    TimerMicro mTimerMicro;
-#endif
-
-    static void HandleTimer(Timer &aTimer);
-    void        HandleTimer(void);
-
-#endif // OPENTHREAD_LINKRAW_TIMER_REQUIRED
-
-#if OPENTHREAD_CONFIG_ENABLE_SOFTWARE_RETRANSMIT
-
-    uint8_t mTransmitAttempts;
-    uint8_t mCsmaAttempts;
-
-    void StartCsmaBackoff(void);
-
-#endif // OPENTHREAD_CONFIG_ENABLE_SOFTWARE_RETRANSMIT
-
-#if OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ENERGY_SCAN
-
-    enum
-    {
-        kInvalidRssiValue = 127
-    };
-
-    Tasklet mEnergyScanTask;
-    int8_t  mEnergyScanRssi;
-
-    static void HandleEnergyScanTask(Tasklet &aTasklet);
-    void        HandleEnergyScanTask(void);
-
-#endif // OPENTHREAD_CONFIG_ENABLE_SOFTWARE_ENERGY_SCAN
-
-    otExtAddress            mExtAddress;
-    uint16_t                mPanId;
-    uint16_t                mShortAddress;
     bool                    mEnabled;
     uint8_t                 mReceiveChannel;
+    PanId                   mPanId;
     otLinkRawReceiveDone    mReceiveDoneCallback;
     otLinkRawTransmitDone   mTransmitDoneCallback;
     otLinkRawEnergyScanDone mEnergyScanDoneCallback;
+
+#if OPENTHREAD_RADIO
+    SubMac mSubMac;
+#elif OPENTHREAD_ENABLE_RAW_LINK_API
+    SubMac &mSubMac;
+#endif
 };
 
+#endif // OPENTHREAD_RADIO || OPENTHREAD_ENABLE_RAW_LINK_API
+
+} // namespace Mac
 } // namespace ot
 
 #endif // LINK_RAW_HPP_

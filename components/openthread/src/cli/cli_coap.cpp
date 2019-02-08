@@ -127,16 +127,16 @@ void Coap::HandleServerResponse(otCoapHeader *aHeader, otMessage *aMessage, cons
 {
     otError      error = OT_ERROR_NONE;
     otCoapHeader responseHeader;
-    otMessage *  responseMessage;
+    otMessage *  responseMessage = NULL;
     otCoapCode   responseCode    = OT_COAP_CODE_EMPTY;
     char         responseContent = '0';
 
     mInterpreter.mServer->OutputFormat(
-        "Received coap request from [%x:%x:%x:%x:%x:%x:%x:%x]: ", HostSwap16(aMessageInfo->mSockAddr.mFields.m16[0]),
-        HostSwap16(aMessageInfo->mSockAddr.mFields.m16[1]), HostSwap16(aMessageInfo->mSockAddr.mFields.m16[2]),
-        HostSwap16(aMessageInfo->mSockAddr.mFields.m16[3]), HostSwap16(aMessageInfo->mSockAddr.mFields.m16[4]),
-        HostSwap16(aMessageInfo->mSockAddr.mFields.m16[5]), HostSwap16(aMessageInfo->mSockAddr.mFields.m16[6]),
-        HostSwap16(aMessageInfo->mSockAddr.mFields.m16[7]));
+        "Received coap request from [%x:%x:%x:%x:%x:%x:%x:%x]: ", HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[0]),
+        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[1]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[2]),
+        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[3]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[4]),
+        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[5]), HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[6]),
+        HostSwap16(aMessageInfo->mPeerAddr.mFields.m16[7]));
 
     switch (otCoapHeaderGetCode(aHeader))
     {
@@ -158,7 +158,7 @@ void Coap::HandleServerResponse(otCoapHeader *aHeader, otMessage *aMessage, cons
 
     default:
         mInterpreter.mServer->OutputFormat("Undefined\r\n");
-        return;
+        ExitNow(error = OT_ERROR_PARSE);
     }
 
     PrintPayload(aMessage);
@@ -183,7 +183,7 @@ void Coap::HandleServerResponse(otCoapHeader *aHeader, otMessage *aMessage, cons
             otCoapHeaderSetPayloadMarker(&responseHeader);
         }
 
-        responseMessage = otCoapNewMessage(mInterpreter.mInstance, &responseHeader);
+        responseMessage = otCoapNewMessage(mInterpreter.mInstance, &responseHeader, NULL);
         VerifyOrExit(responseMessage != NULL, error = OT_ERROR_NO_BUFS);
 
         if (otCoapHeaderGetCode(aHeader) == OT_COAP_CODE_GET)
@@ -196,11 +196,14 @@ void Coap::HandleServerResponse(otCoapHeader *aHeader, otMessage *aMessage, cons
 
 exit:
 
-    if (error != OT_ERROR_NONE && responseMessage != NULL)
+    if (error != OT_ERROR_NONE)
     {
-        mInterpreter.mServer->OutputFormat("Cannot send coap response message: Error %d: %s\r\n", error,
-                                           otThreadErrorToString(error));
-        otMessageFree(responseMessage);
+        if (responseMessage != NULL)
+        {
+            mInterpreter.mServer->OutputFormat("Cannot send coap response message: Error %d: %s\r\n", error,
+                                               otThreadErrorToString(error));
+            otMessageFree(responseMessage);
+        }
     }
     else if (responseCode >= OT_COAP_CODE_RESPONSE_MIN)
     {
@@ -289,7 +292,7 @@ otError Coap::ProcessRequest(int argc, char *argv[])
         }
     }
 
-    message = otCoapNewMessage(mInterpreter.mInstance, &header);
+    message = otCoapNewMessage(mInterpreter.mInstance, &header, NULL);
     VerifyOrExit(message != NULL, error = OT_ERROR_NO_BUFS);
 
     // Embed content into message if given
@@ -338,6 +341,9 @@ void Coap::HandleClientResponse(otCoapHeader *       aHeader,
                                 const otMessageInfo *aMessageInfo,
                                 otError              aError)
 {
+    OT_UNUSED_VARIABLE(aHeader);
+    OT_UNUSED_VARIABLE(aMessageInfo);
+
     if (aError != OT_ERROR_NONE)
     {
         mInterpreter.mServer->OutputFormat("Error receiving coap response message: Error %d: %s\r\n", aError,
@@ -348,9 +354,6 @@ void Coap::HandleClientResponse(otCoapHeader *       aHeader,
         mInterpreter.mServer->OutputFormat("Received coap response");
         PrintPayload(aMessage);
     }
-
-    OT_UNUSED_VARIABLE(aHeader);
-    OT_UNUSED_VARIABLE(aMessageInfo);
 }
 
 } // namespace Cli

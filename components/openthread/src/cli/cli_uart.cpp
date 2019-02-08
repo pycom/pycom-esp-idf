@@ -87,6 +87,11 @@ extern "C" void otCliUartOutputFormat(const char *aFmt, ...)
     va_end(aAp);
 }
 
+extern "C" void otCliUartOutput(const char *aString, uint16_t aLength)
+{
+    Uart::sUartServer->Output(aString, aLength);
+}
+
 extern "C" void otCliUartAppendResult(otError aError)
 {
     Uart::sUartServer->GetInterpreter().AppendResult(aError);
@@ -132,7 +137,7 @@ void Uart::ReceiveTask(const uint8_t *aBuf, uint16_t aBufLength)
 
             break;
 
-#ifdef OPENTHREAD_EXAMPLES_POSIX
+#if OPENTHREAD_POSIX
 
         case 0x04: // ASCII for Ctrl-D
             exit(EXIT_SUCCESS);
@@ -176,31 +181,31 @@ otError Uart::ProcessCommand(void)
     }
 
 #if OPENTHREAD_CONFIG_LOG_OUTPUT != OPENTHREAD_CONFIG_LOG_OUTPUT_NONE
-        /*
-         * Note this is here for this reason:
-         *
-         * TEXT (command) input ... in a test automation script occurs
-         * rapidly and often without gaps between the command and the
-         * terminal CR
-         *
-         * In contrast as a human is typing there is a delay between the
-         * last character of a command and the terminal CR which executes
-         * a command.
-         *
-         * During that human induced delay a tasklet may be scheduled and
-         * the LOG becomes confusing and it is hard to determine when
-         * something happened.  Which happened first? the command-CR or
-         * the tasklet.
-         *
-         * Yes, while rare it is a race condition that is hard to debug.
-         *
-         * Thus this is here to affirmatively LOG exactly when the CLI
-         * command is being executed.
-         */
+    /*
+     * Note this is here for this reason:
+     *
+     * TEXT (command) input ... in a test automation script occurs
+     * rapidly and often without gaps between the command and the
+     * terminal CR
+     *
+     * In contrast as a human is typing there is a delay between the
+     * last character of a command and the terminal CR which executes
+     * a command.
+     *
+     * During that human induced delay a tasklet may be scheduled and
+     * the LOG becomes confusing and it is hard to determine when
+     * something happened.  Which happened first? the command-CR or
+     * the tasklet.
+     *
+     * Yes, while rare it is a race condition that is hard to debug.
+     *
+     * Thus this is here to affirmatively LOG exactly when the CLI
+     * command is being executed.
+     */
 #if OPENTHREAD_ENABLE_MULTIPLE_INSTANCES
-        /* TODO: how exactly do we get the instance here? */
+    /* TODO: how exactly do we get the instance here? */
 #else
-    otLogInfoCli(Instance::Get(), "execute command: %s", mRxBuffer);
+    otLogInfoCli("execute command: %s", mRxBuffer);
 #endif
 #endif
     mInterpreter.ProcessLine(mRxBuffer, mRxLength, *this);
@@ -295,16 +300,16 @@ void Uart::SendDoneTask(void)
 
 extern "C" void otCliPlatLogv(otLogLevel aLogLevel, otLogRegion aLogRegion, const char *aFormat, va_list aArgs)
 {
-    if (NULL == Uart::sUartServer)
-    {
-        return;
-    }
+    OT_UNUSED_VARIABLE(aLogLevel);
+    OT_UNUSED_VARIABLE(aLogRegion);
+
+    VerifyOrExit(Uart::sUartServer != NULL);
 
     Uart::sUartServer->OutputFormatV(aFormat, aArgs);
     Uart::sUartServer->OutputFormat("\r\n");
 
-    OT_UNUSED_VARIABLE(aLogLevel);
-    OT_UNUSED_VARIABLE(aLogRegion);
+exit:
+    return;
 }
 
 } // namespace Cli

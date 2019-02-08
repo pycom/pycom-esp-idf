@@ -90,7 +90,7 @@ public:
 
     void    RestoreChildren(void) {}
     otError RemoveStoredChild(uint16_t) { return OT_ERROR_NOT_IMPLEMENTED; }
-    otError StoreChild(uint16_t) { return OT_ERROR_NOT_IMPLEMENTED; }
+    otError StoreChild(const Child &) { return OT_ERROR_NOT_IMPLEMENTED; }
 
     Neighbor *GetNeighbor(uint16_t aAddress) { return Mle::GetNeighbor(aAddress); }
     Neighbor *GetNeighbor(const Mac::ExtAddress &aAddress) { return Mle::GetNeighbor(aAddress); }
@@ -147,6 +147,9 @@ private:
     void    HandlePartitionChange(void) {}
     void    StopAdvertiseTimer(void) {}
     otError ProcessRouteTlv(const RouteTlv &) { return OT_ERROR_NONE; }
+#if OPENTHREAD_CONFIG_ENABLE_TIME_SYNC
+    otError HandleTimeSync(const Message &, const Ip6::MessageInfo &) { return OT_ERROR_DROP; }
+#endif
 
     ChildTable  mChildTable;
     RouterTable mRouterTable;

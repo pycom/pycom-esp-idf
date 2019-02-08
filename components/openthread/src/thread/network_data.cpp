@@ -566,7 +566,7 @@ void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength)
                 continue;
             }
 
-            otDumpDebgNetData(GetInstance(), "remove prefix done", mTlvs, mLength);
+            otDumpDebgNetData("remove prefix done", mTlvs, mLength);
             break;
         }
 
@@ -587,7 +587,7 @@ void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength)
                 continue;
             }
 
-            otDumpDebgNetData(GetInstance(), "remove service done", mTlvs, mLength);
+            otDumpDebgNetData("remove service done", mTlvs, mLength);
             break;
         }
 
@@ -613,7 +613,7 @@ void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength)
         cur = cur->GetNext();
     }
 
-    otDumpDebgNetData(GetInstance(), "remove done", aData, aDataLength);
+    otDumpDebgNetData("remove done", aData, aDataLength);
 }
 
 void NetworkData::RemoveTemporaryData(uint8_t *aData, uint8_t &aDataLength, PrefixTlv &aPrefix)
@@ -878,9 +878,9 @@ PrefixTlv *NetworkData::FindPrefix(const uint8_t *aPrefix, uint8_t aPrefixLength
 
 PrefixTlv *NetworkData::FindPrefix(const uint8_t *aPrefix, uint8_t aPrefixLength, uint8_t *aTlvs, uint8_t aTlvsLength)
 {
-    NetworkDataTlv *cur = reinterpret_cast<NetworkDataTlv *>(aTlvs);
-    NetworkDataTlv *end = reinterpret_cast<NetworkDataTlv *>(aTlvs + aTlvsLength);
-    PrefixTlv *     compare;
+    NetworkDataTlv *cur     = reinterpret_cast<NetworkDataTlv *>(aTlvs);
+    NetworkDataTlv *end     = reinterpret_cast<NetworkDataTlv *>(aTlvs + aTlvsLength);
+    PrefixTlv *     compare = NULL;
 
     while (cur < end)
     {
@@ -893,15 +893,17 @@ PrefixTlv *NetworkData::FindPrefix(const uint8_t *aPrefix, uint8_t aPrefixLength
             if (compare->GetPrefixLength() == aPrefixLength &&
                 PrefixMatch(compare->GetPrefix(), aPrefix, aPrefixLength) >= aPrefixLength)
             {
-                return compare;
+                ExitNow();
             }
         }
 
         cur = cur->GetNext();
     }
 
+    compare = NULL;
+
 exit:
-    return NULL;
+    return compare;
 }
 
 int8_t NetworkData::PrefixMatch(const uint8_t *a, const uint8_t *b, uint8_t aLength)
@@ -947,9 +949,9 @@ ServiceTlv *NetworkData::FindService(uint32_t       aEnterpriseNumber,
                                      uint8_t *      aTlvs,
                                      uint8_t        aTlvsLength)
 {
-    NetworkDataTlv *cur = reinterpret_cast<NetworkDataTlv *>(aTlvs);
-    NetworkDataTlv *end = reinterpret_cast<NetworkDataTlv *>(aTlvs + aTlvsLength);
-    ServiceTlv *    compare;
+    NetworkDataTlv *cur     = reinterpret_cast<NetworkDataTlv *>(aTlvs);
+    NetworkDataTlv *end     = reinterpret_cast<NetworkDataTlv *>(aTlvs + aTlvsLength);
+    ServiceTlv *    compare = NULL;
 
     while (cur < end)
     {
@@ -963,15 +965,17 @@ ServiceTlv *NetworkData::FindService(uint32_t       aEnterpriseNumber,
                 (compare->GetServiceDataLength() == aServiceDataLength) &&
                 (memcmp(compare->GetServiceData(), aServiceData, aServiceDataLength) == 0))
             {
-                return compare;
+                ExitNow();
             }
         }
 
         cur = cur->GetNext();
     }
 
+    compare = NULL;
+
 exit:
-    return NULL;
+    return compare;
 }
 #endif
 
@@ -1037,7 +1041,7 @@ otError NetworkData::SendServerDataNotification(uint16_t aRloc16)
         mLastAttemptWait = true;
     }
 
-    otLogInfoNetData(GetInstance(), "Sent server data notification");
+    otLogInfoNetData("Sent server data notification");
 
 exit:
 

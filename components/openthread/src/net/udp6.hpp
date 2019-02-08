@@ -57,10 +57,43 @@ class Udp;
  */
 
 /**
+ * This class implements a UDP receiver.
+ *
+ */
+class UdpReceiver : public otUdpReceiver
+{
+    friend class Udp;
+
+public:
+    /**
+     * This constructor initializes the object.
+     *
+     * @param[in]   aUdpHandler     A pointer to the function to handle UDP message.
+     * @param[in]   aContext        A pointer to arbitrary context information.
+     *
+     */
+    UdpReceiver(otUdpHandler aHandler, void *aContext)
+    {
+        mNext    = NULL;
+        mHandler = aHandler;
+        mContext = aContext;
+    }
+
+private:
+    UdpReceiver *GetNext(void) { return static_cast<UdpReceiver *>(mNext); }
+    void         SetNext(UdpReceiver *aReceiver) { mNext = static_cast<otUdpReceiver *>(aReceiver); }
+
+    bool HandleMessage(Message &aMessage, const MessageInfo &aMessageInfo)
+    {
+        return mHandler(mContext, &aMessage, &aMessageInfo);
+    }
+};
+
+/**
  * This class implements a UDP/IPv6 socket.
  *
  */
-class UdpSocket : public otUdpSocket
+class UdpSocket : public otUdpSocket, public InstanceLocator
 {
     friend class Udp;
 
@@ -76,12 +109,16 @@ public:
     /**
      * This method returns a new UDP message with sufficient header space reserved.
      *
+     * @note If @p aSettings is 'NULL', the link layer security is enabled and the message priority is set to
+     * OT_MESSAGE_PRIORITY_NORMAL by default.
+     *
      * @param[in]  aReserved  The number of header bytes to reserve after the UDP header.
+     * @param[in]  aSettings  A pointer to the message settings or NULL to set default settings.
      *
      * @returns A pointer to the message or NULL if no buffers are available.
      *
      */
-    Message *NewMessage(uint16_t aReserved);
+    Message *NewMessage(uint16_t aReserved, const otMessageSettings *aSettings = NULL);
 
     /**
      * This method opens the UDP socket.
@@ -159,6 +196,8 @@ private:
     {
         mHandler(mContext, &aMessage, &aMessageInfo);
     }
+
+    Udp &GetUdp(void);
 };
 
 /**
@@ -177,6 +216,26 @@ public:
      *
      */
     explicit Udp(Instance &aInstance);
+
+    /**
+     * This method adds a UDP receiver.
+     *
+     * @param[in]  aReceiver  A reference to the UDP receiver.
+     *
+     * @retval OT_ERROR_NONE  Successfully added the UDP receiver.
+     *
+     */
+    otError AddReceiver(UdpReceiver &aReceiver);
+
+    /**
+     * This method removes a UDP receiver.
+     *
+     * @param[in]  aReceiver  A reference to the UDP receiver.
+     *
+     * @retval OT_ERROR_NONE  Successfully removed the UDP receiver.
+     *
+     */
+    otError RemoveReceiver(UdpReceiver &aReceiver);
 
     /**
      * This method adds a UDP socket.
@@ -210,11 +269,12 @@ public:
      * This method returns a new UDP message with sufficient header space reserved.
      *
      * @param[in]  aReserved  The number of header bytes to reserve after the UDP header.
+     * @param[in]  aPriority  The priority of the message.
      *
      * @returns A pointer to the message or NULL if no buffers are available.
      *
      */
-    Message *NewMessage(uint16_t aReserved);
+    Message *NewMessage(uint16_t aReserved, const otMessageSettings *aSettings = NULL);
 
     /**
      * This method sends an IPv6 datagram.
@@ -242,6 +302,15 @@ public:
     otError HandleMessage(Message &aMessage, MessageInfo &aMessageInfo);
 
     /**
+     * This method handles a received UDP message with offset set to the payload.
+     *
+     * @param[in]  aMessage      A reference to the UDP message to process.
+     * @param[in]  aMessageInfo  A reference to the message info associated with @p aMessage.
+     *
+     */
+    void HandlePayload(Message &aMessage, MessageInfo &aMessageInfo);
+
+    /**
      * This method updates the UDP checksum.
      *
      * @param[in]  aMessage               A reference to the UDP message.
@@ -253,14 +322,39 @@ public:
      */
     otError UpdateChecksum(Message &aMessage, uint16_t aPseudoHeaderChecksum);
 
+#if OPENTHREAD_ENABLE_PLATFORM_UDP
+    otUdpSocket *GetUdpSockets(void) { return mSockets; }
+#endif
+
+#if OPENTHREAD_ENABLE_UDP_FORWARD
+    /**
+     * This method sets the forward sender.
+     *
+     * @param[in]   aForwarder  A function pointer to forward UDP packets.
+     * @param[in]   aContext    A pointer to arbitrary context information.
+     *
+     */
+    void SetUdpForwarder(otUdpForwarder aForwarder, void *aContext)
+    {
+        mUdpForwarder        = aForwarder;
+        mUdpForwarderContext = aContext;
+    }
+#endif // OPENTHREAD_ENABLE_UDP_FORWARD
+
 private:
     enum
     {
         kDynamicPortMin = 49152, ///< Service Name and Transport Protocol Port Number Registry
         kDynamicPortMax = 65535, ///< Service Name and Transport Protocol Port Number Registry
     };
-    uint16_t   mEphemeralPort;
-    UdpSocket *mSockets;
+
+    uint16_t     mEphemeralPort;
+    UdpReceiver *mReceivers;
+    UdpSocket *  mSockets;
+#if OPENTHREAD_ENABLE_UDP_FORWARD
+    void *         mUdpForwarderContext;
+    otUdpForwarder mUdpForwarder;
+#endif
 };
 
 OT_TOOL_PACKED_BEGIN

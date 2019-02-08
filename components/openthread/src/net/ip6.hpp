@@ -103,19 +103,43 @@ class Ip6 : public InstanceLocator
 public:
     enum
     {
-        kDefaultHopLimit   = 64,
-        kMaxDatagramLength = 1280,
+        kDefaultHopLimit   = OPENTHREAD_CONFIG_IPV6_DEFAULT_HOP_LIMIT,
+        kMaxDatagramLength = OPENTHREAD_CONFIG_IPV6_DEFAULT_MAX_DATAGRAM,
     };
 
     /**
      * This method allocates a new message buffer from the buffer pool.
      *
+     * @note If @p aSettings is 'NULL', the link layer security is enabled and the message priority is set to
+     * OT_MESSAGE_PRIORITY_NORMAL by default.
+     *
      * @param[in]  aReserved  The number of header bytes to reserve following the IPv6 header.
+     * @param[in]  aSettings  A pointer to the message settings or NULL to set default settings.
      *
      * @returns A pointer to the message or NULL if insufficient message buffers are available.
      *
      */
-    Message *NewMessage(uint16_t aReserved);
+    Message *NewMessage(uint16_t aReserved, const otMessageSettings *aSettings = NULL);
+
+    /**
+     * This method converts the message priority level to IPv6 DSCP value.
+     *
+     * @param[in]  aPriority  The message priority level.
+     *
+     * @returns The IPv6 DSCP value.
+     *
+     */
+    static uint8_t PriorityToDscp(uint8_t aPriority);
+
+    /**
+     * This method converts the IPv6 DSCP value to message priority level.
+     *
+     * @param[in]  aDscp  The IPv6 DSCP value.
+     *
+     * @returns The message priority level.
+     *
+     */
+    static uint8_t DscpToPriority(uint8_t aDscp);
 
     /**
      * This constructor initializes the object.
@@ -379,6 +403,11 @@ public:
     static const char *IpProtoToString(IpProto aIpProto);
 
 private:
+    enum
+    {
+        kDefaultIp6MessagePriority = Message::kPriorityNormal,
+    };
+
     static void HandleSendQueue(Tasklet &aTasklet);
     void        HandleSendQueue(void);
 

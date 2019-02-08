@@ -50,14 +50,12 @@ namespace ot {
 
 void SettingsBase::LogNetworkInfo(const char *aAction, const NetworkInfo &aNetworkInfo) const
 {
-    otLogInfoCore(GetInstance(),
-                  "Non-volatile: %s NetworkInfo {rloc:0x%04x, extaddr:%s, role:%s, mode:0x%02x, keyseq:0x%x, ...",
+    otLogInfoCore("Non-volatile: %s NetworkInfo {rloc:0x%04x, extaddr:%s, role:%s, mode:0x%02x, keyseq:0x%x, ...",
                   aAction, aNetworkInfo.mRloc16, aNetworkInfo.mExtAddress.ToString().AsCString(),
                   Mle::Mle::RoleToString(static_cast<otDeviceRole>(aNetworkInfo.mRole)), aNetworkInfo.mDeviceMode,
                   aNetworkInfo.mKeySequence);
 
-    otLogInfoCore(GetInstance(),
-                  "Non-volatile: ... pid:0x%x, mlecntr:0x%x, maccntr:0x%x, mliid:%02x%02x%02x%02x%02x%02x%02x%02x}",
+    otLogInfoCore("Non-volatile: ... pid:0x%x, mlecntr:0x%x, maccntr:0x%x, mliid:%02x%02x%02x%02x%02x%02x%02x%02x}",
                   aNetworkInfo.mPreviousPartitionId, aNetworkInfo.mMleFrameCounter, aNetworkInfo.mMacFrameCounter,
                   aNetworkInfo.mMlIid[0], aNetworkInfo.mMlIid[1], aNetworkInfo.mMlIid[2], aNetworkInfo.mMlIid[3],
                   aNetworkInfo.mMlIid[4], aNetworkInfo.mMlIid[5], aNetworkInfo.mMlIid[6], aNetworkInfo.mMlIid[7]);
@@ -65,14 +63,13 @@ void SettingsBase::LogNetworkInfo(const char *aAction, const NetworkInfo &aNetwo
 
 void SettingsBase::LogParentInfo(const char *aAction, const ParentInfo &aParentInfo) const
 {
-    otLogInfoCore(GetInstance(), "Non-volatile: %s ParentInfo {extaddr:%s}", aAction,
-                  aParentInfo.mExtAddress.ToString().AsCString());
+    otLogInfoCore("Non-volatile: %s ParentInfo {extaddr:%s}", aAction, aParentInfo.mExtAddress.ToString().AsCString());
 }
 
 void SettingsBase::LogChildInfo(const char *aAction, const ChildInfo &aChildInfo) const
 {
-    otLogInfoCore(GetInstance(), "Non-volatile: %s ChildInfo {rloc:0x%04x, extaddr:%s, timeout:%u, mode:0x%02x}",
-                  aAction, aChildInfo.mRloc16, aChildInfo.mExtAddress.ToString().AsCString(), aChildInfo.mTimeout,
+    otLogInfoCore("Non-volatile: %s ChildInfo {rloc:0x%04x, extaddr:%s, timeout:%u, mode:0x%02x}", aAction,
+                  aChildInfo.mRloc16, aChildInfo.mExtAddress.ToString().AsCString(), aChildInfo.mTimeout,
                   aChildInfo.mMode);
 }
 
@@ -80,11 +77,11 @@ void SettingsBase::LogChildInfo(const char *aAction, const ChildInfo &aChildInfo
 
 #if (OPENTHREAD_CONFIG_LOG_LEVEL >= OT_LOG_LEVEL_WARN)
 
-void SettingsBase::LogFailure(otError error, const char *aText) const
+void SettingsBase::LogFailure(otError error, const char *aText, bool aIsDelete) const
 {
-    if (error != OT_ERROR_NONE)
+    if ((error != OT_ERROR_NONE) && (!aIsDelete || (error != OT_ERROR_NOT_FOUND)))
     {
-        otLogWarnCore(GetInstance(), "Non-volatile: Error %s %s", otThreadErrorToString(error), aText);
+        otLogWarnCore("Non-volatile: Error %s %s", otThreadErrorToString(error), aText);
     }
 }
 
@@ -99,14 +96,14 @@ void Settings::Init(void)
 void Settings::Wipe(void)
 {
     otPlatSettingsWipe(&GetInstance());
-    otLogInfoCore(GetInstance(), "Non-volatile: Wiped all info");
+    otLogInfoCore("Non-volatile: Wiped all info");
 }
 
 otError Settings::SaveOperationalDataset(bool aIsActive, const MeshCoP::Dataset &aDataset)
 {
     otError error = Save(aIsActive ? kKeyActiveDataset : kKeyPendingDataset, aDataset.GetBytes(), aDataset.GetSize());
 
-    LogFailure(error, "saving OperationalDataset");
+    LogFailure(error, "saving OperationalDataset", false);
     return error;
 }
 
@@ -127,7 +124,8 @@ otError Settings::DeleteOperationalDataset(bool aIsActive)
 {
     otError error = Delete(aIsActive ? kKeyActiveDataset : kKeyPendingDataset);
 
-    LogFailure(error, "deleting OperationalDataset");
+    LogFailure(error, "deleting OperationalDataset", true);
+
     return error;
 }
 
@@ -150,7 +148,7 @@ otError Settings::SaveNetworkInfo(const NetworkInfo &aNetworkInfo)
     LogNetworkInfo("Saved", aNetworkInfo);
 
 exit:
-    LogFailure(error, "saving NetworkInfo");
+    LogFailure(error, "saving NetworkInfo", false);
     return error;
 }
 
@@ -159,10 +157,10 @@ otError Settings::DeleteNetworkInfo(void)
     otError error;
 
     SuccessOrExit(error = Delete(kKeyNetworkInfo));
-    otLogInfoCore(GetInstance(), "Non-volatile: Deleted NetworkInfo");
+    otLogInfoCore("Non-volatile: Deleted NetworkInfo");
 
 exit:
-    LogFailure(error, "deleting NetworkInfo");
+    LogFailure(error, "deleting NetworkInfo", true);
     return error;
 }
 
@@ -185,7 +183,7 @@ otError Settings::SaveParentInfo(const ParentInfo &aParentInfo)
     LogParentInfo("Saved", aParentInfo);
 
 exit:
-    LogFailure(error, "saving ParentInfo");
+    LogFailure(error, "saving ParentInfo", false);
     return error;
 }
 
@@ -194,10 +192,10 @@ otError Settings::DeleteParentInfo(void)
     otError error;
 
     SuccessOrExit(error = Delete(kKeyParentInfo));
-    otLogInfoCore(GetInstance(), "Non-volatile: Deleted ParentInfo");
+    otLogInfoCore("Non-volatile: Deleted ParentInfo");
 
 exit:
-    LogFailure(error, "deleting ParentInfo");
+    LogFailure(error, "deleting ParentInfo", true);
     return error;
 }
 
@@ -209,7 +207,7 @@ otError Settings::AddChildInfo(const ChildInfo &aChildInfo)
     LogChildInfo("Added", aChildInfo);
 
 exit:
-    LogFailure(error, "adding ChildInfo");
+    LogFailure(error, "adding ChildInfo", false);
     return error;
 }
 
@@ -218,10 +216,10 @@ otError Settings::DeleteChildInfo(void)
     otError error;
 
     SuccessOrExit(error = Delete(kKeyChildInfo));
-    otLogInfoCore(GetInstance(), "Non-volatile: Deleted all ChildInfo");
+    otLogInfoCore("Non-volatile: Deleted all ChildInfo");
 
 exit:
-    LogFailure(error, "deleting all ChildInfo");
+    LogFailure(error, "deleting all ChildInfo", true);
     return error;
 }
 
@@ -258,7 +256,7 @@ otError Settings::ChildInfoIterator::Delete(void)
     LogChildInfo("Removed", mChildInfo);
 
 exit:
-    LogFailure(error, "removing ChildInfo entry");
+    LogFailure(error, "removing ChildInfo entry", true);
     return error;
 }
 

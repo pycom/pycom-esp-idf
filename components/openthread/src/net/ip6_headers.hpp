@@ -38,8 +38,6 @@
 
 #include <stddef.h>
 
-#include <openthread/types.h>
-
 #include "common/encoding.hpp"
 #include "common/message.hpp"
 #include "net/ip6_address.hpp"
@@ -101,6 +99,22 @@ enum IpProto
     kProtoIcmp6    = 58, ///< ICMP for IPv6
     kProtoNone     = 59, ///< No Next Header for IPv6
     kProtoDstOpts  = 60, ///< Destination Options for IPv6
+};
+
+/**
+ * Class Selectors
+ */
+enum IpDscpCs
+{
+    kDscpCs0    = 0,    ///< Class selector codepoint 0
+    kDscpCs1    = 8,    ///< Class selector codepoint 8
+    kDscpCs2    = 16,   ///< Class selector codepoint 16
+    kDscpCs3    = 24,   ///< Class selector codepoint 24
+    kDscpCs4    = 32,   ///< Class selector codepoint 32
+    kDscpCs5    = 40,   ///< Class selector codepoint 40
+    kDscpCs6    = 48,   ///< Class selector codepoint 48
+    kDscpCs7    = 56,   ///< Class selector codepoint 56
+    kDscpCsMask = 0x38, ///< Class selector mask
 };
 
 enum
@@ -171,6 +185,30 @@ public:
      *
      */
     bool IsVersion6(void) const { return (mVersionClassFlow.m8[0] & kVersionMask) == kVersion6; }
+
+    /**
+     * This method returns the IPv6 DSCP value.
+     *
+     * @returns The IPv6 DSCP value.
+     *
+     */
+    uint8_t GetDscp(void) const
+    {
+        return static_cast<uint8_t>((HostSwap32(mVersionClassFlow.m32[0]) & kDscpMask) >> kDscpOffset);
+    }
+
+    /**
+     * This method sets the IPv6 DSCP value.
+     *
+     * @param[in]  aDscp  The IPv6 DSCP value.
+     *
+     */
+    void SetDscp(uint8_t aDscp)
+    {
+        uint32_t tmp = HostSwap32(mVersionClassFlow.m32[0]);
+        tmp = (tmp & static_cast<uint32_t>(~kDscpMask)) | ((static_cast<uint32_t>(aDscp) << kDscpOffset) & kDscpMask);
+        mVersionClassFlow.m32[0] = HostSwap32(tmp);
+    }
 
     /**
      * This method returns the IPv6 Payload Length value.
@@ -289,6 +327,8 @@ private:
     {
         kVersion6    = 0x60,
         kVersionMask = 0xf0,
+        kDscpOffset  = 22,
+        kDscpMask    = 0xfc00000,
     };
 } OT_TOOL_PACKED_END;
 

@@ -57,29 +57,29 @@ void otThreadSetChildTimeout(otInstance *aInstance, uint32_t aTimeout)
     instance.GetThreadNetif().GetMle().SetTimeout(aTimeout);
 }
 
-const uint8_t *otThreadGetExtendedPanId(otInstance *aInstance)
+const otExtendedPanId *otThreadGetExtendedPanId(otInstance *aInstance)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.GetThreadNetif().GetMac().GetExtendedPanId();
+    return &instance.GetThreadNetif().GetMac().GetExtendedPanId();
 }
 
-otError otThreadSetExtendedPanId(otInstance *aInstance, const uint8_t *aExtendedPanId)
+otError otThreadSetExtendedPanId(otInstance *aInstance, const otExtendedPanId *aExtendedPanId)
 {
-    otError   error    = OT_ERROR_NONE;
-    Instance &instance = *static_cast<Instance *>(aInstance);
-    uint8_t   mlPrefix[8];
+    otError           error    = OT_ERROR_NONE;
+    Instance &        instance = *static_cast<Instance *>(aInstance);
+    otMeshLocalPrefix prefix;
 
     VerifyOrExit(instance.GetThreadNetif().GetMle().GetRole() == OT_DEVICE_ROLE_DISABLED,
                  error = OT_ERROR_INVALID_STATE);
 
-    instance.GetThreadNetif().GetMac().SetExtendedPanId(aExtendedPanId);
+    instance.GetThreadNetif().GetMac().SetExtendedPanId(*aExtendedPanId);
 
-    mlPrefix[0] = 0xfd;
-    memcpy(mlPrefix + 1, aExtendedPanId, 5);
-    mlPrefix[6] = 0x00;
-    mlPrefix[7] = 0x00;
-    instance.GetThreadNetif().GetMle().SetMeshLocalPrefix(mlPrefix);
+    prefix.m8[0] = 0xfd;
+    memcpy(&prefix.m8[1], aExtendedPanId->m8, 5);
+    prefix.m8[6] = 0x00;
+    prefix.m8[7] = 0x00;
+    instance.GetThreadNetif().GetMle().SetMeshLocalPrefix(prefix);
 
     instance.GetThreadNetif().GetActiveDataset().Clear();
     instance.GetThreadNetif().GetPendingDataset().Clear();
@@ -119,7 +119,7 @@ otLinkModeConfig otThreadGetLinkMode(otInstance *aInstance)
         config.mSecureDataRequests = 1;
     }
 
-    if (mode & Mle::ModeTlv::kModeFFD)
+    if (mode & Mle::ModeTlv::kModeFullThreadDevice)
     {
         config.mDeviceType = 1;
     }
@@ -149,7 +149,7 @@ otError otThreadSetLinkMode(otInstance *aInstance, otLinkModeConfig aConfig)
 
     if (aConfig.mDeviceType)
     {
-        mode |= Mle::ModeTlv::kModeFFD;
+        mode |= Mle::ModeTlv::kModeFullThreadDevice;
     }
 
     if (aConfig.mNetworkData)
@@ -191,14 +191,14 @@ const otIp6Address *otThreadGetMeshLocalEid(otInstance *aInstance)
     return &instance.GetThreadNetif().GetMle().GetMeshLocal64();
 }
 
-const uint8_t *otThreadGetMeshLocalPrefix(otInstance *aInstance)
+const otMeshLocalPrefix *otThreadGetMeshLocalPrefix(otInstance *aInstance)
 {
     Instance &instance = *static_cast<Instance *>(aInstance);
 
-    return instance.GetThreadNetif().GetMle().GetMeshLocalPrefix();
+    return &instance.GetThreadNetif().GetMle().GetMeshLocalPrefix();
 }
 
-otError otThreadSetMeshLocalPrefix(otInstance *aInstance, const uint8_t *aMeshLocalPrefix)
+otError otThreadSetMeshLocalPrefix(otInstance *aInstance, const otMeshLocalPrefix *aMeshLocalPrefix)
 {
     otError   error    = OT_ERROR_NONE;
     Instance &instance = *static_cast<Instance *>(aInstance);
@@ -206,7 +206,7 @@ otError otThreadSetMeshLocalPrefix(otInstance *aInstance, const uint8_t *aMeshLo
     VerifyOrExit(instance.GetThreadNetif().GetMle().GetRole() == OT_DEVICE_ROLE_DISABLED,
                  error = OT_ERROR_INVALID_STATE);
 
-    error = instance.GetThreadNetif().GetMle().SetMeshLocalPrefix(aMeshLocalPrefix);
+    instance.GetThreadNetif().GetMle().SetMeshLocalPrefix(*aMeshLocalPrefix);
     instance.GetThreadNetif().GetActiveDataset().Clear();
     instance.GetThreadNetif().GetPendingDataset().Clear();
 
@@ -523,4 +523,37 @@ const otIpCounters *otThreadGetIp6Counters(otInstance *aInstance)
     Instance &instance = *static_cast<Instance *>(aInstance);
 
     return &instance.GetThreadNetif().GetMeshForwarder().GetCounters();
+}
+
+const otMleCounters *otThreadGetMleCounters(otInstance *aInstance)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    return &instance.GetThreadNetif().GetMle().GetCounters();
+}
+
+void otThreadResetMleCounters(otInstance *aInstance)
+{
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    instance.GetThreadNetif().GetMle().ResetCounters();
+}
+
+otError otThreadRegisterParentResponseCallback(otInstance *                   aInstance,
+                                               otThreadParentResponseCallback aCallback,
+                                               void *                         aContext)
+{
+#if OPENTHREAD_FTD || OPENTHREAD_MTD
+    Instance &instance = *static_cast<Instance *>(aInstance);
+
+    instance.GetThreadNetif().GetMle().RegisterParentResponseStatsCallback(aCallback, aContext);
+
+    return OT_ERROR_NONE;
+#else
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aCallback);
+    OT_UNUSED_VARIABLE(aContext);
+
+    return OT_ERROR_DISABLED_FEATURE;
+#endif
 }

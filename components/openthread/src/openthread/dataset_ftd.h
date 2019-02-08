@@ -35,7 +35,8 @@
 #ifndef OPENTHREAD_DATASET_FTD_H_
 #define OPENTHREAD_DATASET_FTD_H_
 
-#include <openthread/types.h>
+#include <openthread/dataset.h>
+#include <openthread/ip6.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,100 +50,6 @@ extern "C" {
  */
 
 /**
- * This function sets the Active Operational Dataset.
- *
- * @param[in]  aInstance A pointer to an OpenThread instance.
- * @param[in]  aDataset  A pointer to the Active Operational Dataset.
- *
- * @retval OT_ERROR_NONE          Successfully set the Active Operational Dataset.
- * @retval OT_ERROR_NO_BUFS       Insufficient buffer space to set the Active Operational Dataset.
- * @retval OT_ERROR_INVALID_ARGS  @p aDataset was NULL.
- *
- */
-OTAPI otError OTCALL otDatasetSetActive(otInstance *aInstance, const otOperationalDataset *aDataset);
-
-/**
- * This function sets the Pending Operational Dataset.
- *
- * @param[in]  aInstance A pointer to an OpenThread instance.
- * @param[in]  aDataset  A pointer to the Pending Operational Dataset.
- *
- * @retval OT_ERROR_NONE          Successfully set the Pending Operational Dataset.
- * @retval OT_ERROR_NO_BUFS       Insufficient buffer space to set the Pending Operational Dataset.
- * @retval OT_ERROR_INVALID_ARGS  @p aDataset was NULL.
- *
- */
-OTAPI otError OTCALL otDatasetSetPending(otInstance *aInstance, const otOperationalDataset *aDataset);
-
-/**
- * This function sends MGMT_ACTIVE_GET.
- *
- * @param[in]  aInstance  A pointer to an OpenThread instance.
- * @param[in]  aTlvTypes  A pointer to the TLV Types.
- * @param[in]  aLength    The length of TLV Types.
- * @param[in]  aAddress   A pointer to the IPv6 destination, if it is NULL, will use Leader ALOC as default.
- *
- * @retval OT_ERROR_NONE          Successfully send the meshcop dataset command.
- * @retval OT_ERROR_NO_BUFS       Insufficient buffer space to send.
- *
- */
-OTAPI otError OTCALL otDatasetSendMgmtActiveGet(otInstance *        aInstance,
-                                                const uint8_t *     aTlvTypes,
-                                                uint8_t             aLength,
-                                                const otIp6Address *aAddress);
-
-/**
- * This function sends MGMT_ACTIVE_SET.
- *
- * @param[in]  aInstance  A pointer to an OpenThread instance.
- * @param[in]  aDataset   A pointer to operational dataset.
- * @param[in]  aTlvs      A pointer to TLVs.
- * @param[in]  aLength    The length of TLVs.
- *
- * @retval OT_ERROR_NONE          Successfully send the meshcop dataset command.
- * @retval OT_ERROR_NO_BUFS       Insufficient buffer space to send.
- *
- */
-OTAPI otError OTCALL otDatasetSendMgmtActiveSet(otInstance *                aInstance,
-                                                const otOperationalDataset *aDataset,
-                                                const uint8_t *             aTlvs,
-                                                uint8_t                     aLength);
-
-/**
- * This function sends MGMT_PENDING_GET.
- *
- * @param[in]  aInstance  A pointer to an OpenThread instance.
- * @param[in]  aTlvTypes  A pointer to the TLV Types.
- * @param[in]  aLength    The length of TLV Types.
- * @param[in]  aAddress   A pointer to the IPv6 destination, if it is NULL, will use Leader ALOC as default.
- *
- * @retval OT_ERROR_NONE          Successfully send the meshcop dataset command.
- * @retval OT_ERROR_NO_BUFS       Insufficient buffer space to send.
- *
- */
-OTAPI otError OTCALL otDatasetSendMgmtPendingGet(otInstance *        aInstance,
-                                                 const uint8_t *     aTlvTypes,
-                                                 uint8_t             aLength,
-                                                 const otIp6Address *aAddress);
-
-/**
- * This function sends MGMT_PENDING_SET.
- *
- * @param[in]  aInstance  A pointer to an OpenThread instance.
- * @param[in]  aDataset   A pointer to operational dataset.
- * @param[in]  aTlvs      A pointer to TLVs.
- * @param[in]  aLength    The length of TLVs.
- *
- * @retval OT_ERROR_NONE          Successfully send the meshcop dataset command.
- * @retval OT_ERROR_NO_BUFS       Insufficient buffer space to send.
- *
- */
-OTAPI otError OTCALL otDatasetSendMgmtPendingSet(otInstance *                aInstance,
-                                                 const otOperationalDataset *aDataset,
-                                                 const uint8_t *             aTlvs,
-                                                 uint8_t                     aLength);
-
-/**
  * Get minimal delay timer.
  *
  * @param[in]  aInstance A pointer to an OpenThread instance.
@@ -154,6 +61,9 @@ OTAPI uint32_t OTCALL otDatasetGetDelayTimerMinimal(otInstance *aInstance);
 
 /**
  * Set minimal delay timer.
+ *
+ * @note This API is reserved for testing and demo purposes only. Changing settings with
+ * this API will render a production application non-compliant with the Thread Specification.
  *
  * @param[in]  aInstance           A pointer to an OpenThread instance.
  * @param[in]  aDelayTimerMinimal  The value of minimal delay timer (in ms).

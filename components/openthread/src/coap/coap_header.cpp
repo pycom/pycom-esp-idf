@@ -83,7 +83,7 @@ otError Header::FromMessage(const Message &aMessage, uint16_t aMetadataSize)
     VerifyOrExit(GetVersion() == 1);
 
     tokenLength = GetTokenLength();
-    VerifyOrExit(tokenLength <= kMaxTokenLength && (mHeaderLength + tokenLength) <= length);
+    VerifyOrExit(tokenLength <= OT_COAP_MAX_TOKEN_LENGTH && (mHeaderLength + tokenLength) <= length);
     aMessage.Read(offset, tokenLength, mHeader.mBytes + mHeaderLength);
     mHeaderLength += tokenLength;
     offset += tokenLength;
@@ -170,7 +170,7 @@ otError Header::FromMessage(const Message &aMessage, uint16_t aMetadataSize)
         VerifyOrExit(mHeaderLength + optionLength <= length);
 
         aMessage.Read(offset, optionLength, mHeader.mBytes + mHeaderLength);
-        mHeaderLength += static_cast<uint8_t>(optionLength);
+        mHeaderLength += optionLength;
         offset += optionLength;
     }
 
@@ -249,7 +249,7 @@ otError Header::AppendOption(const Option &aOption)
     memcpy(cur, aOption.mValue, aOption.mLength);
     cur += aOption.mLength;
 
-    mHeaderLength += static_cast<uint8_t>(cur - buf);
+    mHeaderLength += static_cast<uint16_t>(cur - buf);
     mOptionLast = aOption.mNumber;
 
 exit:
@@ -275,6 +275,17 @@ otError Header::AppendUintOption(uint16_t aNumber, uint32_t aValue)
     return AppendOption(coapOption);
 }
 
+otError Header::AppendStringOption(uint16_t aNumber, const char *aValue)
+{
+    Option coapOption;
+
+    coapOption.mNumber = aNumber;
+    coapOption.mLength = static_cast<uint16_t>(strlen(aValue));
+    coapOption.mValue  = reinterpret_cast<const uint8_t *>(aValue);
+
+    return AppendOption(coapOption);
+}
+
 otError Header::AppendObserveOption(uint32_t aObserve)
 {
     return AppendUintOption(OT_COAP_OPTION_OBSERVE, aObserve & 0xFFFFFF);
@@ -282,10 +293,10 @@ otError Header::AppendObserveOption(uint32_t aObserve)
 
 otError Header::AppendUriPathOptions(const char *aUriPath)
 {
-    otError        error = OT_ERROR_NONE;
-    const char *   cur   = aUriPath;
-    const char *   end;
-    Header::Option coapOption;
+    otError     error = OT_ERROR_NONE;
+    const char *cur   = aUriPath;
+    const char *end;
+    Option      coapOption;
 
     coapOption.mNumber = OT_COAP_OPTION_URI_PATH;
 
@@ -297,12 +308,15 @@ otError Header::AppendUriPathOptions(const char *aUriPath)
         cur = end + 1;
     }
 
-    coapOption.mLength = static_cast<uint16_t>(strlen(cur));
-    coapOption.mValue  = reinterpret_cast<const uint8_t *>(cur);
-    SuccessOrExit(error = AppendOption(coapOption));
+    SuccessOrExit(error = AppendStringOption(OT_COAP_OPTION_URI_PATH, cur));
 
 exit:
     return error;
+}
+
+otError Header::AppendProxyUriOption(const char *aProxyUri)
+{
+    return AppendStringOption(OT_COAP_OPTION_PROXY_URI, aProxyUri);
 }
 
 otError Header::AppendContentFormatOption(otCoapOptionContentFormat aContentFormat)
@@ -317,13 +331,7 @@ otError Header::AppendMaxAgeOption(uint32_t aMaxAge)
 
 otError Header::AppendUriQueryOption(const char *aUriQuery)
 {
-    Option coapOption;
-
-    coapOption.mNumber = OT_COAP_OPTION_URI_QUERY;
-    coapOption.mLength = static_cast<uint16_t>(strlen(aUriQuery));
-    coapOption.mValue  = reinterpret_cast<const uint8_t *>(aUriQuery);
-
-    return AppendOption(coapOption);
+    return AppendStringOption(OT_COAP_OPTION_URI_QUERY, aUriQuery);
 }
 
 const Header::Option *Header::GetFirstOption(void)
@@ -397,7 +405,7 @@ const Header::Option *Header::GetNextOption(void)
     mOption.mLength = optionLength;
     mOption.mValue  = mHeader.mBytes + mNextOptionOffset;
     mNextOptionOffset += optionLength;
-    rval = static_cast<Header::Option *>(&mOption);
+    rval = static_cast<Option *>(&mOption);
 
 exit:
     return rval;
@@ -416,9 +424,9 @@ exit:
 
 void Header::SetToken(uint8_t aTokenLength)
 {
-    uint8_t token[kMaxTokenLength] = {0};
+    uint8_t token[OT_COAP_MAX_TOKEN_LENGTH] = {0};
 
-    assert(aTokenLength <= kMaxTokenLength);
+    assert(aTokenLength <= sizeof(token));
 
     Random::FillBuffer(token, aTokenLength);
 
@@ -431,6 +439,103 @@ void Header::SetDefaultResponseHeader(const Header &aRequestHeader)
     SetMessageId(aRequestHeader.GetMessageId());
     SetToken(aRequestHeader.GetToken(), aRequestHeader.GetTokenLength());
 }
+
+#if OPENTHREAD_ENABLE_APPLICATION_COAP
+const char *Header::CodeToString(void) const
+{
+    const char *mCodeString;
+
+    switch (mHeader.mFields.mCode)
+    {
+    case OT_COAP_CODE_INTERNAL_ERROR:
+        mCodeString = "InternalError";
+        break;
+    case OT_COAP_CODE_METHOD_NOT_ALLOWED:
+        mCodeString = "MethodNotAllowed";
+        break;
+    case OT_COAP_CODE_CONTENT:
+        mCodeString = "Content";
+        break;
+    case OT_COAP_CODE_EMPTY:
+        mCodeString = "Empty";
+        break;
+    case OT_COAP_CODE_GET:
+        mCodeString = "Get";
+        break;
+    case OT_COAP_CODE_POST:
+        mCodeString = "Post";
+        break;
+    case OT_COAP_CODE_PUT:
+        mCodeString = "Put";
+        break;
+    case OT_COAP_CODE_DELETE:
+        mCodeString = "Delete";
+        break;
+    case OT_COAP_CODE_NOT_FOUND:
+        mCodeString = "NotFound";
+        break;
+    case OT_COAP_CODE_UNSUPPORTED_FORMAT:
+        mCodeString = "UnsupportedFormat";
+        break;
+    case OT_COAP_CODE_RESPONSE_MIN:
+        mCodeString = "ResponseMin";
+        break;
+    case OT_COAP_CODE_CREATED:
+        mCodeString = "Created";
+        break;
+    case OT_COAP_CODE_DELETED:
+        mCodeString = "Deleted";
+        break;
+    case OT_COAP_CODE_VALID:
+        mCodeString = "Valid";
+        break;
+    case OT_COAP_CODE_CHANGED:
+        mCodeString = "Changed";
+        break;
+    case OT_COAP_CODE_BAD_REQUEST:
+        mCodeString = "BadRequest";
+        break;
+    case OT_COAP_CODE_UNAUTHORIZED:
+        mCodeString = "Unauthorized";
+        break;
+    case OT_COAP_CODE_BAD_OPTION:
+        mCodeString = "BadOption";
+        break;
+    case OT_COAP_CODE_FORBIDDEN:
+        mCodeString = "Forbidden";
+        break;
+    case OT_COAP_CODE_NOT_ACCEPTABLE:
+        mCodeString = "NotAcceptable";
+        break;
+    case OT_COAP_CODE_PRECONDITION_FAILED:
+        mCodeString = "PreconditionFailed";
+        break;
+    case OT_COAP_CODE_REQUEST_TOO_LARGE:
+        mCodeString = "RequestTooLarge";
+        break;
+    case OT_COAP_CODE_NOT_IMPLEMENTED:
+        mCodeString = "NotImplemented";
+        break;
+    case OT_COAP_CODE_BAD_GATEWAY:
+        mCodeString = "BadGateway";
+        break;
+    case OT_COAP_CODE_SERVICE_UNAVAILABLE:
+        mCodeString = "ServiceUnavailable";
+        break;
+    case OT_COAP_CODE_GATEWAY_TIMEOUT:
+        mCodeString = "GatewayTimeout";
+        break;
+    case OT_COAP_CODE_PROXY_NOT_SUPPORTED:
+        mCodeString = "ProxyNotSupported";
+        break;
+    default:
+        mCodeString = "Unknown";
+        break;
+    }
+
+    return mCodeString;
+}
+#endif // OPENTHREAD_ENABLE_APPLICATION_COAP
 
 } // namespace Coap
 } // namespace ot

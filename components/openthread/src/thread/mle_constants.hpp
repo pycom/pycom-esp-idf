@@ -48,54 +48,39 @@ enum
 {
     kMaxChildren               = OPENTHREAD_CONFIG_MAX_CHILDREN,
     kMaxChildKeepAliveAttempts = 6, ///< Maximum keep alive attempts before attempting to reattach to a new Parent
-    kFailedChildTransmissions  = 6, ///< FAILED_CHILD_TRANSMISSIONS
+    kFailedChildTransmissions  = OPENTHREAD_CONFIG_FAILED_CHILD_TRANSMISSIONS, ///< FAILED_CHILD_TRANSMISSIONS
 };
 
 /**
  * MLE Protocol Constants
  *
  */
-// orig values
-/*enum
-{
-    kVersion                       = 2,     ///< MLE Version
-    kUdpPort                       = 19788, ///< MLE UDP Port
-    kParentRequestRouterTimeout    = 750,   ///< Router Parent Request timeout
-    kParentRequestReedTimeout      = 1250,  ///< Router and REEDs Parent Request timeout
-    kAttachStartJitter             = 50,    ///< Maximum jitter time added to start of attach.
-    kAnnounceProcessTimeout        = 250,   ///< Timeout after receiving Announcement before channel/pan-id change
-    kAnnounceTimeout               = 1400,  ///< Total timeout used for sending Announcement messages
-    kMinAnnounceDelay              = 80,    ///< Minimum delay between Announcement messages
-    kParentResponseMaxDelayRouters = 500,   ///< Maximum delay for response for Parent Request sent to routers only
-    kParentResponseMaxDelayAll     = 1000,  ///< Maximum delay for response for Parent Request sent to all devices
-    kUnicastRetransmissionDelay    = 1000,  ///< Base delay before retransmitting an MLE unicast.
-    kMaxTransmissionCount          = 3,     ///< Maximum number of times an MLE message may be transmitted.
-    kMaxResponseDelay              = 1000,  ///< Maximum delay before responding to a multicast request
-    kMaxChildIdRequestTimeout      = 5000,  ///< Maximum delay for receiving a Child ID Request
-    kMaxChildUpdateResponseTimeout = 2000,  ///< Maximum delay for receiving a Child Update Response
-    kMaxLinkRequestTimeout         = 2000,  ///< Maximum delay for receiving a Link Accept
-    kMinTimeout = (((kMaxChildKeepAliveAttempts + 1) * kUnicastRetransmissionDelay) / 1000), ///< Minimum timeout(s)
-};*/
-
 enum
 {
-    kVersion                       = 2,     ///< MLE Version
-    kUdpPort                       = 19788, ///< MLE UDP Port
-    kParentRequestRouterTimeout    = 20000,   ///< Router Parent Request timeout
-    kParentRequestReedTimeout      = 20000,  ///< Router and REEDs Parent Request timeout
-    kAttachStartJitter             = 50,    ///< Maximum jitter time added to start of attach.
-    kAnnounceProcessTimeout        = 250,   ///< Timeout after receiving Announcement before channel/pan-id change
-    kAnnounceTimeout               = 8000,  ///< Total timeout used for sending Announcement messages
-    kMinAnnounceDelay              = 2000,    ///< Minimum delay between Announcement messages
-    kParentResponseMaxDelayRouters = 1000,   ///< Maximum delay for response for Parent Request sent to routers only
-    kParentResponseMaxDelayAll     = 2000,  ///< Maximum delay for response for Parent Request sent to all devices
-    kUnicastRetransmissionDelay    = 1000,  ///< Base delay before retransmitting an MLE unicast.
-    kMaxTransmissionCount          = 5,     ///< Maximum number of times an MLE message may be transmitted.
-    kMaxResponseDelay              = 1000,  ///< Maximum delay before responding to a multicast request
-    kMaxChildIdRequestTimeout      = 20000,  ///< Maximum delay for receiving a Child ID Request
-    kMaxChildUpdateResponseTimeout = 20000,  ///< Maximum delay for receiving a Child Update Response
-    kMaxLinkRequestTimeout         = 20000,  ///< Maximum delay for receiving a Link Accept
-    kMinTimeout = (((kMaxChildKeepAliveAttempts + 1) * kUnicastRetransmissionDelay) / 1000), ///< Minimum timeout(s)
+    kThreadVersion                  = 2,     ///< Thread Version
+    kUdpPort                        = 19788, ///< MLE UDP Port
+    kParentRequestRouterTimeout     = 10000,   ///< Router Parent Request timeout
+    kParentRequestReedTimeout       = 10000,  ///< Router and REEDs Parent Request timeout
+    kAttachStartJitter              = 50,    ///< Maximum jitter time added to start of attach.
+    kAnnounceProcessTimeout         = 2500,   ///< Timeout after receiving Announcement before channel/pan-id change
+    kAnnounceTimeout                = 5000,  ///< Total timeout used for sending Announcement messages
+    kMinAnnounceDelay               = 500,    ///< Minimum delay between Announcement messages
+    kParentResponseMaxDelayRouters  = 1000,   ///< Maximum delay for response for Parent Request sent to routers only
+    kParentResponseMaxDelayAll      = 1000,  ///< Maximum delay for response for Parent Request sent to all devices
+    kUnicastRetransmissionDelay     = 1000,  ///< Base delay before retransmitting an MLE unicast.
+    kChildUpdateRequestPendingDelay = 100,   ///< Delay (in ms) for aggregating Child Update Request.
+    kMaxTransmissionCount           = 5,     ///< Maximum number of times an MLE message may be transmitted.
+    kMaxResponseDelay               = 1000,  ///< Maximum delay before responding to a multicast request
+    kMaxChildIdRequestTimeout       = 10000,  ///< Maximum delay for receiving a Child ID Request
+    kMaxChildUpdateResponseTimeout  = 10000,  ///< Maximum delay for receiving a Child Update Response
+    kMaxLinkRequestTimeout          = 10000,  ///< Maximum delay for receiving a Link Accept
+    kMinTimeoutKeepAlive            = (((kMaxChildKeepAliveAttempts + 1) * kUnicastRetransmissionDelay) /
+                            1000), ///< Minimum timeout(s) for keep alive
+    kMinTimeoutDataPoll             = (OPENTHREAD_CONFIG_MINIMUM_POLL_PERIOD +
+                           OPENTHREAD_CONFIG_FAILED_CHILD_TRANSMISSIONS * OPENTHREAD_CONFIG_RETX_POLL_PERIOD) /
+                          1000, ///< Minimum timeout(s) for data poll
+    kMinTimeout = (kMinTimeoutKeepAlive >= kMinTimeoutDataPoll ? kMinTimeoutKeepAlive
+                                                               : kMinTimeoutDataPoll), ///< Minimum timeout(s)
 };
 
 enum
@@ -112,13 +97,21 @@ enum
  */
 enum
 {
-    kAdvertiseIntervalMin       = 10,                                       ///< ADVERTISEMENT_I_MIN (sec)
-    kAdvertiseIntervalMax       = 32,                                      ///< ADVERTISEMENT_I_MAX (sec)
-    kFailedRouterTransmissions  = 4,                                       ///< FAILED_ROUTER_TRANSMISSIONS
-    kRouterIdReuseDelay         = 100,                                     ///< ID_REUSE_DELAY (sec)
-    kRouterIdSequencePeriod     = 10,                                      ///< ID_SEQUENCE_PERIOD (sec)
-    kMaxNeighborAge             = 100,                                     ///< MAX_NEIGHBOR_AGE (sec)
-    kMaxRouteCost               = 16,                                      ///< MAX_ROUTE_COST
+    kAdvertiseIntervalMin = 1, ///< ADVERTISEMENT_I_MIN (sec)
+#if OPENTHREAD_CONFIG_ENABLE_LONG_ROUTES
+    kAdvertiseIntervalMax = 5, ///< ADVERTISEMENT_I_MAX (sec) proposal
+#else
+    kAdvertiseIntervalMax = 32, ///< ADVERTISEMENT_I_MAX (sec)
+#endif
+    kFailedRouterTransmissions = 4,   ///< FAILED_ROUTER_TRANSMISSIONS
+    kRouterIdReuseDelay        = 100, ///< ID_REUSE_DELAY (sec)
+    kRouterIdSequencePeriod    = 10,  ///< ID_SEQUENCE_PERIOD (sec)
+    kMaxNeighborAge            = 100, ///< MAX_NEIGHBOR_AGE (sec)
+#if OPENTHREAD_CONFIG_ENABLE_LONG_ROUTES
+    kMaxRouteCost = 127, ///< MAX_ROUTE_COST proposal
+#else
+    kMaxRouteCost         = 16, ///< MAX_ROUTE_COST
+#endif
     kMaxRouterId                = 62,                                      ///< MAX_ROUTER_ID
     kInvalidRouterId            = kMaxRouterId + 1,                        ///< Value indicating incorrect Router Id
     kMaxRouters                 = OPENTHREAD_CONFIG_MAX_ROUTERS,           ///< MAX_ROUTERS
@@ -149,10 +142,10 @@ enum
 
 enum
 {
-    kLinkQuality3LinkCost = 1,  ///< Link Cost for Link Quality 3
-    kLinkQuality2LinkCost = 2,  ///< Link Cost for Link Quality 2
-    kLinkQuality1LinkCost = 4,  ///< Link Cost for Link Quality 1
-    kLinkQuality0LinkCost = 16, ///< Link Cost for Link Quality 0
+    kLinkQuality3LinkCost = 1,             ///< Link Cost for Link Quality 3
+    kLinkQuality2LinkCost = 2,             ///< Link Cost for Link Quality 2
+    kLinkQuality1LinkCost = 4,             ///< Link Cost for Link Quality 1
+    kLinkQuality0LinkCost = kMaxRouteCost, ///< Link Cost for Link Quality 0
 };
 
 /**

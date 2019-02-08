@@ -72,7 +72,8 @@ enum
  * DHCPv6 Message Types
  *
  */
-typedef enum Type {
+typedef enum Type
+{
     kTypeSolicit            = 1,
     kTypeAdvertise          = 2,
     kTypeRequest            = 3,
@@ -149,7 +150,8 @@ private:
  * DHCPv6 Option Codes
  *
  */
-typedef enum Code {
+typedef enum Code
+{
     kOptionClientIdentifier          = 1,
     kOptionServerIdentifier          = 2,
     kOptionIaNa                      = 3,
@@ -233,7 +235,8 @@ private:
  * Duid Type
  *
  */
-typedef enum DuidType {
+typedef enum DuidType
+{
     kDuidLLT = 1,
     kDuidEN  = 2,
     kDuidLL  = 3,
@@ -469,7 +472,7 @@ public:
      * @returns A pointer to the IPv6 address.
      *
      */
-    otIp6Address *GetAddress(void) { return &mAddress; }
+    Ip6::Address &GetAddress(void) { return mAddress; }
 
     /**
      * This method sets the IPv6 address.
@@ -512,7 +515,7 @@ public:
     void SetValidLifetime(uint32_t aValidLifetime) { mValidLifetime = HostSwap32(aValidLifetime); }
 
 private:
-    otIp6Address mAddress;           ///< IPv6 address
+    Ip6::Address mAddress;           ///< IPv6 address
     uint32_t     mPreferredLifetime; ///< Preferred Lifetime
     uint32_t     mValidLifetime;     ///< Valid Lifetime
 } OT_TOOL_PACKED_END;
@@ -555,7 +558,8 @@ private:
  * Status Code
  *
  */
-typedef enum Status {
+typedef enum Status
+{
     kStatusSuccess      = 0,
     kStatusUnspecFail   = 1,
     kStatusNoAddrsAvail = 2,

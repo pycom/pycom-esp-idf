@@ -249,7 +249,7 @@ Router *RouterTable::Allocate(uint8_t aRouterId)
     mRouterIdSequenceLastUpdated = TimerMilli::GetNow();
     GetNetif().GetMle().ResetAdvertiseInterval();
 
-    otLogInfoMle(GetInstance(), "Allocate router id %d", aRouterId);
+    otLogNoteMle("Allocate router id %d", aRouterId);
 
 exit:
     return rval;
@@ -289,10 +289,10 @@ otError RouterTable::Release(uint8_t aRouterId)
     mRouterIdSequenceLastUpdated = TimerMilli::GetNow();
 
     netif.GetAddressResolver().Remove(aRouterId);
-    netif.GetNetworkDataLeader().RemoveBorderRouter(rloc16);
+    netif.GetNetworkDataLeader().RemoveBorderRouter(rloc16, NetworkData::Leader::kMatchModeRouterId);
     netif.GetMle().ResetAdvertiseInterval();
 
-    otLogInfoMle(GetInstance(), "Release router id %d", aRouterId);
+    otLogNoteMle("Release router id %d", aRouterId);
 
 exit:
     return error;
@@ -333,6 +333,28 @@ void RouterTable::RemoveNeighbor(Router &aRouter)
         // Clear all EID-to-RLOC entries assossiated with the router.
         netif.GetAddressResolver().Remove(aRouter.GetRouterId());
     }
+}
+
+uint8_t RouterTable::GetActiveLinkCount(void) const
+{
+    uint8_t activeLinks = 0;
+
+    for (int i = 0; i < Mle::kMaxRouters; i++)
+    {
+        const Router &cur = mRouters[i];
+
+        if (cur.GetRloc16() == 0xffff)
+        {
+            break;
+        }
+
+        if (cur.GetState() == Neighbor::kStateValid)
+        {
+            activeLinks++;
+        }
+    }
+
+    return activeLinks;
 }
 
 Router *RouterTable::GetNeighbor(uint16_t aRloc16)
@@ -534,14 +556,11 @@ void RouterTable::ProcessTlv(const Mle::RouteTlv &aTlv)
         }
         else
         {
-            if (IsAllocated(i))
-            {
-                Router *router = GetRouter(i);
+            Router *router = GetRouter(i);
 
-                assert(router != NULL);
-                router->SetNextHop(Mle::kInvalidRouterId);
-                RemoveNeighbor(*router);
-            }
+            assert(router != NULL);
+            router->SetNextHop(Mle::kInvalidRouterId);
+            RemoveNeighbor(*router);
 
             mAllocatedRouterIds[i / 8] &= ~(1 << (i % 8));
         }

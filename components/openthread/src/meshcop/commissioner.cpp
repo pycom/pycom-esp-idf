@@ -38,7 +38,6 @@
 #include <stdio.h>
 #include "utils/wrap_string.h"
 
-#include <openthread/types.h>
 #include <openthread/platform/random.h>
 
 #include "coap/coap_header.hpp"
@@ -61,7 +60,6 @@ namespace MeshCoP {
 
 Commissioner::Commissioner(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mState(OT_COMMISSIONER_STATE_DISABLED)
     , mJoinerPort(0)
     , mJoinerRloc(0)
     , mJoinerExpirationTimer(aInstance, HandleJoinerExpirationTimer, this)
@@ -74,8 +72,15 @@ Commissioner::Commissioner(Instance &aInstance)
     , mAnnounceBegin(aInstance)
     , mEnergyScan(aInstance)
     , mPanIdQuery(aInstance)
+    , mState(OT_COMMISSIONER_STATE_DISABLED)
 {
     memset(mJoiners, 0, sizeof(mJoiners));
+
+    mCommissionerAloc.mPrefixLength       = 64;
+    mCommissionerAloc.mPreferred          = true;
+    mCommissionerAloc.mValid              = true;
+    mCommissionerAloc.mScopeOverride      = Ip6::Address::kRealmLocalScope;
+    mCommissionerAloc.mScopeOverrideValid = true;
 }
 
 void Commissioner::AddCoapResources(void)
@@ -122,7 +127,8 @@ otError Commissioner::Stop(void)
     GetNetif().GetCoapSecure().Stop();
 
     mState = OT_COMMISSIONER_STATE_DISABLED;
-    GetNotifier().SetFlags(OT_CHANGED_COMMISSIONER_STATE);
+    GetNetif().RemoveUnicastAddress(mCommissionerAloc);
+    GetNotifier().Signal(OT_CHANGED_COMMISSIONER_STATE);
     RemoveCoapResources();
     ClearJoiners();
     mTransmitAttempts = 0;
@@ -237,11 +243,11 @@ exit:
     {
         if (aEui64)
         {
-            otLogInfoMeshCoP(GetInstance(), "Added Joiner (%s, %s)", aEui64->ToString().AsCString(), aPSKd);
+            otLogInfoMeshCoP("Added Joiner (%s, %s)", aEui64->ToString().AsCString(), aPSKd);
         }
         else
         {
-            otLogInfoMeshCoP(GetInstance(), "Added Joiner (*, %s)", aPSKd);
+            otLogInfoMeshCoP("Added Joiner (*, %s)", aPSKd);
         }
     }
 
@@ -299,15 +305,24 @@ exit:
     {
         if (aEui64)
         {
-            otLogInfoMeshCoP(GetInstance(), "Removed Joiner (%s)", aEui64->ToString().AsCString());
+            otLogInfoMeshCoP("Removed Joiner (%s)", aEui64->ToString().AsCString());
         }
         else
         {
-            otLogInfoMeshCoP(GetInstance(), "Removed Joiner (*)");
+            otLogInfoMeshCoP("Removed Joiner (*)");
         }
     }
 
     return error;
+}
+
+const char *Commissioner::GetProvisioningUrl(uint16_t &aLength) const
+{
+    ProvisioningUrlTlv &provisioningUrl = GetNetif().GetDtls().mProvisioningUrl;
+
+    aLength = provisioningUrl.GetLength();
+
+    return provisioningUrl.GetProvisioningUrl();
 }
 
 otError Commissioner::SetProvisioningUrl(const char *aProvisioningUrl)
@@ -366,7 +381,7 @@ void Commissioner::HandleJoinerExpirationTimer(void)
 
         if (static_cast<int32_t>(now - mJoiners[i].mExpirationTime) >= 0)
         {
-            otLogDebgMeshCoP(GetInstance(), "removing joiner due to timeout or successfully joined");
+            otLogDebgMeshCoP("removing joiner due to timeout or successfully joined");
             RemoveJoiner(&mJoiners[i].mEui64, 0); // remove immediately
         }
     }
@@ -441,7 +456,7 @@ otError Commissioner::SendMgmtCommissionerGetRequest(const uint8_t *aTlvs, uint8
     SuccessOrExit(error = netif.GetCoap().SendMessage(*message, messageInfo,
                                                       Commissioner::HandleMgmtCommissionerGetResponse, this));
 
-    otLogInfoMeshCoP(GetInstance(), "sent MGMT_COMMISSIONER_GET.req to leader");
+    otLogInfoMeshCoP("sent MGMT_COMMISSIONER_GET.req to leader");
 
 exit:
 
@@ -473,7 +488,7 @@ void Commissioner::HandleMgmtCommissisonerGetResponse(Coap::Header *          aH
     OT_UNUSED_VARIABLE(aMessageInfo);
 
     VerifyOrExit(aResult == OT_ERROR_NONE && aHeader->GetCode() == OT_COAP_CODE_CHANGED);
-    otLogInfoMeshCoP(GetInstance(), "received MGMT_COMMISSIONER_GET response");
+    otLogInfoMeshCoP("received MGMT_COMMISSIONER_GET response");
 
 exit:
     return;
@@ -546,7 +561,7 @@ otError Commissioner::SendMgmtCommissionerSetRequest(const otCommissioningDatase
     SuccessOrExit(error = netif.GetCoap().SendMessage(*message, messageInfo,
                                                       Commissioner::HandleMgmtCommissionerSetResponse, this));
 
-    otLogInfoMeshCoP(GetInstance(), "sent MGMT_COMMISSIONER_SET.req to leader");
+    otLogInfoMeshCoP("sent MGMT_COMMISSIONER_SET.req to leader");
 
 exit:
 
@@ -578,7 +593,7 @@ void Commissioner::HandleMgmtCommissisonerSetResponse(Coap::Header *          aH
     OT_UNUSED_VARIABLE(aMessageInfo);
 
     VerifyOrExit(aResult == OT_ERROR_NONE && aHeader->GetCode() == OT_COAP_CODE_CHANGED);
-    otLogInfoMeshCoP(GetInstance(), "received MGMT_COMMISSIONER_SET response");
+    otLogInfoMeshCoP("received MGMT_COMMISSIONER_SET response");
 
 exit:
     return;
@@ -613,7 +628,7 @@ otError Commissioner::SendPetition(void)
     SuccessOrExit(
         error = netif.GetCoap().SendMessage(*message, messageInfo, Commissioner::HandleLeaderPetitionResponse, this));
 
-    otLogInfoMeshCoP(GetInstance(), "sent petition");
+    otLogInfoMeshCoP("sent petition");
 
 exit:
 
@@ -641,8 +656,9 @@ void Commissioner::HandleLeaderPetitionResponse(Coap::Header *          aHeader,
                                                 const Ip6::MessageInfo *aMessageInfo,
                                                 otError                 aResult)
 {
-    (void)aMessageInfo;
+    OT_UNUSED_VARIABLE(aMessageInfo);
 
+    ThreadNetif &            netif = GetNetif();
     StateTlv                 state;
     CommissionerSessionIdTlv sessionId;
     bool                     retransmit = false;
@@ -650,7 +666,7 @@ void Commissioner::HandleLeaderPetitionResponse(Coap::Header *          aHeader,
     VerifyOrExit(mState == OT_COMMISSIONER_STATE_PETITION, mState = OT_COMMISSIONER_STATE_DISABLED);
     VerifyOrExit(aResult == OT_ERROR_NONE && aHeader->GetCode() == OT_COAP_CODE_CHANGED, retransmit = true);
 
-    otLogInfoMeshCoP(GetInstance(), "received Leader Petition response");
+    otLogInfoMeshCoP("received Leader Petition response");
 
     SuccessOrExit(Tlv::GetTlv(*aMessage, Tlv::kState, sizeof(state), state));
     VerifyOrExit(state.IsValid());
@@ -660,6 +676,9 @@ void Commissioner::HandleLeaderPetitionResponse(Coap::Header *          aHeader,
     SuccessOrExit(Tlv::GetTlv(*aMessage, Tlv::kCommissionerSessionId, sizeof(sessionId), sessionId));
     VerifyOrExit(sessionId.IsValid());
     mSessionId = sessionId.GetCommissionerSessionId();
+
+    netif.GetMle().GetCommissionerAloc(mCommissionerAloc.GetAddress(), mSessionId);
+    netif.AddUnicastAddress(mCommissionerAloc);
 
     AddCoapResources();
     mState = OT_COMMISSIONER_STATE_ACTIVE;
@@ -681,7 +700,7 @@ exit:
         }
     }
 
-    GetNotifier().SetFlags(OT_CHANGED_COMMISSIONER_STATE);
+    GetNotifier().Signal(OT_CHANGED_COMMISSIONER_STATE);
 }
 
 otError Commissioner::SendKeepAlive(void)
@@ -715,7 +734,7 @@ otError Commissioner::SendKeepAlive(void)
     SuccessOrExit(
         error = netif.GetCoap().SendMessage(*message, messageInfo, Commissioner::HandleLeaderKeepAliveResponse, this));
 
-    otLogInfoMeshCoP(GetInstance(), "sent keep alive");
+    otLogInfoMeshCoP("sent keep alive");
 
 exit:
 
@@ -743,7 +762,7 @@ void Commissioner::HandleLeaderKeepAliveResponse(Coap::Header *          aHeader
                                                  const Ip6::MessageInfo *aMessageInfo,
                                                  otError                 aResult)
 {
-    (void)aMessageInfo;
+    OT_UNUSED_VARIABLE(aMessageInfo);
 
     StateTlv state;
 
@@ -751,7 +770,7 @@ void Commissioner::HandleLeaderKeepAliveResponse(Coap::Header *          aHeader
     VerifyOrExit(aResult == OT_ERROR_NONE && aHeader->GetCode() == OT_COAP_CODE_CHANGED,
                  mState = OT_COMMISSIONER_STATE_DISABLED);
 
-    otLogInfoMeshCoP(GetInstance(), "received Leader keep-alive response");
+    otLogInfoMeshCoP("received Leader keep-alive response");
 
     SuccessOrExit(Tlv::GetTlv(*aMessage, Tlv::kState, sizeof(state), state));
     VerifyOrExit(state.IsValid());
@@ -764,6 +783,7 @@ exit:
 
     if (mState != OT_COMMISSIONER_STATE_ACTIVE)
     {
+        GetNetif().RemoveUnicastAddress(mCommissionerAloc);
         RemoveCoapResources();
     }
 }
@@ -780,6 +800,8 @@ void Commissioner::HandleRelayReceive(void *               aContext,
 
 void Commissioner::HandleRelayReceive(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
+    OT_UNUSED_VARIABLE(aMessageInfo);
+
     ThreadNetif &          netif = GetNetif();
     otError                error;
     JoinerUdpPortTlv       joinerPort;
@@ -826,7 +848,7 @@ void Commissioner::HandleRelayReceive(Coap::Header &aHeader, Message &aMessage, 
                 error = netif.GetCoapSecure().SetPsk(reinterpret_cast<const uint8_t *>(mJoiners[i].mPsk),
                                                      static_cast<uint8_t>(strlen(mJoiners[i].mPsk)));
                 SuccessOrExit(error);
-                otLogInfoMeshCoP(GetInstance(), "found joiner, starting new session");
+                otLogInfoMeshCoP("found joiner, starting new session");
                 enableJoiner = true;
                 break;
             }
@@ -844,9 +866,9 @@ void Commissioner::HandleRelayReceive(Coap::Header &aHeader, Message &aMessage, 
     mJoinerPort = joinerPort.GetUdpPort();
     mJoinerRloc = joinerRloc.GetJoinerRouterLocator();
 
-    otLogInfoMeshCoP(GetInstance(), "Remove Relay Receive (%02x%02x%02x%02x%02x%02x%02x%02x, 0x%04x)", mJoinerIid[0],
-                     mJoinerIid[1], mJoinerIid[2], mJoinerIid[3], mJoinerIid[4], mJoinerIid[5], mJoinerIid[6],
-                     mJoinerIid[7], mJoinerRloc);
+    otLogInfoMeshCoP("Remove Relay Receive (%02x%02x%02x%02x%02x%02x%02x%02x, 0x%04x)", mJoinerIid[0], mJoinerIid[1],
+                     mJoinerIid[2], mJoinerIid[3], mJoinerIid[4], mJoinerIid[5], mJoinerIid[6], mJoinerIid[7],
+                     mJoinerRloc);
 
     aMessage.SetOffset(offset);
     SuccessOrExit(error = aMessage.SetLength(offset + length));
@@ -858,8 +880,6 @@ void Commissioner::HandleRelayReceive(Coap::Header &aHeader, Message &aMessage, 
     netif.GetCoapSecure().Receive(aMessage, joinerMessageInfo);
 
 exit:
-    OT_UNUSED_VARIABLE(aMessageInfo);
-
     return;
 }
 
@@ -875,14 +895,15 @@ void Commissioner::HandleDatasetChanged(void *               aContext,
 
 void Commissioner::HandleDatasetChanged(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
+    OT_UNUSED_VARIABLE(aMessage);
+
     VerifyOrExit(aHeader.GetType() == OT_COAP_TYPE_CONFIRMABLE && aHeader.GetCode() == OT_COAP_CODE_POST);
 
-    otLogInfoMeshCoP(GetInstance(), "received dataset changed");
-    OT_UNUSED_VARIABLE(aMessage);
+    otLogInfoMeshCoP("received dataset changed");
 
     SuccessOrExit(GetNetif().GetCoap().SendEmptyAck(aHeader, aMessageInfo));
 
-    otLogInfoMeshCoP(GetInstance(), "sent dataset changed acknowledgment");
+    otLogInfoMeshCoP("sent dataset changed acknowledgment");
 
 exit:
     return;
@@ -901,10 +922,11 @@ void Commissioner::HandleJoinerFinalize(void *               aContext,
 void Commissioner::HandleJoinerFinalize(Coap::Header &aHeader, Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     OT_UNUSED_VARIABLE(aMessageInfo);
+
     StateTlv::State    state = StateTlv::kAccept;
     ProvisioningUrlTlv provisioningUrl;
 
-    otLogInfoMeshCoP(GetInstance(), "received joiner finalize");
+    otLogInfoMeshCoP("received joiner finalize");
 
     if (Tlv::GetTlv(aMessage, Tlv::kProvisioningUrl, sizeof(provisioningUrl), provisioningUrl) == OT_ERROR_NONE)
     {
@@ -920,8 +942,7 @@ void Commissioner::HandleJoinerFinalize(Coap::Header &aHeader, Message &aMessage
     uint8_t buf[OPENTHREAD_CONFIG_MESSAGE_BUFFER_SIZE];
     VerifyOrExit(aMessage.GetLength() <= sizeof(buf));
     aMessage.Read(aHeader.GetLength(), aMessage.GetLength() - aHeader.GetLength(), buf);
-    otDumpCertMeshCoP(GetInstance(), "[THCI] direction=recv | type=JOIN_FIN.req |", buf,
-                      aMessage.GetLength() - aHeader.GetLength());
+    otDumpCertMeshCoP("[THCI] direction=recv | type=JOIN_FIN.req |", buf, aMessage.GetLength() - aHeader.GetLength());
 
 exit:
 #endif
@@ -959,7 +980,7 @@ void Commissioner::SendJoinFinalizeResponse(const Coap::Header &aRequestHeader, 
     uint8_t buf[OPENTHREAD_CONFIG_MESSAGE_BUFFER_SIZE];
     VerifyOrExit(message->GetLength() <= sizeof(buf));
     message->Read(responseHeader.GetLength(), message->GetLength() - responseHeader.GetLength(), buf);
-    otDumpCertMeshCoP(GetInstance(), "[THCI] direction=send | type=JOIN_FIN.rsp |", buf,
+    otDumpCertMeshCoP("[THCI] direction=send | type=JOIN_FIN.rsp |", buf,
                       message->GetLength() - responseHeader.GetLength());
 #endif
 
@@ -969,7 +990,7 @@ void Commissioner::SendJoinFinalizeResponse(const Coap::Header &aRequestHeader, 
     extAddr.SetLocal(!extAddr.IsLocal());
     RemoveJoiner(&extAddr, kRemoveJoinerDelay); // remove after kRemoveJoinerDelay (seconds)
 
-    otLogInfoMeshCoP(GetInstance(), "sent joiner finalize response");
+    otLogInfoMeshCoP("sent joiner finalize response");
 
 exit:
 
@@ -986,6 +1007,8 @@ otError Commissioner::SendRelayTransmit(void *aContext, Message &aMessage, const
 
 otError Commissioner::SendRelayTransmit(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
+    OT_UNUSED_VARIABLE(aMessageInfo);
+
     ThreadNetif &          netif = GetNetif();
     otError                error = OT_ERROR_NONE;
     Coap::Header           header;
@@ -996,8 +1019,6 @@ otError Commissioner::SendRelayTransmit(Message &aMessage, const Ip6::MessageInf
     Message *              message;
     uint16_t               offset;
     Ip6::MessageInfo       messageInfo;
-
-    OT_UNUSED_VARIABLE(aMessageInfo);
 
     header.Init(OT_COAP_TYPE_NON_CONFIRMABLE, OT_COAP_CODE_POST);
     header.AppendUriPathOptions(OT_URI_PATH_RELAY_TX);
@@ -1051,10 +1072,10 @@ exit:
     return error;
 }
 
-otError Commissioner::GeneratePSKc(const char *   aPassPhrase,
-                                   const char *   aNetworkName,
-                                   const uint8_t *aExtPanId,
-                                   uint8_t *      aPSKc)
+otError Commissioner::GeneratePSKc(const char *           aPassPhrase,
+                                   const char *           aNetworkName,
+                                   const otExtendedPanId &aExtPanId,
+                                   uint8_t *              aPSKc)
 {
     otError     error      = OT_ERROR_NONE;
     const char *saltPrefix = "Thread";
@@ -1069,7 +1090,7 @@ otError Commissioner::GeneratePSKc(const char *   aPassPhrase,
     memcpy(salt, saltPrefix, strlen(saltPrefix));
     saltLen += static_cast<uint16_t>(strlen(saltPrefix));
 
-    memcpy(salt + saltLen, aExtPanId, OT_EXT_PAN_ID_SIZE);
+    memcpy(salt + saltLen, aExtPanId.m8, sizeof(aExtPanId));
     saltLen += OT_EXT_PAN_ID_SIZE;
 
     memcpy(salt + saltLen, aNetworkName, strlen(aNetworkName));

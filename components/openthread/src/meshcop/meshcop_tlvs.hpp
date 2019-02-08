@@ -39,17 +39,19 @@
 
 #include "utils/wrap_string.h"
 
-#include <openthread/types.h>
+#include <openthread/commissioner.h>
+#include <openthread/dataset.h>
 
 #include "common/crc16.hpp"
 #include "common/encoding.hpp"
 #include "common/message.hpp"
 #include "common/tlvs.hpp"
 #include "meshcop/timestamp.hpp"
+#include "net/ip6_address.hpp"
 
+using ot::Encoding::Reverse32;
 using ot::Encoding::BigEndian::HostSwap16;
 using ot::Encoding::BigEndian::HostSwap32;
-using ot::Encoding::Reverse32;
 
 namespace ot {
 namespace MeshCoP {
@@ -95,6 +97,8 @@ public:
         kVendorSwVersion         = OT_MESHCOP_TLV_VENDOR_SW_VERSION_TLV,    ///< meshcop Vendor SW Version TLV
         kVendorData              = OT_MESHCOP_TLV_VENDOR_DATA_TLV,          ///< meshcop Vendor Data TLV
         kVendorStackVersion      = OT_MESHCOP_TLV_VENDOR_STACK_VERSION_TLV, ///< meshcop Vendor Stack Version TLV
+        kUdpEncapsulation        = OT_MESHCOP_TLV_UDP_ENCAPSULATION_TLV,    ///< meshcop UDP encapsulation TLV
+        kIPv6Address             = OT_MESHCOP_TLV_IPV6_ADDRESS_TLV,         ///< meshcop IPv6 address TLV
         kPendingTimestamp        = OT_MESHCOP_TLV_PENDINGTIMESTAMP,         ///< Pending Timestamp TLV
         kDelayTimer              = OT_MESHCOP_TLV_DELAYTIMER,               ///< Delay Timer TLV
         kChannelMask             = OT_MESHCOP_TLV_CHANNELMASK,              ///< Channel Mask TLV
@@ -176,6 +180,31 @@ public:
      */
     static bool IsValid(const Tlv &aTlv);
 
+} OT_TOOL_PACKED_END;
+
+/**
+ * This class implements extended MeshCoP TLV generation and parsing.
+ *
+ */
+OT_TOOL_PACKED_BEGIN
+class ExtendedTlv : public ot::ExtendedTlv
+{
+public:
+    /**
+     * This method returns the Type value.
+     *
+     * @returns The Type value.
+     *
+     */
+    MeshCoP::Tlv::Type GetType(void) const { return static_cast<MeshCoP::Tlv::Type>(ot::ExtendedTlv::GetType()); }
+
+    /**
+     * This method sets the Type value.
+     *
+     * @param[in]  aType  The Type value.
+     *
+     */
+    void SetType(MeshCoP::Tlv::Type aType) { ot::ExtendedTlv::SetType(static_cast<uint8_t>(aType)); }
 } OT_TOOL_PACKED_END;
 
 /**
@@ -322,7 +351,7 @@ public:
      * @returns The Extended PAN ID value.
      *
      */
-    const uint8_t *GetExtendedPanId(void) const { return mExtendedPanId; }
+    const otExtendedPanId &GetExtendedPanId(void) const { return mExtendedPanId; }
 
     /**
      * This method sets the Extended PAN ID value.
@@ -330,10 +359,10 @@ public:
      * @param[in]  aExtendedPanId  A pointer to the Extended PAN ID value.
      *
      */
-    void SetExtendedPanId(const uint8_t *aExtendedPanId) { memcpy(mExtendedPanId, aExtendedPanId, OT_EXT_PAN_ID_SIZE); }
+    void SetExtendedPanId(const otExtendedPanId &aExtendedPanId) { mExtendedPanId = aExtendedPanId; }
 
 private:
-    uint8_t mExtendedPanId[OT_EXT_PAN_ID_SIZE];
+    otExtendedPanId mExtendedPanId;
 } OT_TOOL_PACKED_END;
 
 /**
@@ -562,7 +591,7 @@ public:
      * @returns The Mesh Local Prefix value.
      *
      */
-    const uint8_t *GetMeshLocalPrefix(void) const { return mMeshLocalPrefix; }
+    const otMeshLocalPrefix &GetMeshLocalPrefix(void) const { return mMeshLocalPrefix; }
 
     /**
      * This method sets the Mesh Local Prefix value.
@@ -570,13 +599,10 @@ public:
      * @param[in]  aMeshLocalPrefix  A pointer to the Mesh Local Prefix value.
      *
      */
-    void SetMeshLocalPrefix(const uint8_t *aMeshLocalPrefix)
-    {
-        memcpy(mMeshLocalPrefix, aMeshLocalPrefix, sizeof(mMeshLocalPrefix));
-    }
+    void SetMeshLocalPrefix(const otMeshLocalPrefix &aMeshLocalPrefix) { mMeshLocalPrefix = aMeshLocalPrefix; }
 
 private:
-    uint8_t mMeshLocalPrefix[8];
+    otMeshLocalPrefix mMeshLocalPrefix;
 } OT_TOOL_PACKED_END;
 
 /**
@@ -1295,7 +1321,7 @@ private:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class ChannelMaskEntry
+class ChannelMaskEntryBase
 {
 public:
     /**
@@ -1336,7 +1362,7 @@ public:
      * @returns The total size of this entry (number of bytes).
      *
      */
-    uint8_t GetSize(void) const { return sizeof(ChannelMaskEntry) + mMaskLength; }
+    uint16_t GetSize(void) const { return sizeof(ChannelMaskEntryBase) + mMaskLength; }
 
     /**
      * This method clears the bit corresponding to @p aChannel in ChannelMask.
@@ -1377,12 +1403,12 @@ public:
     /**
      * This method gets the next Channel Mask Entry in a Channel Mask TLV.
      *
-     * @param[in] aChannelMaskTlv  A pointer to the Channel Mask TLV to which this entry belongs.
+     * @param[in] aChannelMaskBaseTlv  A pointer to the Channel Mask TLV to which this entry belongs.
      *
      * @returns A pointer to next Channel Mask Entry or NULL if none found.
      *
      */
-    const ChannelMaskEntry *GetNext(const Tlv *aChannelMaskTlv) const;
+    const ChannelMaskEntryBase *GetNext(const Tlv *aChannelMaskBaseTlv) const;
 
 private:
     uint8_t mChannelPage;
@@ -1394,7 +1420,7 @@ private:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class ChannelMask0Entry : public ChannelMaskEntry
+class ChannelMaskEntry : public ChannelMaskEntryBase
 {
 public:
     /**
@@ -1414,7 +1440,7 @@ public:
      * @retval FALSE  If the entry does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetChannelPage() == 0 && GetMaskLength() == sizeof(mMask); }
+    bool IsValid(void) const { return GetMaskLength() == sizeof(mMask); }
 
     /**
      * This method returns the Channel Mask value as a `uint32_t` bit mask.
@@ -1441,7 +1467,7 @@ private:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class ChannelMaskTlv : public Tlv
+class ChannelMaskBaseTlv : public Tlv
 {
 public:
     /**
@@ -1469,15 +1495,17 @@ public:
      * @returns A pointer to first Channel Mask Entry or NULL if not found.
      *
      */
-    const ChannelMaskEntry *GetFirstEntry(void) const;
+    const ChannelMaskEntryBase *GetFirstEntry(void) const;
 
     /**
-     * This method gets the Page 0 Channel Mask Entry in the Channel Mask TLV.
+     * This method gets the Channel Mask Entry in the Channel Mask TLV.
      *
-     * @returns A pointer to Page 0 Channel Mask Entry or NULL if not found.
+     * @param[in]  aChannelPage  The ChannelPage value.
+     *
+     * @returns A pointer to Channel Mask Entry or NULL if not found.
      *
      */
-    const ChannelMask0Entry *GetMask0Entry(void) const;
+    const ChannelMaskEntry *GetMaskEntry(uint8_t aChannelPage) const;
 
 } OT_TOOL_PACKED_END;
 
@@ -1486,7 +1514,7 @@ public:
  *
  */
 OT_TOOL_PACKED_BEGIN
-class ChannelMask0Tlv : public ChannelMaskTlv, public ChannelMask0Entry
+class ChannelMaskTlv : public ChannelMaskBaseTlv, public ChannelMaskEntry
 {
 public:
     /**
@@ -1497,7 +1525,7 @@ public:
     {
         SetType(kChannelMask);
         SetLength(sizeof(*this) - sizeof(Tlv));
-        ChannelMask0Entry::Init();
+        ChannelMaskEntry::Init();
     }
 
     /**
@@ -1507,7 +1535,7 @@ public:
      * @retval FALSE  If the TLV does not appear to be well-formed.
      *
      */
-    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv) && ChannelMask0Entry::IsValid(); }
+    bool IsValid(void) const { return GetLength() == sizeof(*this) - sizeof(Tlv) && ChannelMaskEntry::IsValid(); }
 } OT_TOOL_PACKED_END;
 
 /**
@@ -2173,6 +2201,124 @@ private:
         kMajorMask   = 0xf << kMajorOffset,
     };
     uint8_t mMinorMajor;
+} OT_TOOL_PACKED_END;
+
+/**
+ * This class implements IPv6 Address TLV generation and parsing.
+ *
+ */
+OT_TOOL_PACKED_BEGIN
+class IPv6AddressTlv : public Tlv
+{
+public:
+    /**
+     * This method initializes the TLV.
+     *
+     */
+    void Init(void)
+    {
+        SetType(kIPv6Address);
+        SetLength(sizeof(mAddress));
+    }
+
+    /**
+     * This method returns the IPv6 Address.
+     *
+     * @returns A reference to the IPv6 Address.
+     *
+     */
+    const Ip6::Address &GetAddress(void) const { return mAddress; }
+
+    /**
+     * This method sets the IPv6 Address.
+     *
+     * @param[in]   aAddress    A reference to the IPv6 Address.
+     *
+     */
+    void SetAddress(const Ip6::Address &aAddress) { mAddress = aAddress; }
+
+private:
+    Ip6::Address mAddress;
+} OT_TOOL_PACKED_END;
+
+/**
+ * This class implements UDP Encapsulation TLV generation and parsing.
+ *
+ */
+OT_TOOL_PACKED_BEGIN
+class UdpEncapsulationTlv : public ExtendedTlv
+{
+public:
+    /**
+     * This method initializes the TLV.
+     *
+     */
+    void Init(void)
+    {
+        SetType(MeshCoP::Tlv::kUdpEncapsulation);
+        SetLength(sizeof(*this) - sizeof(ExtendedTlv));
+    }
+
+    /**
+     * This method indicates whether or not the TLV appears to be well-formed.
+     *
+     * @retval TRUE   If the TLV appears to be well-formed.
+     * @retval FALSE  If the TLV does not appear to be well-formed.
+     *
+     */
+    bool IsValid(void) const { return GetLength() >= sizeof(*this) - sizeof(ExtendedTlv); }
+
+    /**
+     * This method returns the source port.
+     *
+     * @returns The source port.
+     *
+     */
+    uint16_t GetSourcePort(void) const { return HostSwap16(mSourcePort); }
+
+    /**
+     * This method updates the source port.
+     *
+     * @param[in]   aSourcePort     The source port.
+     *
+     */
+    void SetSourcePort(uint16_t aSourcePort) { mSourcePort = HostSwap16(aSourcePort); }
+
+    /**
+     * This method returns the destination port.
+     *
+     * @returns The destination port.
+     *
+     */
+    uint16_t GetDestinationPort(void) const { return HostSwap16(mDestinationPort); }
+
+    /**
+     * This method updates the destination port.
+     *
+     * @param[in]   aDestinationPort    The destination port.
+     *
+     */
+    void SetDestinationPort(uint16_t aDestinationPort) { mDestinationPort = HostSwap16(aDestinationPort); }
+
+    /**
+     * This method returns the calculated UDP length.
+     *
+     * @returns The calculated UDP length.
+     *
+     */
+    uint16_t GetUdpLength(void) const { return GetLength() - sizeof(mSourcePort) - sizeof(mDestinationPort); }
+
+    /**
+     * This method updates the UDP length.
+     *
+     * @param[in]   aLength     The length of UDP payload in bytes.
+     *
+     */
+    void SetUdpLength(uint16_t aLength) { SetLength(sizeof(mSourcePort) + sizeof(mDestinationPort) + aLength); }
+
+private:
+    uint16_t mSourcePort;
+    uint16_t mDestinationPort;
 } OT_TOOL_PACKED_END;
 
 /**

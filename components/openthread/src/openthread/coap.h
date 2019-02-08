@@ -37,8 +37,8 @@
 
 #include <stdint.h>
 
+#include <openthread/ip6.h>
 #include <openthread/message.h>
-#include <openthread/types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,11 +59,14 @@ extern "C" {
 
 #define OT_DEFAULT_COAP_PORT 5683 ///< Default CoAP port, as specified in RFC 7252
 
+#define OT_COAP_MAX_TOKEN_LENGTH 8 ///< Max token length as specified (RFC 7252).
+
 /**
  * CoAP Type values.
  *
  */
-typedef enum otCoapType {
+typedef enum otCoapType
+{
     OT_COAP_TYPE_CONFIRMABLE     = 0x00, ///< Confirmable
     OT_COAP_TYPE_NON_CONFIRMABLE = 0x10, ///< Non-confirmable
     OT_COAP_TYPE_ACKNOWLEDGMENT  = 0x20, ///< Acknowledgment
@@ -80,7 +83,8 @@ typedef enum otCoapType {
  * CoAP Code values.
  *
  */
-typedef enum otCoapCode {
+typedef enum otCoapCode
+{
     OT_COAP_CODE_EMPTY  = OT_COAP_CODE(0, 0), ///< Empty message code
     OT_COAP_CODE_GET    = OT_COAP_CODE(0, 1), ///< Get
     OT_COAP_CODE_POST   = OT_COAP_CODE(0, 2), ///< Post
@@ -116,7 +120,8 @@ typedef enum otCoapCode {
 /**
  * CoAP Option Numbers
  */
-typedef enum otCoapOptionType {
+typedef enum otCoapOptionType
+{
     OT_COAP_OPTION_IF_MATCH       = 1,  ///< If-Match
     OT_COAP_OPTION_URI_HOST       = 3,  ///< Uri-Host
     OT_COAP_OPTION_E_TAG          = 4,  ///< ETag
@@ -148,19 +153,148 @@ typedef struct otCoapOption
 
 /**
  * CoAP Content Format codes.  The full list is documented at
- * https://tools.ietf.org/html/rfc7252#page-92
- *
+ * https://www.iana.org/assignments/core-parameters/core-parameters.xhtml#content-formats
  */
-typedef enum otCoapOptionContentFormat {
-    OT_COAP_OPTION_CONTENT_FORMAT_TEXT_PLAIN   = 0,  ///< text/plain
-    OT_COAP_OPTION_CONTENT_FORMAT_LINK_FORMAT  = 40, ///< application/link-format
-    OT_COAP_OPTION_CONTENT_FORMAT_XML          = 41, ///< application/xml
-    OT_COAP_OPTION_CONTENT_FORMAT_OCTET_STREAM = 42, ///< application/octet-stream
-    OT_COAP_OPTION_CONTENT_FORMAT_EXI          = 47, ///< application/exi
-    OT_COAP_OPTION_CONTENT_FORMAT_JSON         = 50, ///< application/json
+typedef enum otCoapOptionContentFormat
+{
+    /**
+     * text/plain; charset=utf-8: [RFC2046][RFC3676][RFC5147]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_TEXT_PLAIN = 0,
+
+    /**
+     * application/cose; cose-type="cose-encrypt0": [RFC8152]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_COSE_ENCRYPT0 = 16,
+
+    /**
+     * application/cose; cose-type="cose-mac0": [RFC8152]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_COSE_MAC0 = 17,
+
+    /**
+     * application/cose; cose-type="cose-sign1": [RFC8152]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_COSE_SIGN1 = 18,
+
+    /**
+     * application/link-format: [RFC6690]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_LINK_FORMAT = 40,
+
+    /**
+     * application/xml: [RFC3023]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_XML = 41,
+
+    /**
+     * application/octet-stream: [RFC2045][RFC2046]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_OCTET_STREAM = 42,
+
+    /**
+     * application/exi:
+     * ["Efficient XML Interchange (EXI) Format 1.0 (Second Edition)", February 2014]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_EXI = 47,
+
+    /**
+     * application/json: [RFC7159]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_JSON = 50,
+
+    /**
+     * application/json-patch+json: [RFC6902]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_JSON_PATCH_JSON = 51,
+
+    /**
+     * application/merge-patch+json: [RFC7396]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_MERGE_PATCH_JSON = 52,
+
+    /**
+     * application/cbor: [RFC7049]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_CBOR = 60,
+
+    /**
+     * application/cwt: [RFC8392]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_CWT = 61,
+
+    /**
+     * application/cose; cose-type="cose-encrypt": [RFC8152]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_COSE_ENCRYPT = 96,
+
+    /**
+     * application/cose; cose-type="cose-mac": [RFC8152]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_COSE_MAC = 97,
+
+    /**
+     * application/cose; cose-type="cose-sign": [RFC8152]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_COSE_SIGN = 98,
+
+    /**
+     * application/cose-key: [RFC8152]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_COSE_KEY = 101,
+
+    /**
+     * application/cose-key-set: [RFC8152]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_COSE_KEY_SET = 102,
+
+    /**
+     * application/senml+json: [RFC8428]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_SENML_JSON = 110,
+
+    /**
+     * application/sensml+json: [RFC8428]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_SENSML_JSON = 111,
+
+    /**
+     * application/senml+cbor: [RFC8428]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_SENML_CBOR = 112,
+
+    /**
+     * application/sensml+cbor: [RFC8428]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_SENSML_CBOR = 113,
+
+    /**
+     * application/senml-exi: [RFC8428]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_SENML_EXI = 114,
+
+    /**
+     * application/sensml-exi: [RFC8428]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_SENSML_EXI = 115,
+
+    /**
+     * application/coap-group+json: [RFC7390]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_COAP_GROUP_JSON = 256,
+
+    /**
+     * application/senml+xml: [RFC8428]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_SENML_XML = 310,
+
+    /**
+     * application/sensml+xml: [RFC8428]
+     */
+    OT_COAP_OPTION_CONTENT_FORMAT_SENSML_XML = 311
 } otCoapOptionContentFormat;
 
-#define OT_COAP_HEADER_MAX_LENGTH 128 ///< Max CoAP header length (bytes)
+#define OT_COAP_HEADER_MAX_LENGTH 512 ///< Max CoAP header length (bytes)
 
 /**
  * This structure represents a CoAP header.
@@ -178,7 +312,7 @@ typedef struct otCoapHeader
         } mFields;                                 ///< Structure representing a CoAP base header
         uint8_t mBytes[OT_COAP_HEADER_MAX_LENGTH]; ///< The raw byte encoding for the CoAP header
     } mHeader;                                     ///< The CoAP header encoding
-    uint8_t      mHeaderLength;                    ///< The CoAP header length (bytes)
+    uint16_t     mHeaderLength;                    ///< The CoAP header length (bytes)
     uint16_t     mOptionLast;                      ///< The last CoAP Option Number value
     uint16_t     mFirstOptionOffset;               ///< The byte offset for the first CoAP Option
     uint16_t     mNextOptionOffset;                ///< The byte offset for the next CoAP Option
@@ -323,7 +457,7 @@ otError otCoapHeaderAppendUintOption(otCoapHeader *aHeader, uint16_t aNumber, ui
 otError otCoapHeaderAppendObserveOption(otCoapHeader *aHeader, uint32_t aObserve);
 
 /**
- * This function appends an Uri-Path option.
+ * This function appends a Uri-Path option.
  *
  * @param[inout]  aHeader   A pointer to the CoAP header.
  * @param[in]     aUriPath  A pointer to a NULL-terminated string.
@@ -334,6 +468,19 @@ otError otCoapHeaderAppendObserveOption(otCoapHeader *aHeader, uint32_t aObserve
  *
  */
 otError otCoapHeaderAppendUriPathOptions(otCoapHeader *aHeader, const char *aUriPath);
+
+/**
+ * This function appends a Proxy-Uri option.
+ *
+ * @param[inout]  aHeader   A pointer to the CoAP header.
+ * @param[in]     aUriPath  A pointer to a NULL-terminated string.
+ *
+ * @retval OT_ERROR_NONE          Successfully appended the option.
+ * @retval OT_ERROR_INVALID_ARGS  The option type is not equal or greater than the last option type.
+ * @retval OT_ERROR_NO_BUFS       The option length exceeds the buffer size.
+ *
+ */
+otError otCoapHeaderAppendProxyUriOption(otCoapHeader *aHeader, const char *aUriPath);
 
 /**
  * This function appends a Max-Age option.
@@ -369,7 +516,7 @@ otError otCoapHeaderAppendUriQueryOption(otCoapHeader *aHeader, const char *aUri
  * @retval OT_ERROR_NO_BUFS  Header Payload Marker exceeds the buffer size.
  *
  */
-void otCoapHeaderSetPayloadMarker(otCoapHeader *aHeader);
+otError otCoapHeaderSetPayloadMarker(otCoapHeader *aHeader);
 
 /**
  * This function sets the Message ID value.
@@ -399,6 +546,16 @@ otCoapType otCoapHeaderGetType(const otCoapHeader *aHeader);
  *
  */
 otCoapCode otCoapHeaderGetCode(const otCoapHeader *aHeader);
+
+/**
+ * This method returns the CoAP Code as human readable string.
+ *
+ * @param[in]  aHeader    A pointer to the CoAP header.
+ *
+ * @ returns The CoAP Code as string.
+ *
+ */
+const char *otCoapHeaderCodeToString(const otCoapHeader *aHeader);
 
 /**
  * This function returns the Message ID value.
@@ -453,13 +610,17 @@ const otCoapOption *otCoapHeaderGetNextOption(otCoapHeader *aHeader);
 /**
  * This function creates a new message with a CoAP header.
  *
- * @param[in]  aInstance     A pointer to an OpenThread instance.
- * @param[in]  aHeader  A pointer to a CoAP header that is used to create the message.
+ * @note If @p aSettings is 'NULL', the link layer security is enabled and the message priority is set to
+ * OT_MESSAGE_PRIORITY_NORMAL by default.
  *
- * @returns A pointer to the message or NULL if failed to allocate message.
+ * @param[in]  aInstance  A pointer to an OpenThread instance.
+ * @param[in]  aHeader    A pointer to a CoAP header that is used to create the message.
+ * @param[in]  aSettings  A pointer to the message settings or NULL to set default settings.
+ *
+ * @returns A pointer to the message buffer or NULL if no message buffers are available or parameters are invalid.
  *
  */
-otMessage *otCoapNewMessage(otInstance *aInstance, const otCoapHeader *aHeader);
+otMessage *otCoapNewMessage(otInstance *aInstance, const otCoapHeader *aHeader, const otMessageSettings *aSettings);
 
 /**
  * This function sends a CoAP request.
