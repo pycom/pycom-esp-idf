@@ -20,7 +20,8 @@
 
 [submodule "components/aws_iot/aws-iot-device-sdk-embedded-C"]
 	path = components/aws_iot/aws-iot-device-sdk-embedded-C
-	url = https://github.com/espressif/aws-iot-device-sdk-embedded-C.git
+	url = https://github.com/husigeza/aws-iot-device-sdk-embedded-C.git
+	branch = pycom_aws_iot
 
 [submodule "components/nghttp/nghttp2"]
 	path = components/nghttp/nghttp2

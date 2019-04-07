@@ -313,9 +313,8 @@ IoT_Error_t iot_tls_write(Network *pNetwork, unsigned char *pMsg, size_t len, Ti
     TLSDataParams *tlsDataParams = &(pNetwork->tlsDataParams);
 
     for(written_so_far = 0, frags = 0;
-        written_so_far < len && !has_timer_expired(timer); written_so_far += ret, frags++) {
-        while(!has_timer_expired(timer) &&
-              (ret = mbedtls_ssl_write(&(tlsDataParams->ssl), pMsg + written_so_far, len - written_so_far)) <= 0) {
+        written_so_far < len; written_so_far += ret, frags++) {
+        while((ret = mbedtls_ssl_write(&(tlsDataParams->ssl), pMsg + written_so_far, len - written_so_far)) <= 0) {
             if(ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
                 ESP_LOGE(TAG, "failed! mbedtls_ssl_write returned -0x%x", -ret);
                 /* All other negative return values indicate connection needs to be reset.
@@ -333,7 +332,7 @@ IoT_Error_t iot_tls_write(Network *pNetwork, unsigned char *pMsg, size_t len, Ti
 
     if(isErrorFlag) {
         return NETWORK_SSL_WRITE_ERROR;
-    } else if(has_timer_expired(timer) && written_so_far != len) {
+    } else if(written_so_far != len) {
         return NETWORK_SSL_WRITE_TIMEOUT_ERROR;
     }
 
