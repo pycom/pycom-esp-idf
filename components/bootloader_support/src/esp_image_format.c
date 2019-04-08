@@ -18,6 +18,7 @@
 #include <soc/cpu.h>
 #include <esp_image_format.h>
 #include <esp_secure_boot.h>
+#define LOG_LOCAL_LEVEL ESP_LOG_ERROR
 #include <esp_log.h>
 #include <esp_spi_flash.h>
 #include <bootloader_flash.h>

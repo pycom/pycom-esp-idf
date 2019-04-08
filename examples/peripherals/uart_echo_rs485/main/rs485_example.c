@@ -79,7 +79,7 @@ static void echo_task()
 
     // Install UART driver (we don't need an event queue here)
     // In this example we don't even use a buffer for sending data.
-    uart_driver_install(uart_num, BUF_SIZE * 2, 0, 0, NULL, 0);
+    uart_driver_install(uart_num, BUF_SIZE * 2, 0, 0, NULL, 0, NULL);
 
     // Set RS485 half duplex mode
     uart_set_mode(uart_num, UART_MODE_RS485_HALF_DUPLEX);

@@ -29,9 +29,9 @@ TEST_CASE("Can use access() for UART", "[vfs]")
 {
     const char *uarts[] = {"/dev/uart/0", "/dev/uart/1", "/dev/uart/2"};
 
-    uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0);
-    uart_driver_install(UART_NUM_1, 256, 0, 0, NULL, 0);
-    uart_driver_install(UART_NUM_2, 256, 0, 0, NULL, 0);
+    uart_driver_install(UART_NUM_0, 256, 0, 0, NULL, 0, NULL);
+    uart_driver_install(UART_NUM_1, 256, 0, 0, NULL, 0, NULL);
+    uart_driver_install(UART_NUM_2, 256, 0, 0, NULL, 0, NULL);
 
     for (int i = 0; i < sizeof(uarts)/sizeof(uarts[0]); ++i) {
         TEST_ASSERT_EQUAL_MESSAGE(access(uarts[i], F_OK), 0, uarts[i]);

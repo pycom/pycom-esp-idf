@@ -94,7 +94,7 @@ static void uart1_init()
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
     };
     uart_param_config(UART_NUM_1, &uart_config);
-    uart_driver_install(UART_NUM_1, 256, 256, 0, NULL, 0);
+    uart_driver_install(UART_NUM_1, 256, 256, 0, NULL, 0, NULL);
 }
 
 static void send_task(void *param)

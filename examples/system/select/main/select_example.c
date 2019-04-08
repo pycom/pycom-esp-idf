@@ -99,7 +99,7 @@ static void uart1_init()
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
     };
     uart_param_config(UART_NUM_1, &uart_config);
-    uart_driver_install(UART_NUM_1, 256, 0, 0, NULL, 0);
+    uart_driver_install(UART_NUM_1, 256, 0, 0, NULL, 0, NULL);
     UART1.conf0.loopback = 1;
 
     if ((uart_fd = open("/dev/uart/1", O_RDWR | O_NONBLOCK)) == -1) {

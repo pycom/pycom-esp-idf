@@ -402,7 +402,7 @@ static void spp_uart_init(void)
     //Set UART pins
     uart_set_pin(UART_NUM_0, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     //Install UART driver, and get the queue.
-    uart_driver_install(UART_NUM_0, 4096, 8192, 10,&spp_uart_queue,0);
+    uart_driver_install(UART_NUM_0, 4096, 8192, 10, &spp_uart_queue, 0, NULL);
     xTaskCreate(uart_task, "uTask", 2048, (void*)UART_NUM_0, 8, NULL);
 }
 

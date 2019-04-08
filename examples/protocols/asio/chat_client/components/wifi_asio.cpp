@@ -121,7 +121,7 @@ extern "C" void app_main()
     setvbuf(stdout, NULL, _IONBF, 0);
     /* Install UART driver for interrupt-driven reads and writes */
     ESP_ERROR_CHECK( uart_driver_install( (uart_port_t)CONFIG_CONSOLE_UART_NUM,
-            256, 0, 0, NULL, 0) );
+            256, 0, 0, NULL, 0, NULL) );
     /* Tell VFS to use UART driver */
     esp_vfs_dev_uart_use_driver(CONFIG_CONSOLE_UART_NUM);
     esp_vfs_dev_uart_set_rx_line_endings(ESP_LINE_ENDINGS_CR);

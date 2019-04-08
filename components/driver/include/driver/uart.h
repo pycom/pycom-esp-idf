@@ -530,7 +530,9 @@ esp_err_t uart_intr_config(uart_port_t uart_num, const uart_intr_config_t *intr_
  *     - ESP_OK   Success
  *     - ESP_FAIL Parameter error
  */
-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags);
+typedef void (*uart_rx_callback_t)(int uart_id, int rx_byte);
+
+esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback);
 
 /**
  * @brief Uninstall UART driver.

@@ -115,7 +115,7 @@ static void uart_config(uint32_t baud_rate, bool use_ref_tick)
     };
     uart_param_config(UART_NUM1, &uart_config);
     uart_set_pin(UART_NUM1, UART1_TX_PIN, UART1_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    uart_driver_install(UART_NUM1, BUF_SIZE * 2, BUF_SIZE * 2, 20, NULL, 0);
+    uart_driver_install(UART_NUM1, BUF_SIZE * 2, BUF_SIZE * 2, 20, NULL, 0, NULL);
 }
 
 TEST_CASE("test uart get baud-rate","[uart]")
@@ -209,7 +209,7 @@ static void rs485_init()
     // Set UART1 pins(TX: IO4, RX: I05, RTS: IO18, CTS: IO19)
     uart_set_pin(UART_NUM1, UART1_TX_PIN, UART1_RX_PIN, UART1_RTS_PIN, UART_PIN_NO_CHANGE);
     // Install UART driver (we don't need an event queue here)
-    uart_driver_install(UART_NUM1, BUF_SIZE * 2, 0, 0, NULL, 0);
+    uart_driver_install(UART_NUM1, BUF_SIZE * 2, 0, 0, NULL, 0, NULL);
     // Setup rs485 half duplex mode
     //uart_set_rs485_hd_mode(uart_num, true);
     uart_set_mode(UART_NUM1, UART_MODE_RS485_HALF_DUPLEX);

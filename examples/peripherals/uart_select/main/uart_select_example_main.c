@@ -30,7 +30,7 @@ static void uart_select_task()
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
     };
     uart_param_config(UART_NUM_0, &uart_config);
-    uart_driver_install(UART_NUM_0, 2*1024, 0, 0, NULL, 0);
+    uart_driver_install(UART_NUM_0, 2*1024, 0, 0, NULL, 0, NULL);
 
     while (1) {
         int fd;

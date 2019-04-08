@@ -713,6 +713,8 @@ static int uart_find_pattern_from_last(uint8_t* buf, int length, uint8_t pat_chr
     return len;
 }
 
+static uart_rx_callback_t uart_rx_callback[UART_NUM_MAX] = { NULL };
+
 //internal isr handler for default driver code.
 static void uart_rx_intr_handler_default(void *param)
 {
@@ -1082,6 +1084,7 @@ int uart_tx_chars(uart_port_t uart_num, const char* buffer, uint32_t len)
         return 0;
     }
     xSemaphoreTake(p_uart_obj[uart_num]->tx_mux, (portTickType)portMAX_DELAY);
+    xSemaphoreTake(p_uart_obj[uart_num]->tx_done_sem, 0);
     int tx_len = uart_fill_fifo(uart_num, (const char*) buffer, len);
     xSemaphoreGive(p_uart_obj[uart_num]->tx_mux);
     return tx_len;
@@ -1300,7 +1303,7 @@ esp_err_t uart_flush_input(uart_port_t uart_num)
     return ESP_OK;
 }
 
-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags)
+esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback)
 {
     esp_err_t r;
     UART_CHECK((uart_num < UART_NUM_MAX), "uart_num error", ESP_FAIL);
@@ -1359,6 +1362,7 @@ esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_b
         return ESP_FAIL;
     }
 
+    uart_rx_callback[uart_num] = rx_callback;
     r=uart_isr_register(uart_num, uart_rx_intr_handler_default, p_uart_obj[uart_num], intr_alloc_flags, &p_uart_obj[uart_num]->intr_handle);
     if (r!=ESP_OK) goto err;
     uart_intr_config_t uart_intr = {
