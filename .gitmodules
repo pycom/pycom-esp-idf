@@ -18,11 +18,6 @@
 	path = components/coap/libcoap
 	url = https://github.com/obgm/libcoap.git
 
-[submodule "components/aws_iot/aws-iot-device-sdk-embedded-C"]
-	path = components/aws_iot/aws-iot-device-sdk-embedded-C
-	url = https://github.com/husigeza/aws-iot-device-sdk-embedded-C.git
-	branch = pycom_aws_iot
-
 [submodule "components/nghttp/nghttp2"]
 	path = components/nghttp/nghttp2
 	url = https://github.com/nghttp2/nghttp2.git
@@ -42,3 +37,7 @@
 [submodule "components/mbedtls/mbedtls"]
 	path = components/mbedtls/mbedtls
 	url = https://github.com/espressif/mbedtls.git
+[submodule "components/aws_iot/aws-iot-device-sdk-embedded-C"]
+	path = components/aws_iot/aws-iot-device-sdk-embedded-C
+	url = https://github.com/pycom/aws-iot-device-sdk-embedded-C.git
+	branch = pycom_aws_iot
