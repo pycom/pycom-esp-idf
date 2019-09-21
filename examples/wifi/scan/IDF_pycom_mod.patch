@@ -1,0 +1,325 @@
+diff --git a/components/esp32/include/esp_system.h b/components/esp32/include/esp_system.h
+index 05214c8f57bef81e0ca1f089fb327f9bd126b502..2cd66dcd2630a4c063689b51279281388640ff61 100644
+--- a/components/esp32/include/esp_system.h
++++ b/components/esp32/include/esp_system.h
+@@ -329,6 +329,8 @@ typedef struct {
+  */
+ void esp_chip_info(esp_chip_info_t* out_info);
+ 
++uint32_t esp_get_revision(void);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/components/esp32/ld/esp32.spiram.rom-functions-iram.ld b/components/esp32/ld/esp32.spiram.rom-functions-iram.ld
+index d3a264da1947001a514307890bff0f52e55d79fd..4925d42aff276061f566e42e6647170ef8dd7998 100644
+--- a/components/esp32/ld/esp32.spiram.rom-functions-iram.ld
++++ b/components/esp32/ld/esp32.spiram.rom-functions-iram.ld
+@@ -44,6 +44,7 @@
+     *libc-psram-workaround.a:*lib_a-strftime.o(.literal .text .literal.* .text.*)
+     *libc-psram-workaround.a:*lib_a-mktime.o(.literal .text .literal.* .text.*)
+     *libc-psram-workaround.a:*lib_a-syswrite.o(.literal .text .literal.* .text.*)
++    *libc-psram-workaround.a:*lib_a-sysgettod.o(.literal .text .literal.* .text.*)
+     *libc-psram-workaround.a:*lib_a-tzset_r.o(.literal .text .literal.* .text.*)
+     *libc-psram-workaround.a:*lib_a-tzset.o(.literal .text .literal.* .text.*)
+     *libc-psram-workaround.a:*lib_a-toupper.o(.literal .text .literal.* .text.*)
+diff --git a/components/spi_flash/flash_mmap.c b/components/spi_flash/flash_mmap.c
+index d649a74603b89c0b56711802e69e3a23da6b84a9..51f40d13a2136d33a9d2f56dd116bcb69e8b96be 100644
+--- a/components/spi_flash/flash_mmap.c
++++ b/components/spi_flash/flash_mmap.c
+@@ -245,7 +245,9 @@ esp_err_t IRAM_ATTR spi_flash_mmap_pages(const int *pages, size_t page_count, sp
+     */
+     if (!did_flush && need_flush) {
+ #if CONFIG_SPIRAM_SUPPORT
+-        esp_spiram_writeback_cache();
++        if (esp_get_revision() > 0) {
++            esp_spiram_writeback_cache();
++        }
+ #endif
+         Cache_Flush(0);
+         Cache_Flush(1);
+@@ -390,7 +392,9 @@ static inline IRAM_ATTR bool update_written_pages(size_t start_addr, size_t leng
+                cores, or the pointer passed between CPUs.
+             */
+ #if CONFIG_SPIRAM_SUPPORT
+-            esp_spiram_writeback_cache();
++            if (esp_get_revision() > 0) {
++                esp_spiram_writeback_cache();
++            }
+ #endif
+             Cache_Flush(0);
+ #ifndef CONFIG_FREERTOS_UNICORE
+diff --git a/components/esp32/cpu_start.c b/components/esp32/cpu_start.c
+index ed579e8af433c6b379f6f3c8dcd3fac10df6bd83..f98dc62cfcf5c1647f8143eab9d90ddcd5ef289f 100644
+--- a/components/esp32/cpu_start.c
++++ b/components/esp32/cpu_start.c
+@@ -159,24 +159,26 @@ void IRAM_ATTR call_start_cpu0()
+     }
+ 
+ #if CONFIG_SPIRAM_BOOT_INIT
+-    esp_spiram_init_cache();
+-    if (esp_spiram_init() != ESP_OK) {
++    if (esp_get_revision() > 0) {
++    	esp_spiram_init_cache();
++    	if (esp_spiram_init() != ESP_OK) {
+ #if CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
+-        ESP_EARLY_LOGE(TAG, "Failed to init external RAM, needed for external .bss segment");
+-        abort();
++        	ESP_EARLY_LOGE(TAG, "Failed to init external RAM, needed for external .bss segment");
++        	abort();
+ #endif
+ 
+ #if CONFIG_SPIRAM_IGNORE_NOTFOUND
+-        ESP_EARLY_LOGI(TAG, "Failed to init external RAM; continuing without it.");
+-        s_spiram_okay = false;
++        	ESP_EARLY_LOGI(TAG, "Failed to init external RAM; continuing without it.");
++        	s_spiram_okay = false;
+ #else
+-        ESP_EARLY_LOGE(TAG, "Failed to init external RAM!");
+-        abort();
++        	ESP_EARLY_LOGE(TAG, "Failed to init external RAM!");
++        	abort();
+ #endif
+-    }
++    	}
+ # else  // If psram is uninitialized, we need to improve the flash cs timing.
+-    bootloader_common_set_flash_cs_timing();
++    	bootloader_common_set_flash_cs_timing();
+ #endif
++}
+ 
+     ESP_EARLY_LOGI(TAG, "Pro cpu up.");
+ 
+@@ -213,16 +215,20 @@ void IRAM_ATTR call_start_cpu0()
+ 
+ 
+ #if CONFIG_SPIRAM_MEMTEST
+-    if (s_spiram_okay) {
+-        bool ext_ram_ok=esp_spiram_test();
+-        if (!ext_ram_ok) {
+-            ESP_EARLY_LOGE(TAG, "External RAM failed memory test!");
+-            abort();
+-        }
+-    }
++	if (esp_get_revision() > 0) {
++    	if (s_spiram_okay) {
++        	bool ext_ram_ok=esp_spiram_test();
++        	if (!ext_ram_ok) {
++            	ESP_EARLY_LOGE(TAG, "External RAM failed memory test!");
++            	abort();
++        	}
++    	}
++	}
+ #endif
+ #if CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
+-    memset(&_ext_ram_bss_start, 0, (&_ext_ram_bss_end - &_ext_ram_bss_start) * sizeof(_ext_ram_bss_start));
++	if (esp_get_revision() > 0) {
++    	memset(&_ext_ram_bss_start, 0, (&_ext_ram_bss_end - &_ext_ram_bss_start) * sizeof(_ext_ram_bss_start));
++	}
+ #endif
+     /* Initialize heap allocator. WARNING: This *needs* to happen *after* the app cpu has booted.
+        If the heap allocator is initialized first, it will put free memory linked list items into
+@@ -288,17 +294,19 @@ void start_cpu0_default(void)
+     esp_err_t err;
+     esp_setup_syscall_table();
+ 
+-    if (s_spiram_okay) {
++	if (esp_get_revision() > 0) {
++    	if (s_spiram_okay) {
+ #if CONFIG_SPIRAM_BOOT_INIT && (CONFIG_SPIRAM_USE_CAPS_ALLOC || CONFIG_SPIRAM_USE_MALLOC)
+-        esp_err_t r=esp_spiram_add_to_heapalloc();
+-        if (r != ESP_OK) {
+-            ESP_EARLY_LOGE(TAG, "External RAM could not be added to heap!");
+-            abort();
+-        }
++        	esp_err_t r=esp_spiram_add_to_heapalloc();
++        	if (r != ESP_OK) {
++            	ESP_EARLY_LOGE(TAG, "External RAM could not be added to heap!");
++            	abort();
++        	}
+ #if CONFIG_SPIRAM_USE_MALLOC
+-        heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
++        	heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
+ #endif
+ #endif
++		}
+     }
+ 
+ //Enable trace memory and immediately start trace.
+@@ -470,11 +478,13 @@ static void main_task(void* args)
+ 
+     // Now we have startup stack RAM available for heap, enable any DMA pool memory
+ #if CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL
+-    esp_err_t r = esp_spiram_reserve_dma_pool(CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL);
+-    if (r != ESP_OK) {
+-        ESP_EARLY_LOGE(TAG, "Could not reserve internal/DMA pool (error 0x%x)", r);
+-        abort();
+-    }
++	if (esp_get_revision() > 0) {
++    	esp_err_t r = esp_spiram_reserve_dma_pool(CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL);
++    	if (r != ESP_OK) {
++        	ESP_EARLY_LOGE(TAG, "Could not reserve internal/DMA pool (error 0x%x)", r);
++        	abort();
++    	}
++	}
+ #endif
+ 
+     //Initialize task wdt if configured to do so
+diff --git a/components/spi_flash/flash_ops.c b/components/spi_flash/flash_ops.c
+index 7a5315cbf7ce1f1a94667bad4402fcc68f6471db..a2f172b9945d50abdfdebe795bb92adfe50d4061 100644
+--- a/components/spi_flash/flash_ops.c
++++ b/components/spi_flash/flash_ops.c
+@@ -121,14 +121,6 @@ static __attribute__((unused)) bool is_safe_write_address(size_t addr, size_t si
+         UNSAFE_WRITE_ADDRESS;
+     }
+ 
+-    const esp_partition_t *p = esp_ota_get_running_partition();
+-    if (addr >= p->address && addr < p->address + p->size) {
+-        UNSAFE_WRITE_ADDRESS;
+-    }
+-    if (addr < p->address && addr + size > p->address) {
+-        UNSAFE_WRITE_ADDRESS;
+-    }
+-
+     return result;
+ }
+ 
+diff --git a/components/driver/uart.c b/components/driver/uart.c
+index 597993dbb8e7738d63b0fe6dbd9dfa681a8a33e0..5c06c0787f6fbb15af46e9682f74d5c2d3a1328c 100644
+--- a/components/driver/uart.c
++++ b/components/driver/uart.c
+@@ -713,6 +713,8 @@ static int uart_find_pattern_from_last(uint8_t* buf, int length, uint8_t pat_chr
+     return len;
+ }
+ 
++static uart_rx_callback_t uart_rx_callback[UART_NUM_MAX] = { NULL };
++
+ //internal isr handler for default driver code.
+ static void uart_rx_intr_handler_default(void *param)
+ {
+@@ -844,7 +846,11 @@ static void uart_rx_intr_handler_default(void *param)
+             if (p_uart->rx_buffer_full_flg == false) {
+                 //We have to read out all data in RX FIFO to clear the interrupt signal
+                 for(buf_idx = 0; buf_idx < rx_fifo_len; buf_idx++) {
+-                    p_uart->rx_data_buf[buf_idx] = uart_reg->fifo.rw_byte;
++                    uint8_t rx_data = uart_reg->fifo.rw_byte;
++                    p_uart->rx_data_buf[buf_idx] = rx_data;
++                    if (uart_rx_callback[uart_num]) {
++                        uart_rx_callback[uart_num](uart_num, rx_data);
++                    }
+                 }
+                 uint8_t pat_chr = uart_reg->at_cmd_char.data;
+                 int pat_num = uart_reg->at_cmd_char.char_num;
+@@ -1082,6 +1088,7 @@ int uart_tx_chars(uart_port_t uart_num, const char* buffer, uint32_t len)
+         return 0;
+     }
+     xSemaphoreTake(p_uart_obj[uart_num]->tx_mux, (portTickType)portMAX_DELAY);
++    xSemaphoreTake(p_uart_obj[uart_num]->tx_done_sem, 0);
+     int tx_len = uart_fill_fifo(uart_num, (const char*) buffer, len);
+     xSemaphoreGive(p_uart_obj[uart_num]->tx_mux);
+     return tx_len;
+@@ -1300,7 +1307,7 @@ esp_err_t uart_flush_input(uart_port_t uart_num)
+     return ESP_OK;
+ }
+ 
+-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags)
++esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback)
+ {
+     esp_err_t r;
+     UART_CHECK((uart_num < UART_NUM_MAX), "uart_num error", ESP_FAIL);
+@@ -1359,6 +1366,7 @@ esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_b
+         return ESP_FAIL;
+     }
+ 
++    uart_rx_callback[uart_num] = rx_callback;
+     r=uart_isr_register(uart_num, uart_rx_intr_handler_default, p_uart_obj[uart_num], intr_alloc_flags, &p_uart_obj[uart_num]->intr_handle);
+     if (r!=ESP_OK) goto err;
+     uart_intr_config_t uart_intr = {
+diff --git a/examples/wifi/scan/main/scan.c b/examples/wifi/scan/main/scan.c
+index fa27bf7f21ab4d59164c48f336f23f947ed517ab..6d94165ec59342898f3497288db3b24489e3863b 100644
+--- a/examples/wifi/scan/main/scan.c
++++ b/examples/wifi/scan/main/scan.c
+@@ -125,3 +125,7 @@ void app_main()
+ 
+     wifi_scan();
+ }
++
++void vPortCleanUpTCB (void *tcb) {
++
++}
+diff --git a/components/driver/include/driver/uart.h b/components/driver/include/driver/uart.h
+index 93c65c66f3948534cd0563ac46c11b573ca61e38..1e877f086f7b47fdba5b01ee110acc37bed18214 100644
+--- a/components/driver/include/driver/uart.h
++++ b/components/driver/include/driver/uart.h
+@@ -530,8 +530,9 @@ esp_err_t uart_intr_config(uart_port_t uart_num, const uart_intr_config_t *intr_
+  *     - ESP_OK   Success
+  *     - ESP_FAIL Parameter error
+  */
+-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags);
++typedef void (*uart_rx_callback_t)(int uart_id, int rx_byte);
+ 
++esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback);
+ /**
+  * @brief Uninstall UART driver.
+  *
+diff --git a/components/esp32/sleep_modes.c b/components/esp32/sleep_modes.c
+index 98a884761862d88ace49fabd833110dbb7634267..a8c4c3a2e4da61ef0b9884f6afce13fcdbd8c3b6 100644
+--- a/components/esp32/sleep_modes.c
++++ b/components/esp32/sleep_modes.c
+@@ -303,13 +303,15 @@ esp_err_t esp_light_sleep_start()
+                                           + CONFIG_ESP32_DEEP_SLEEP_WAKEUP_DELAY;
+ 
+ #ifndef CONFIG_SPIRAM_SUPPORT
+-    const uint32_t vddsdio_pd_sleep_duration = MAX(FLASH_PD_MIN_SLEEP_TIME_US,
+-            flash_enable_time_us + LIGHT_SLEEP_TIME_OVERHEAD_US + LIGHT_SLEEP_MIN_TIME_US);
+-
+-    if (s_config.sleep_duration > vddsdio_pd_sleep_duration) {
+-        pd_flags |= RTC_SLEEP_PD_VDDSDIO;
+-        s_config.sleep_time_adjustment += flash_enable_time_us;
+-    }
++	if (esp_get_revision() > 0) {
++    	const uint32_t vddsdio_pd_sleep_duration = MAX(FLASH_PD_MIN_SLEEP_TIME_US,
++            	flash_enable_time_us + LIGHT_SLEEP_TIME_OVERHEAD_US + LIGHT_SLEEP_MIN_TIME_US);
++
++    	if (s_config.sleep_duration > vddsdio_pd_sleep_duration) {
++        	pd_flags |= RTC_SLEEP_PD_VDDSDIO;
++        	s_config.sleep_time_adjustment += flash_enable_time_us;
++    	}
++	}
+ #endif //CONFIG_SPIRAM_SUPPORT
+ 
+     rtc_vddsdio_config_t vddsdio_config = rtc_vddsdio_get_config();
+diff --git a/components/esp32/system_api.c b/components/esp32/system_api.c
+index 435a2d7488ee667ea5e5b49a0798e21acc682cdc..165cf56d8af365adfd455eaa23092e24d285f2d1 100644
+--- a/components/esp32/system_api.c
++++ b/components/esp32/system_api.c
+@@ -404,3 +404,11 @@ void esp_chip_info(esp_chip_info_t* out_info)
+         out_info->features |= CHIP_FEATURE_EMB_FLASH;
+     }
+ }
++IRAM_ATTR uint32_t esp_get_revision(void)
++{
++    uint32_t reg = REG_READ(EFUSE_BLK0_RDATA3_REG);
++    if ((reg & EFUSE_RD_CHIP_VER_REV1_M) != 0) {
++        return 1;
++    }
++    return 0;
++}
+diff --git a/components/soc/esp32/include/soc/spi_reg.h b/components/soc/esp32/include/soc/spi_reg.h
+index fac2965c7861a635e1078f45670c6249ff69c6e2..3c677322622767f230b24c8ee0ac176c2fe7e7e4 100644
+--- a/components/soc/esp32/include/soc/spi_reg.h
++++ b/components/soc/esp32/include/soc/spi_reg.h
+@@ -132,6 +132,13 @@
+ #define SPI_FLASH_PER_V  0x1
+ #define SPI_FLASH_PER_S  16
+ 
++/* SPI_USR_ADDR_VALUE : R/W ;bitpos:[31:0] ;default: 32'h0 ; */
++/*description: [31:8]:address to slave [7:0]:Reserved.*/
++#define SPI_USR_ADDR_VALUE  0xFFFFFFFF
++#define SPI_USR_ADDR_VALUE_M  ((SPI_USR_ADDR_VALUE_V)<<(SPI_USR_ADDR_VALUE_S))
++#define SPI_USR_ADDR_VALUE_V  0xFFFFFFFF
++#define SPI_USR_ADDR_VALUE_S  0
++
+ #define SPI_ADDR_REG(i)          (REG_SPI_BASE(i) + 0x4)
+ //The CSV actually is wrong here. It indicates that the lower 8 bits of this register are reserved. This is not true,
+ //all 32 bits of SPI_ADDR_REG are usable/used.
