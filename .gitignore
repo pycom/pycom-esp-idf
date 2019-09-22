@@ -68,3 +68,4 @@ test_multi_heap_host
 
 # VS Code Settings
 .vscode/
+*.pem
