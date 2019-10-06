@@ -352,16 +352,9 @@ BOOLEAN l2c_link_hci_disc_comp (UINT16 handle, UINT8 reason)
     BOOLEAN     status = TRUE;
     BOOLEAN     lcb_is_free = TRUE;
     tBT_TRANSPORT   transport = BT_TRANSPORT_BR_EDR;
-    volatile uint8_t save_transport=0;
 
     /* See if we have a link control block for the connection */
     p_lcb = l2cu_find_lcb_by_handle (handle);
-    save_transport = p_lcb->transport;
-
-    if(save_transport!=2)
-    {
-        ets_printf("Save_trans_ERROR%d\n",save_transport);
-    }
 
     /* If we don't have one, maybe an SCO link. Send to MM */
     if (!p_lcb) {
