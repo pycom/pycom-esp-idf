@@ -27,6 +27,7 @@
 #include "esp_log.h"
 #include "esp_event_loop.h"
 #include "nvs_flash.h"
+#include "esp_eth.h"
 
 /*Set the SSID and Password via "make menuconfig"*/
 #define DEFAULT_SSID CONFIG_WIFI_SSID
@@ -67,6 +68,7 @@
 #endif /*CONFIG_FAST_SCAN_THRESHOLD*/
 
 static const char *TAG = "scan";
+xQueueHandle eth_cmdQueue = NULL;
 
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
@@ -129,3 +131,7 @@ void app_main()
 void vPortCleanUpTCB (void *tcb) {
 
 }
+
+eth_speed_mode_t get_eth_link_speed(void){return 0;}
+bool is_eth_link_up(void){return false;}
+void modeth_get_mac(uint8_t *mac){};
