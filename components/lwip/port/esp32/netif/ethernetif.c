@@ -51,9 +51,52 @@
 #include "esp_eth.h"
 #include "tcpip_adapter.h"
 
+typedef enum
+{
+    ETH_CMD_TX = 0,
+    ETH_CMD_CHK_LINK
+}modeth_cmd_t;
+
+typedef struct
+{
+    modeth_cmd_t cmd;
+    uint8_t* buf;
+    uint16_t len;
+}modeth_cmd_ctx_t;
+
+eth_speed_mode_t get_eth_link_speed(void);
+extern bool is_eth_link_up(void);
+extern xQueueHandle eth_cmdQueue;
+
 /* Define those to better describe your network interface. */
 #define IFNAME0 'e'
 #define IFNAME1 'n'
+
+static esp_err_t ksz8851_tx(struct pbuf *buff)
+{
+    modeth_cmd_ctx_t ctx =
+    {
+            .cmd = ETH_CMD_TX,
+            .buf = (uint8_t*)(buff->payload),
+            .len = buff->len
+    };
+
+    xQueueSend(eth_cmdQueue, &ctx, 10 / portTICK_PERIOD_MS);
+
+    return ESP_OK;
+}
+
+static err_t etharp_wrapper(struct netif *netif, struct pbuf *q, const ip4_addr_t *ipaddr)
+{
+    if(is_eth_link_up())
+    {
+        return etharp_output(netif, q, ipaddr);
+    }
+    else
+    {
+        return ERR_IF;
+    }
+}
 
 /**
  * In this function, the hardware should be initialized.
@@ -84,7 +127,7 @@ ethernet_low_level_init(struct netif *netif)
 #endif
 
 #ifndef CONFIG_EMAC_L2_TO_L3_RX_BUF_MODE
-  netif->l2_buffer_free_notify = esp_eth_free_rx_buf;
+  //netif->l2_buffer_free_notify = esp_eth_free_rx_buf;
 #endif
 }
 
@@ -117,7 +160,7 @@ ethernet_low_level_output(struct netif *netif, struct pbuf *p)
   }
 
   if (q->next == NULL) {
-    ret = esp_eth_tx(q->payload, q->len);
+      ret = ksz8851_tx(q);
   } else {
     LWIP_DEBUGF(PBUF_DEBUG, ("low_level_output: pbuf is a list, application may has bug"));
     q = pbuf_alloc(PBUF_RAW_TX, p->tot_len, PBUF_RAM);
@@ -127,7 +170,7 @@ ethernet_low_level_output(struct netif *netif, struct pbuf *p)
     } else {
       return ERR_MEM;
     }
-    ret = esp_eth_tx(q->payload, q->len);
+    ret = ksz8851_tx(q);
     pbuf_free(q);
   }
   /* error occured when no memory or peripheral wrong state */
@@ -163,7 +206,7 @@ ethernetif_input(struct netif *netif, void *buffer, uint16_t len)
   if(buffer== NULL || !netif_is_up(netif)) {
 #ifndef CONFIG_EMAC_L2_TO_L3_RX_BUF_MODE
     if (buffer) {
-      esp_eth_free_rx_buf(buffer);
+      //esp_eth_free_rx_buf(buffer);
     }
 #endif
     return;
@@ -186,7 +229,7 @@ if (netif->input(p, netif) != ERR_OK) {
 #else
   p = pbuf_alloc(PBUF_RAW, len, PBUF_REF);
   if (p == NULL){
-    esp_eth_free_rx_buf(buffer);
+    //esp_eth_free_rx_buf(buffer);
     return;
   }
   p->payload = buffer;
@@ -234,7 +277,7 @@ ethernetif_init(struct netif *netif)
    * The last argument should be replaced with your link speed, in units
    * of bits per second.
    */
-  if(esp_eth_get_speed() == ETH_SPEED_MODE_100M){
+  if(get_eth_link_speed() == ETH_SPEED_MODE_100M){
     NETIF_INIT_SNMP(netif, snmp_ifType_ethernet_csmacd, 100000000);
   } else {
     NETIF_INIT_SNMP(netif, snmp_ifType_ethernet_csmacd, 10000000);
@@ -246,7 +289,7 @@ ethernetif_init(struct netif *netif)
    * You can instead declare your own function an call etharp_output()
    * from it if you have to do some checks before sending (e.g. if link
    * is available...) */
-  netif->output = etharp_output;
+  netif->output = etharp_wrapper;
 #if LWIP_IPV6
   netif->output_ip6 = ethip6_output;
 #endif /* LWIP_IPV6 */

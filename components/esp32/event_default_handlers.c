@@ -36,6 +36,7 @@
 #include "esp_log.h"
 
 static const char* TAG = "event";
+extern void modeth_get_mac(uint8_t *mac);
 
 #define WIFI_API_CALL_CHECK(info, api_call, ret) \
 do{\
@@ -125,7 +126,7 @@ esp_err_t system_event_eth_start_handle_default(system_event_t *event)
     tcpip_adapter_ip_info_t eth_ip;
     uint8_t eth_mac[6];
 
-    esp_eth_get_mac(eth_mac);
+    modeth_get_mac(eth_mac);
     tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_ETH, &eth_ip);
     tcpip_adapter_eth_start(eth_mac, &eth_ip);
 
