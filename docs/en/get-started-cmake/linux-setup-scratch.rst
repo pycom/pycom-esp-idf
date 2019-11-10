@@ -2,6 +2,8 @@
 Setup Linux Toolchain from Scratch (CMake)
 ******************************************
 
+:link_to_translation:`zh_CN:[中文]`
+
 .. include:: ../cmake-warning.rst
 
 The following instructions are alternative to downloading binary toolchain from Espressif website. To quickly setup the binary toolchain, instead of compiling it yourself, backup and proceed to section :doc:`linux-setup`.
@@ -66,10 +68,10 @@ Build the toolchain::
     ./ct-ng build
     chmod -R u+w builds/xtensa-esp32-elf
 
-Toolchain will be built in ``~/esp/crosstool-NG/builds/xtensa-esp32-elf``. Follow :ref:`instructions for standard setup <setup-linux-toolchain-add-it-to-path-cmake>` to add the toolchain to your ``PATH``.
+Toolchain will be built in ``~/esp/crosstool-NG/builds/xtensa-esp32-elf``. Follow `instructions for standard setup <setup-linux-toolchain-add-it-to-path-cmake>`_ to add the toolchain to your ``PATH``.
 
 
 Next Steps
 ==========
 
-To carry on with development environment setup, proceed to section :ref:`get-started-get-esp-idf-cmake`.
+To carry on with development environment setup, proceed to :ref:`get-started-get-esp-idf-cmake`.

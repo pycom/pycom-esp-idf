@@ -601,6 +601,7 @@ test cases:
     4. calculate adv intervals, within the interval range in adv param
   initial condition: BLE_INIT1
   test environment: SSC_T1_3
+  CI ready: 'No'
   cmd set:
   - "BLEFunction/AdvInterval"
   - - interval_list = ["0x0020-0x0020", "0x0040-0x0040", "0x0060-0x0060"]

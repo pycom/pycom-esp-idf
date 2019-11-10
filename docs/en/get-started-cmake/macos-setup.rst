@@ -2,6 +2,8 @@
 Standard Setup of Toolchain for Mac OS (CMake)
 **********************************************
 
+:link_to_translation:`zh_CN:[中文]`
+
 .. include:: ../cmake-warning.rst
 
 Install Prerequisites
@@ -73,7 +75,7 @@ Log off and log in back to make the ``.profile`` changes effective. Run the foll
 Next Steps
 ==========
 
-To carry on with development environment setup, proceed to section :ref:`get-started-get-esp-idf-cmake`.
+To carry on with development environment setup, proceed to :ref:`get-started-get-esp-idf-cmake`.
 
 Related Documents
 =================

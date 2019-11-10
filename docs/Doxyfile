@@ -88,6 +88,8 @@ INPUT = \
     ../../components/soc/esp32/include/soc/touch_channel.h \
     ../../components/soc/esp32/include/soc/uart_channel.h \
     ../../components/soc/esp32/include/soc/rtc_gpio_channel.h \
+    ## tcpip_adapter - API Reference
+    ../../components/tcpip_adapter/include/tcpip_adapter.h \
     ##
     ## Protocols - API Reference
     ##
@@ -99,6 +101,7 @@ INPUT = \
     ../../components/mdns/include/mdns.h \
     ../../components/esp_http_client/include/esp_http_client.h \
     ../../components/esp_http_server/include/esp_http_server.h \
+    ../../components/esp_https_server/include/esp_https_server.h \
     ##
     ## Provisioning - API Reference
     ##
@@ -111,7 +114,12 @@ INPUT = \
     ../../components/protocomm/include/transports/protocomm_console.h \
     ../../components/protocomm/include/transports/protocomm_httpd.h \
     ## WiFi Provisioning
+    ../../components/wifi_provisioning/include/wifi_provisioning/manager.h \
+    ../../components/wifi_provisioning/include/wifi_provisioning/scheme_ble.h \
+    ../../components/wifi_provisioning/include/wifi_provisioning/scheme_softap.h \
+    ../../components/wifi_provisioning/include/wifi_provisioning/scheme_console.h \
     ../../components/wifi_provisioning/include/wifi_provisioning/wifi_config.h \
+    ../../components/wifi_provisioning/include/wifi_provisioning/wifi_scan.h \
     ##
     ## Storage - API Reference
     ##
@@ -188,6 +196,8 @@ INPUT = \
     ### esp_event, Event Loop Library
     ../../components/esp_event/include/esp_event.h \
     ../../components/esp_event/include/esp_event_base.h \
+    ### eFuse Manager
+    ../../components/efuse/include/esp_efuse.h \
     ### ESP Pthread parameters
     ../../components/pthread/include/esp_pthread.h \
     ###

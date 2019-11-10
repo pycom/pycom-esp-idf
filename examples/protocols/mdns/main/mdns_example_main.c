@@ -29,8 +29,8 @@
 #define EXAMPLE_WIFI_SSID CONFIG_WIFI_SSID
 #define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
 
-#define EXAMPLE_MDNS_HOSTNAME CONFIG_MDNS_HOSTNAME
 #define EXAMPLE_MDNS_INSTANCE CONFIG_MDNS_INSTANCE
+
 
 /* FreeRTOS event group to signal when we are connected & ready to make a request */
 static EventGroupHandle_t wifi_event_group;
@@ -43,6 +43,7 @@ const int IP6_CONNECTED_BIT = BIT1;
 
 static const char *TAG = "mdns-test";
 static bool auto_reconnect = true;
+static char* generate_hostname();
 
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
@@ -97,10 +98,12 @@ static void initialise_wifi(void)
 
 static void initialise_mdns(void)
 {
+    char* hostname = generate_hostname();
     //initialize mDNS
     ESP_ERROR_CHECK( mdns_init() );
     //set mDNS hostname (required if you want to advertise services)
-    ESP_ERROR_CHECK( mdns_hostname_set(EXAMPLE_MDNS_HOSTNAME) );
+    ESP_ERROR_CHECK( mdns_hostname_set(hostname) );
+    ESP_LOGI(TAG, "mdns hostname set to: [%s]", hostname);
     //set default mDNS instance name
     ESP_ERROR_CHECK( mdns_instance_name_set(EXAMPLE_MDNS_INSTANCE) );
 
@@ -117,6 +120,7 @@ static void initialise_mdns(void)
     ESP_ERROR_CHECK( mdns_service_txt_item_set("_http", "_tcp", "path", "/foobar") );
     //change TXT item value
     ESP_ERROR_CHECK( mdns_service_txt_item_set("_http", "_tcp", "u", "admin") );
+    free(hostname);
 }
 
 static const char * if_str[] = {"STA", "AP", "ETH", "MAX"};
@@ -191,7 +195,7 @@ static void query_mdns_host(const char * host_name)
         return;
     }
 
-    ESP_LOGI(TAG, IPSTR, IP2STR(&addr));
+    ESP_LOGI(TAG, "Query A: %s.local resolved to: " IPSTR, host_name, IP2STR(&addr));
 }
 
 static void initialise_button(void)
@@ -228,6 +232,12 @@ static void mdns_example_task(void *pvParameters)
     /* Wait for the callback to set the CONNECTED_BIT in the event group. */
     xEventGroupWaitBits(wifi_event_group, IP4_CONNECTED_BIT | IP6_CONNECTED_BIT,
                      false, true, portMAX_DELAY);
+
+#if CONFIG_RESOLVE_TEST_SERVICES == 1
+    /* Send initial queries that are started by CI tester */
+    query_mdns_host("tinytester");
+#endif
+
     while(1) {
         check_button();
         vTaskDelay(50 / portTICK_PERIOD_MS);
@@ -241,4 +251,22 @@ void app_main()
     initialise_wifi();
     initialise_button();
     xTaskCreate(&mdns_example_task, "mdns_example_task", 2048, NULL, 5, NULL);
+}
+
+/** Generate host name based on sdkconfig, optionally adding a portion of MAC address to it.
+ *  @return host name string allocated from the heap
+ */
+static char* generate_hostname()
+{
+#ifndef CONFIG_MDNS_ADD_MAC_TO_HOSTNAME
+    return strdup(CONFIG_MDNS_HOSTNAME);
+#else
+    uint8_t mac[6];
+    char   *hostname;
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    if (-1 == asprintf(&hostname, "%s-%02X%02X%02X", CONFIG_MDNS_HOSTNAME, mac[3], mac[4], mac[5])) {
+        abort();
+    }
+    return hostname;
+#endif
 }

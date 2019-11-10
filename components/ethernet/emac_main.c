@@ -1233,7 +1233,7 @@ esp_err_t esp_eth_deinit(void)
     periph_module_disable(PERIPH_EMAC_MODULE);
     emac_config.emac_status = EMAC_RUNTIME_NOT_INIT;
 
-    /* free memory that dynamically allocated */
+    /* free memory that dynamically allocted */
     free(emac_dma_rx_chain_buf);
     free(emac_dma_tx_chain_buf);
     emac_dma_rx_chain_buf = NULL;

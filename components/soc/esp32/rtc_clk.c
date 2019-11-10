@@ -88,12 +88,13 @@
  *
  * There is a record in efuse which indicates the proper voltage for these two cases.
  */
+#define RTC_CNTL_DBIAS_HP_VOLT         (RTC_CNTL_DBIAS_1V25 - (REG_GET_FIELD(EFUSE_BLK0_RDATA5_REG, EFUSE_RD_VOL_LEVEL_HP_INV)))
 #ifdef CONFIG_ESPTOOLPY_FLASHFREQ_80M
-#define DIG_DBIAS_80M_160M  RTC_CNTL_DBIAS_1V25
+#define DIG_DBIAS_80M_160M  RTC_CNTL_DBIAS_HP_VOLT
 #else
 #define DIG_DBIAS_80M_160M  RTC_CNTL_DBIAS_1V10
 #endif
-#define DIG_DBIAS_240M      RTC_CNTL_DBIAS_1V25
+#define DIG_DBIAS_240M      RTC_CNTL_DBIAS_HP_VOLT
 #define DIG_DBIAS_XTAL      RTC_CNTL_DBIAS_1V10
 #define DIG_DBIAS_2M        RTC_CNTL_DBIAS_1V00
 
@@ -529,7 +530,7 @@ rtc_cpu_freq_t rtc_clk_cpu_freq_get()
 {
     rtc_cpu_freq_config_t config;
     rtc_clk_cpu_freq_get_config(&config);
-    rtc_cpu_freq_t freq;
+    rtc_cpu_freq_t freq = RTC_CPU_FREQ_XTAL;
     rtc_clk_cpu_freq_from_mhz_internal(config.freq_mhz, &freq);
     return freq;
 }
@@ -590,7 +591,7 @@ void rtc_clk_cpu_freq_to_config(rtc_cpu_freq_t cpu_freq, rtc_cpu_freq_config_t* 
             source = RTC_CPU_FREQ_SRC_XTAL;
             if (cpu_freq == RTC_CPU_FREQ_2M) {
                 freq_mhz = 2;
-                divider = out_config->source_freq_mhz / 2;
+                divider = source_freq_mhz / 2;
             } else {
                 freq_mhz = source_freq_mhz;
                 divider = 1;

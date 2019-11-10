@@ -260,10 +260,10 @@ void IRAM_ATTR esp_spiram_writeback_cache()
     }
 #else
     /*
-    Low/high psram cache mode uses one 32KB cache for the lowest 2MiB of SPI flash and another 32K for the highest
+    Low/high psram cache mode uses one 32K cache for the lowest 2MiB of SPI flash and another 32K for the highest
     2MiB. Clear this by reading from both regions.
-    Note: this assumes the amount of external RAM is >2MB. If it is 2MB or less, what this code does is undefined. If
-    we ever support external RAM chips of 2MB or smaller, this may need adjusting.
+    Note: this assumes the amount of external RAM is >2M. If it is 2M or less, what this code does is undefined. If
+    we ever support external RAM chips of 2M or smaller, this may need adjusting.
     */
     for (x=0; x<1024*64; x+=32) {
         i+=psram[x];

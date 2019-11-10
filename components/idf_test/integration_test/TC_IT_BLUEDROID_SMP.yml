@@ -118,7 +118,7 @@
     - - "SSC SSC2 blesmp -S -z IOCAP -v 0x03"
       - ['P SSC2 C +BLESMP:OK']
 
-test case:
+test cases:
 - ID: BLUEDROID_SMP_04001
   <<: *SMP_CASE
   test point 2: BLE SMP key test
@@ -359,7 +359,7 @@ test case:
   - *master_passkey_entry_pair
   - *disconnect
   - - "SSC SSC1 bleconn -C -p 0x10 -a <dut2_bt_mac>"
-    - ['P SSC1 C +BLE:GapConnect,OK', 'P SSC2 C +BLE:GapConnect']
+    - ['P SSC1 C +BLECONN:GapConnect,OK', 'P SSC2 C +BLECONN:GapConnect']
   - - "SSC SSC2 blesmp -E -r <dut1_bt_mac> -z Enc"
     - ['P SSC[1-2] C +BLESMP:AuthComplete,Success,0']
 - ID: BLUEDROID_SMP_07006
@@ -407,7 +407,7 @@ test case:
   - *numberic_comparision_pair
   - *disconnect
   - - "SSC SSC1 bleconn -C -p 0x10 -a <dut2_bt_mac>"
-    - ['P SSC1 C +BLE:GapConnect,OK', 'P SSC2 C +BLE:GapConnect']
+    - ['P SSC1 C +BLECONN:GapConnect,OK', 'P SSC2 C +BLECONN:GapConnect']
   - - "SSC SSC2 blesmp -E -r <dut1_bt_mac> -z Enc"
     - ['P SSC[1-2] C +BLESMP:AuthComplete,Success,0']
 - ID: BLUEDROID_SMP_07008

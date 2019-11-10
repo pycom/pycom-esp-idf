@@ -2,6 +2,8 @@
 Setup Toolchain for Mac OS from Scratch (CMake)
 ***********************************************
 
+:link_to_translation:`zh_CN:[中文]`
+
 .. include:: ../cmake-warning.rst
 
 Package Manager
@@ -83,4 +85,4 @@ Toolchain will be built in ``~/esp/ctng-volume/crosstool-NG/builds/xtensa-esp32-
 Next Steps
 ==========
 
-To carry on with development environment setup, proceed to section :ref:`get-started-get-esp-idf-cmake`.
+To carry on with development environment setup, proceed to :ref:`get-started-get-esp-idf-cmake`.

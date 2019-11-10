@@ -1485,7 +1485,7 @@ void smp_fast_conn_param(tSMP_CB *p_cb, tSMP_INT_DATA *p_data)
 {
     if(p_cb->role == BTM_ROLE_MASTER) {
         L2CA_EnableUpdateBleConnParams(p_cb->pairing_bda, FALSE);
-    } 
+    }
 #if (SMP_SLAVE_CON_PARAMS_UPD_ENABLE == TRUE)
     else {
         tBTM_SEC_DEV_REC    *p_rec = btm_find_dev (p_cb->pairing_bda);

@@ -15,9 +15,10 @@
 
 from __future__ import print_function
 
-from .transport import *
+from .transport import Transport
 
 from . import ble_cli
+
 
 class Transport_BLE(Transport):
     def __init__(self, devname, service_uuid, nu_lookup):
@@ -53,7 +54,7 @@ class Transport_BLE(Transport):
         # Make sure device is disconnected before application gets closed
         try:
             self.disconnect()
-        except:
+        except Exception:
             pass
 
     def disconnect(self):

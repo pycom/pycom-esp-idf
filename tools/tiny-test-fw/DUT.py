@@ -296,8 +296,8 @@ class BaseDUT(object):
         self.record_data_lock = threading.RLock()
         self.receive_thread = None
         self.expect_failures = []
-        # open and start during init
-        self.open()
+        self._port_open()
+        self.start_receive()
 
     def __str__(self):
         return "DUT({}: {})".format(self.name, str(self.port))
@@ -402,26 +402,31 @@ class BaseDUT(object):
         pass
 
     # methods that features raw port methods
-    def open(self):
+    def start_receive(self):
         """
-        open port and create thread to receive data.
+        Start thread to receive data.
 
         :return: None
         """
-        self._port_open()
         self.receive_thread = self.RECV_THREAD_CLS(self._port_read, self)
         self.receive_thread.start()
 
-    def close(self):
+    def stop_receive(self):
         """
-        close receive thread and then close port.
-
+        stop the receiving thread for the port
         :return: None
         """
         if self.receive_thread:
             self.receive_thread.exit()
-        self._port_close()
         self.LOG_THREAD.flush_data()
+        self.receive_thread = None
+
+    def close(self):
+        """
+        permanently close the port
+        """
+        self.stop_receive()
+        self._port_close()
 
     @staticmethod
     def u_to_bytearray(data):
@@ -430,7 +435,7 @@ class BaseDUT(object):
 
         :param data: data which needs to be checked and maybe transformed
         """
-        if type(data) is type(u''):
+        if isinstance(data, type(u'')):
             try:
                 data = data.encode('utf-8')
             except Exception as e:
@@ -533,9 +538,9 @@ class BaseDUT(object):
         :return: match groups if match succeed otherwise None
         """
         ret = None
-        if type(pattern.pattern) is type(u''):
+        if isinstance(pattern.pattern, type(u'')):
             pattern = re.compile(BaseDUT.u_to_bytearray(pattern.pattern))
-        if type(data) is type(u''):
+        if isinstance(data, type(u'')):
             data = BaseDUT.u_to_bytearray(data)
         match = pattern.search(data)
         if match:
@@ -547,7 +552,7 @@ class BaseDUT(object):
 
     EXPECT_METHOD = [
         [type(re.compile("")), "_expect_re"],
-        [type(b''), "_expect_str"], # Python 2 & 3 hook to work without 'from builtins import str' from future
+        [type(b''), "_expect_str"],  # Python 2 & 3 hook to work without 'from builtins import str' from future
         [type(u''), "_expect_str"],
     ]
 

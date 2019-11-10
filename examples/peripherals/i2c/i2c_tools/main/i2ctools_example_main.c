@@ -78,15 +78,15 @@ static void initialize_console()
 
     /* Install UART driver for interrupt-driven reads and writes */
     ESP_ERROR_CHECK(uart_driver_install(CONFIG_CONSOLE_UART_NUM,
-                                        256, 0, 0, NULL, 0, NULL));
+                                        256, 0, 0, NULL, 0));
 
     /* Tell VFS to use UART driver */
     esp_vfs_dev_uart_use_driver(CONFIG_CONSOLE_UART_NUM);
 
     /* Initialize the console */
     esp_console_config_t console_config = {
-        .max_cmdline_args = 8,
-        .max_cmdline_length = 256,
+        .max_cmdline_args = CONFIG_MAX_CMD_ARGUMENTS,
+        .max_cmdline_length = CONFIG_MAX_CMD_LENGTH,
 #if CONFIG_LOG_COLORS
         .hint_color = atoi(LOG_COLOR_CYAN)
 #endif

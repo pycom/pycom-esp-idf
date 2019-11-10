@@ -1,19 +1,16 @@
 include(ExternalProject)
 
 macro(kconfig_set_variables)
-    set(CONFIG_DIR ${CMAKE_BINARY_DIR}/config)
-    set_default(SDKCONFIG ${PROJECT_PATH}/sdkconfig)
+    set_default(IDF_SDKCONFIG_DEFAULTS "")
+
+    set_default(CONFIG_DIR ${IDF_BUILD_ARTIFACTS_DIR}/config)
+    set_default(SDKCONFIG ${IDF_PROJECT_PATH}/sdkconfig)
     set(SDKCONFIG_HEADER ${CONFIG_DIR}/sdkconfig.h)
     set(SDKCONFIG_CMAKE ${CONFIG_DIR}/sdkconfig.cmake)
     set(SDKCONFIG_JSON ${CONFIG_DIR}/sdkconfig.json)
     set(KCONFIG_JSON_MENUS ${CONFIG_DIR}/kconfig_menus.json)
 
     set(ROOT_KCONFIG ${IDF_PATH}/Kconfig)
-
-    set_default(SDKCONFIG_DEFAULTS "${SDKCONFIG}.defaults")
-
-    # ensure all source files can include sdkconfig.h
-    include_directories("${CONFIG_DIR}")
 endmacro()
 
 if(CMAKE_HOST_WIN32)
@@ -51,7 +48,7 @@ endif()
 if(NOT MCONF)
     # Use the existing Makefile to build mconf (out of tree) when needed
     #
-    set(MCONF kconfig_bin/mconf-idf)
+    set(MCONF ${CMAKE_BINARY_DIR}/kconfig_bin/mconf-idf)
 
     externalproject_add(mconf-idf
         SOURCE_DIR ${IDF_PATH}/tools/kconfig
@@ -80,9 +77,20 @@ function(kconfig_process_config)
     set(kconfigs)
     set(kconfigs_projbuild)
 
+    # Components are usually sorted (somewhat) topologically via their dependencies. This extends to the component
+    # paths list. Obtain an alphabetical list in order to present menus also in the same order.
+    set(components ${BUILD_COMPONENTS})
+    list(SORT components)
+
+    foreach(component ${components})
+        list(FIND BUILD_COMPONENTS ${component} idx)
+        list(GET BUILD_COMPONENT_PATHS ${idx} component_path)
+        list(APPEND component_paths ${component_path})
+    endforeach()
+
     # Find Kconfig and Kconfig.projbuild for each component as applicable
     # if any of these change, cmake should rerun
-    foreach(dir ${BUILD_COMPONENT_PATHS})
+    foreach(dir ${component_paths})
         file(GLOB kconfig "${dir}/Kconfig")
         if(kconfig)
             set(kconfigs "${kconfigs} ${kconfig}")
@@ -95,8 +103,12 @@ function(kconfig_process_config)
         endif()
     endforeach()
 
-    if(EXISTS ${SDKCONFIG_DEFAULTS})
-        set(defaults_arg --defaults "${SDKCONFIG_DEFAULTS}")
+    if(IDF_SDKCONFIG_DEFAULTS)
+        set(defaults_arg --defaults "${IDF_SDKCONFIG_DEFAULTS}")
+    endif()
+
+    if(EXISTS "${IDF_SDKCONFIG_DEFAULTS}.${IDF_TARGET}")
+        list(APPEND defaults_arg --defaults "${IDF_SDKCONFIG_DEFAULTS}.${IDF_TARGET}")
     endif()
 
     # Set these in the parent scope, so that they can be written to project_description.json
@@ -117,12 +129,13 @@ function(kconfig_process_config)
     add_custom_target(menuconfig
         ${menuconfig_depends}
         # create any missing config file, with defaults if necessary
-        COMMAND ${confgen_basecommand} --output config ${SDKCONFIG}
+        COMMAND ${confgen_basecommand} --env "IDF_TARGET=${IDF_TARGET}" --output config ${SDKCONFIG}
         COMMAND ${CMAKE_COMMAND} -E env
         "COMPONENT_KCONFIGS=${kconfigs}"
         "COMPONENT_KCONFIGS_PROJBUILD=${kconfigs_projbuild}"
         "IDF_CMAKE=y"
         "KCONFIG_CONFIG=${SDKCONFIG}"
+        "IDF_TARGET=${IDF_TARGET}"
         ${MCONF} ${ROOT_KCONFIG}
         VERBATIM
         USES_TERMINAL)
@@ -132,8 +145,7 @@ function(kconfig_process_config)
         COMMAND ${CMAKE_COMMAND} -E env
         "COMPONENT_KCONFIGS=${kconfigs}"
         "COMPONENT_KCONFIGS_PROJBUILD=${kconfigs_projbuild}"
-        ${PYTHON} ${IDF_PATH}/tools/kconfig_new/confserver.py
-        --kconfig ${IDF_PATH}/Kconfig --config ${SDKCONFIG}
+        ${PYTHON} ${IDF_PATH}/tools/kconfig_new/confserver.py --kconfig ${IDF_PATH}/Kconfig --config ${SDKCONFIG}
         VERBATIM
         USES_TERMINAL)
 

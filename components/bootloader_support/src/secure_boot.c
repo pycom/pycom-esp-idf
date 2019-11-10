@@ -36,6 +36,12 @@
 #include "esp_flash_encrypt.h"
 #include "esp_efuse.h"
 
+/* The following API implementations are used only when called
+ * from the bootloader code.
+ */
+
+#ifdef BOOTLOADER_BUILD
+
 static const char* TAG = "secure_boot";
 
 /**
@@ -95,18 +101,15 @@ static bool secure_boot_generate(uint32_t image_len){
 /* Burn values written to the efuse write registers */
 static inline void burn_efuses()
 {
-#ifdef CONFIG_SECURE_BOOT_TEST_MODE
-    ESP_LOGE(TAG, "SECURE BOOT TEST MODE. Not really burning any efuses! NOT SECURE");
-#else
     esp_efuse_burn_new_values();
-#endif
 }
 
-esp_err_t esp_secure_boot_permanently_enable(void) {
+esp_err_t esp_secure_boot_generate_digest(void)
+{
     esp_err_t err;
-    if (esp_secure_boot_enabled())
-    {
-        ESP_LOGI(TAG, "bootloader secure boot is already enabled, continuing..");
+    if (esp_secure_boot_enabled()) {
+        ESP_LOGI(TAG, "bootloader secure boot is already enabled."
+                      " No need to generate digest. continuing..");
         return ESP_OK;
     }
 
@@ -124,6 +127,7 @@ esp_err_t esp_secure_boot_permanently_enable(void) {
         return err;
     }
 
+    /* Generate secure boot key and keep in EFUSE */
     uint32_t dis_reg = REG_READ(EFUSE_BLK0_RDATA0_REG);
     bool efuse_key_read_protected = dis_reg & EFUSE_RD_DIS_BLK2;
     bool efuse_key_write_protected = dis_reg & EFUSE_WR_DIS_BLK2;
@@ -140,16 +144,11 @@ esp_err_t esp_secure_boot_permanently_enable(void) {
         ESP_LOGI(TAG, "Generating new secure boot key...");
         esp_efuse_write_random_key(EFUSE_BLK2_WDATA0_REG);
         burn_efuses();
-        ESP_LOGI(TAG, "Read & write protecting new key...");
-        REG_WRITE(EFUSE_BLK0_WDATA0_REG, EFUSE_WR_DIS_BLK2 | EFUSE_RD_DIS_BLK2);
-        burn_efuses();
-        efuse_key_read_protected = true;
-        efuse_key_write_protected = true;
-
     } else {
         ESP_LOGW(TAG, "Using pre-loaded secure boot key in EFUSE block 2");
     }
 
+    /* Generate secure boot digest using programmed key in EFUSE */
     ESP_LOGI(TAG, "Generating secure boot digest...");
     uint32_t image_len = bootloader_data.image_len;
     if(bootloader_data.image.hash_appended) {
@@ -162,7 +161,28 @@ esp_err_t esp_secure_boot_permanently_enable(void) {
     }
     ESP_LOGI(TAG, "Digest generation complete.");
 
-#ifndef CONFIG_SECURE_BOOT_TEST_MODE
+    return ESP_OK;
+}
+
+esp_err_t esp_secure_boot_permanently_enable(void)
+{
+    if (esp_secure_boot_enabled()) {
+        ESP_LOGI(TAG, "bootloader secure boot is already enabled, continuing..");
+        return ESP_OK;
+    }
+
+    uint32_t dis_reg = REG_READ(EFUSE_BLK0_RDATA0_REG);
+    bool efuse_key_read_protected = dis_reg & EFUSE_RD_DIS_BLK2;
+    bool efuse_key_write_protected = dis_reg & EFUSE_WR_DIS_BLK2;
+    if (efuse_key_read_protected == false
+        && efuse_key_write_protected == false) {
+        ESP_LOGI(TAG, "Read & write protecting new key...");
+        REG_WRITE(EFUSE_BLK0_WDATA0_REG, EFUSE_WR_DIS_BLK2 | EFUSE_RD_DIS_BLK2);
+        burn_efuses();
+        efuse_key_read_protected = true;
+        efuse_key_write_protected = true;
+    }
+
     if (!efuse_key_read_protected) {
         ESP_LOGE(TAG, "Pre-loaded key is not read protected. Refusing to blow secure boot efuse.");
         return ESP_ERR_INVALID_STATE;
@@ -171,7 +191,6 @@ esp_err_t esp_secure_boot_permanently_enable(void) {
         ESP_LOGE(TAG, "Pre-loaded key is not write protected. Refusing to blow secure boot efuse.");
         return ESP_ERR_INVALID_STATE;
     }
-#endif
 
     ESP_LOGI(TAG, "blowing secure boot efuse...");
     ESP_LOGD(TAG, "before updating, EFUSE_BLK0_RDATA6 %x", REG_READ(EFUSE_BLK0_RDATA6_REG));
@@ -200,11 +219,9 @@ esp_err_t esp_secure_boot_permanently_enable(void) {
         ESP_LOGI(TAG, "secure boot is now enabled for bootloader image");
         return ESP_OK;
     } else {
-#ifdef CONFIG_SECURE_BOOT_TEST_MODE
-        ESP_LOGE(TAG, "secure boot not enabled due to test mode");
-#else
         ESP_LOGE(TAG, "secure boot not enabled for bootloader image, EFUSE_RD_ABS_DONE_0 is probably write protected!");
-#endif
         return ESP_ERR_INVALID_STATE;
     }
 }
+
+#endif // #ifdef BOOTLOADER_BUILD

@@ -18,13 +18,13 @@
 #include "esp_log.h"
 #include "rom/gpio.h"
 #include "rom/spi_flash.h"
-#include "rom/rtc.h"
 #include "bootloader_config.h"
 #include "bootloader_init.h"
 #include "bootloader_utility.h"
 #include "bootloader_common.h"
 #include "sdkconfig.h"
 #include "esp_image_format.h"
+#include "rom/rtc.h"
 
 static const char* TAG = "boot";
 
