@@ -1,7 +1,7 @@
 set(COMPONENT_SRCDIRS ".")
 set(COMPONENT_ADD_INCLUDEDIRS ". ${CMAKE_CURRENT_BINARY_DIR}")
 
-set(COMPONENT_REQUIRES unity nvs_flash ulp)
+set(COMPONENT_REQUIRES unity test_utils nvs_flash ulp)
 
 register_component()
 
@@ -48,5 +48,5 @@ add_definitions(-DWIFI_ESP_WIFI_MD5=\"${WIFI_ESP_WIFI_MD5}\")
 
 add_custom_target(esp32_test_logo DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/test_tjpgd_logo.h")
 
-add_dependencies(${COMPONENT_NAME} esp32_test_logo)
-
+add_dependencies(${COMPONENT_TARGET} esp32_test_logo)
+target_link_libraries(${COMPONENT_TARGET} "-u ld_include_test_dport_xt_highint5")

@@ -2,6 +2,8 @@
 Standard Setup of Toolchain for Windows (CMake)
 ***********************************************
 
+:link_to_translation:`zh_CN:[中文]`
+
 .. include:: ../cmake-warning.rst
 
 .. note::
@@ -49,7 +51,7 @@ For the remaining Getting Started steps, we're going to use a terminal command p
 Next Steps
 ==========
 
-To carry on with development environment setup, proceed to section :ref:`get-started-get-esp-idf-cmake`.
+To carry on with development environment setup, proceed to :ref:`get-started-get-esp-idf-cmake`.
 
 Related Documents
 =================

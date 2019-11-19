@@ -48,7 +48,7 @@ Aside from encrypting the firmware binary, the app may need to store some sensit
 
 The recommended way to do this is to use :ref:`nvs_encryption` .
 
-Alternatively, it is possible to use the :doc:`Wear Levelling feature </api-reference/storage/wear-levelling>` with an encrypted partition, if the "encrypted" flag is set on the partition. This allows, for example, a FATFS partition to be stored encrypted in flash.
+Alternatively, it is possible to use the :doc:`Wear Levelling feature </api-reference/storage/wear-levelling>` with an encrypted partition, if the "encrypted" flag is set on the partition. This allows, for example, a VFAT partition to be stored encrypted in flash.
 
 The following are **not suitable** and will store data where an attacker with physical access can read it out:
 

@@ -81,7 +81,9 @@ static sleep_config_t s_config = {
     .wakeup_triggers = 0
 };
 
-bool s_light_sleep_wakeup = false;
+/* Internal variable used to track if light sleep wakeup sources are to be
+   expected when determining wakeup cause. */
+static bool s_light_sleep_wakeup = false;
 
 /* Updating RTC_MEMORY_CRC_REG register via set_rtc_memory_crc()
    is not thread-safe. */
@@ -303,15 +305,13 @@ esp_err_t esp_light_sleep_start()
                                           + CONFIG_ESP32_DEEP_SLEEP_WAKEUP_DELAY;
 
 #ifndef CONFIG_SPIRAM_SUPPORT
-	if (esp_get_revision() > 0) {
-    	const uint32_t vddsdio_pd_sleep_duration = MAX(FLASH_PD_MIN_SLEEP_TIME_US,
-            	flash_enable_time_us + LIGHT_SLEEP_TIME_OVERHEAD_US + LIGHT_SLEEP_MIN_TIME_US);
+    const uint32_t vddsdio_pd_sleep_duration = MAX(FLASH_PD_MIN_SLEEP_TIME_US,
+            flash_enable_time_us + LIGHT_SLEEP_TIME_OVERHEAD_US + LIGHT_SLEEP_MIN_TIME_US);
 
-    	if (s_config.sleep_duration > vddsdio_pd_sleep_duration) {
-        	pd_flags |= RTC_SLEEP_PD_VDDSDIO;
-        	s_config.sleep_time_adjustment += flash_enable_time_us;
-    	}
-	}
+    if (s_config.sleep_duration > vddsdio_pd_sleep_duration) {
+        pd_flags |= RTC_SLEEP_PD_VDDSDIO;
+        s_config.sleep_time_adjustment += flash_enable_time_us;
+    }
 #endif //CONFIG_SPIRAM_SUPPORT
 
     rtc_vddsdio_config_t vddsdio_config = rtc_vddsdio_get_config();

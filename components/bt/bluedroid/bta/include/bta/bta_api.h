@@ -1625,6 +1625,22 @@ extern void BTA_DmPinReply(BD_ADDR bd_addr, BOOLEAN accept, UINT8 pin_len,
 **
 *******************************************************************************/
 extern void BTA_DmLocalOob(void);
+
+/*******************************************************************************
+**
+** Function         BTA_DmOobReply
+**
+**                  This function is called to provide the OOB data for
+**                  SMP in response to BTM_LE_OOB_REQ_EVT
+**
+** Parameters:      bd_addr     - Address of the peer device
+**                  len         - length of simple pairing Randomizer  C
+**                  p_value     - simple pairing Randomizer  C.
+**
+** Returns          void
+**
+*******************************************************************************/
+extern void BTA_DmOobReply(BD_ADDR bd_addr, UINT8 len, UINT8 *p_value);
 #endif /* BTM_OOB_INCLUDED */
 
 /*******************************************************************************
@@ -2213,6 +2229,22 @@ extern void BTA_DmBleSetAdvConfig (tBTA_BLE_AD_MASK data_mask,
 **
 *******************************************************************************/
 extern void BTA_DmBleSetAdvConfigRaw (UINT8 *p_raw_adv, UINT32 raw_adv_len,
+                            tBTA_SET_ADV_DATA_CMPL_CBACK *p_adv_data_cback);
+
+/*******************************************************************************
+**
+** Function         BTA_DmBleSetLongAdv
+**
+** Description      This function is called to set long Advertising data
+**
+** Parameters       adv_data : long advertising data.
+**                  adv_data_len : long advertising data length.
+**                  p_adv_data_cback : set long adv data complete callback.
+**
+** Returns          None
+**
+*******************************************************************************/
+void BTA_DmBleSetLongAdv (UINT8 *adv_data, UINT32 adv_data_len,
                             tBTA_SET_ADV_DATA_CMPL_CBACK *p_adv_data_cback);
 
 /*******************************************************************************

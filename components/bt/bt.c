@@ -62,6 +62,7 @@
 #define BTDM_CFG_CONTROLLER_RUN_APP_CPU     (1<<2)
 #define BTDM_CFG_SCAN_DUPLICATE_OPTIONS     (1<<3)
 #define BTDM_CFG_SEND_ADV_RESERVED_SIZE     (1<<4)
+#define BTDM_CFG_BLE_FULL_SCAN_SUPPORTED    (1<<5)
 
 /* Sleep mode */
 #define BTDM_MODEM_SLEEP_MODE_NONE          (0)
@@ -375,6 +376,7 @@ static DRAM_ATTR esp_timer_handle_t s_btdm_slp_tmr;
 static DRAM_ATTR esp_pm_lock_handle_t s_pm_lock;
 static DRAM_ATTR esp_pm_lock_handle_t s_light_sleep_pm_lock; // pm_lock to prevent light sleep due to incompatibility currently
 static DRAM_ATTR QueueHandle_t s_pm_lock_sem = NULL;
+static void btdm_slp_tmr_callback(void *arg);
 #endif
 
 static inline void btdm_check_and_init_bb(void)
@@ -913,6 +915,9 @@ static uint32_t btdm_config_mask_load(void)
 #if CONFIG_BTDM_CONTROLLER_PINNED_TO_CORE == 1
     mask |= BTDM_CFG_CONTROLLER_RUN_APP_CPU;
 #endif
+#if CONFIG_BTDM_CONTROLLER_FULL_SCAN_SUPPORTED
+    mask |= BTDM_CFG_BLE_FULL_SCAN_SUPPORTED;
+#endif /* CONFIG_BTDM_CONTROLLER_FULL_SCAN_SUPPORTED */
     mask |= BTDM_CFG_SCAN_DUPLICATE_OPTIONS;
 
     mask |= BTDM_CFG_SEND_ADV_RESERVED_SIZE;

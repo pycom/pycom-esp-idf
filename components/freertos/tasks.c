@@ -2921,7 +2921,7 @@ TickType_t xTimeToWake;
 			/* Add the task to the suspended task list instead of a delayed task
 			list to ensure the task is not woken by a timing event.  It will
 			block indefinitely. */
-            traceMOVED_TASK_TO_SUSPENDED_LIST(pxCurrentTCB);
+            traceMOVED_TASK_TO_SUSPENDED_LIST(pxCurrentTCB[ xPortGetCoreID() ]);
 			vListInsertEnd( &xSuspendedTaskList, &( pxCurrentTCB[ xPortGetCoreID() ]->xGenericListItem ) );
 		}
 		else
@@ -4621,7 +4621,7 @@ TickType_t uxReturn;
 							of a delayed task list to ensure the task is not
 							woken by a timing event.  It will block
 							indefinitely. */
-                            traceMOVED_TASK_TO_SUSPENDED_LIST(pxCurrentTCB);
+                            traceMOVED_TASK_TO_SUSPENDED_LIST(pxCurrentTCB[ xPortGetCoreID() ]);
 							vListInsertEnd( &xSuspendedTaskList, &( pxCurrentTCB[ xPortGetCoreID() ]->xGenericListItem ) );
 						}
 						else
@@ -4737,7 +4737,7 @@ TickType_t uxReturn;
 							of a delayed task list to ensure the task is not
 							woken by a timing event.  It will block
 							indefinitely. */
-                            traceMOVED_TASK_TO_SUSPENDED_LIST(pxCurrentTCB);
+                            traceMOVED_TASK_TO_SUSPENDED_LIST(pxCurrentTCB[ xPortGetCoreID() ]);
 							vListInsertEnd( &xSuspendedTaskList, &( pxCurrentTCB[ xPortGetCoreID() ]->xGenericListItem ) );
 						}
 						else

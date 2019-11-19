@@ -37,8 +37,8 @@ pacman --noconfirm -S --needed gettext-devel gcc git make ncurses-devel flex bis
        mingw-w64-i686-python2-pip mingw-w64-i686-python2-cryptography unzip winpty
 
 # if IDF_PATH is set, install requirements now as well
-if [ -n $IDF_PATH ]; then
-	python -m pip install -r $IDF_PATH/requirements.txt
+if [ -n "$IDF_PATH" ]; then
+	python -m pip install -r "$IDF_PATH/requirements.txt"
 fi
 
 # Automatically download precompiled toolchain, unpack at /opt/xtensa-esp32-elf/
@@ -54,7 +54,7 @@ rm ~/${TOOLCHAIN_ZIP}
 cat > /etc/profile.d/esp32_toolchain.sh << EOF
 # This file was created by ESP-IDF windows_install_prerequisites.sh
 # and will be overwritten if that script is run again.
-export PATH="\/opt/xtensa-esp32-elf/bin:$PATH"
+export PATH="/opt/xtensa-esp32-elf/bin:\$PATH"
 EOF
 
 # clean up pacman package cache to save some disk space

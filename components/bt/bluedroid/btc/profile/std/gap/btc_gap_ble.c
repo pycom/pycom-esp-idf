@@ -967,6 +967,21 @@ void btc_gap_ble_arg_deep_copy(btc_msg_t *msg, void *p_dest, void *p_src)
         }
         break;
     }
+    case BTC_GAP_BLE_OOB_REQ_REPLY_EVT: {
+        btc_ble_gap_args_t *src = (btc_ble_gap_args_t *)p_src;
+        btc_ble_gap_args_t  *dst = (btc_ble_gap_args_t *) p_dest;
+        uint8_t length = 0;
+        if (src->oob_req_reply.p_value) {
+            length = dst->oob_req_reply.len;
+            dst->oob_req_reply.p_value = osi_malloc(length);
+            if (dst->oob_req_reply.p_value != NULL) {
+                memcpy(dst->oob_req_reply.p_value, src->oob_req_reply.p_value, length);
+            } else {
+                BTC_TRACE_ERROR("%s %d no mem\n",__func__, msg->act);
+            }
+        }
+        break;
+    }
     default:
         BTC_TRACE_ERROR("Unhandled deep copy %d\n", msg->act);
         break;
@@ -1017,6 +1032,13 @@ void btc_gap_ble_arg_deep_free(btc_msg_t *msg)
     }
     case BTC_GAP_BLE_SET_SECURITY_PARAM_EVT: {
         uint8_t *value = ((btc_ble_gap_args_t *)msg->arg)->set_security_param.value;
+        if (value) {
+            osi_free(value);
+        }
+        break;
+    }
+    case BTC_GAP_BLE_OOB_REQ_REPLY_EVT: {
+        uint8_t *value = ((btc_ble_gap_args_t *)msg->arg)->oob_req_reply.p_value;
         if (value) {
             osi_free(value);
         }
@@ -1167,6 +1189,12 @@ void btc_gap_ble_call_handler(btc_msg_t *msg)
                 bta_dm_co_ble_set_max_key_size(key_size);
                 break;
             }
+            case ESP_BLE_SM_MIN_KEY_SIZE: {
+                uint8_t key_size = 0;
+                STREAM_TO_UINT8(key_size, value);
+                bta_dm_co_ble_set_min_key_size(key_size);
+                break;
+            }
             case ESP_BLE_SM_SET_STATIC_PASSKEY: {
                 uint32_t passkey = 0;
                 for(uint8_t i = 0; i < arg->set_security_param.len; i++)
@@ -1184,6 +1212,12 @@ void btc_gap_ble_call_handler(btc_msg_t *msg)
                 uint8_t enable = 0;
                 STREAM_TO_UINT8(enable, value);
                 bta_dm_co_ble_set_accept_auth_enable(enable);
+                break;
+            }
+            case ESP_BLE_SM_OOB_SUPPORT: {
+                uint8_t enable = 0;
+                STREAM_TO_UINT8(enable, value);
+                bta_dm_co_ble_oob_support(enable);
                 break;
             }
             default:
@@ -1216,6 +1250,9 @@ void btc_gap_ble_call_handler(btc_msg_t *msg)
         BTA_DmRemoveDevice(bd_addr, BT_TRANSPORT_LE);
         break;
     }
+    case BTC_GAP_BLE_OOB_REQ_REPLY_EVT:
+        BTA_DmOobReply(arg->oob_req_reply.bd_addr, arg->oob_req_reply.len, arg->oob_req_reply.p_value);
+        break;
 #endif  ///SMP_INCLUDED == TRUE
     case BTC_GAP_BLE_DISCONNECT_EVT:
         btc_ble_disconnect(arg->disconnect.remote_device);

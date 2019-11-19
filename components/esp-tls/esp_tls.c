@@ -141,22 +141,33 @@ err_freeaddr:
     return ret;
 }
 
+esp_err_t esp_tls_init_global_ca_store()
+{
+    if (global_cacert == NULL) {
+        global_cacert = (mbedtls_x509_crt *)calloc(1, sizeof(mbedtls_x509_crt));
+        if (global_cacert == NULL) {
+            ESP_LOGE(TAG, "global_cacert not allocated");
+            return ESP_ERR_NO_MEM;
+        }
+        mbedtls_x509_crt_init(global_cacert);
+    }
+    return ESP_OK;
+}
+
 esp_err_t esp_tls_set_global_ca_store(const unsigned char *cacert_pem_buf, const unsigned int cacert_pem_bytes)
 {
+    int ret;
     if (cacert_pem_buf == NULL) {
         ESP_LOGE(TAG, "cacert_pem_buf is null");
         return ESP_ERR_INVALID_ARG;
     }
-    if (global_cacert != NULL) {
-        mbedtls_x509_crt_free(global_cacert);
-    }
-    global_cacert = (mbedtls_x509_crt *)calloc(1, sizeof(mbedtls_x509_crt));
     if (global_cacert == NULL) {
-        ESP_LOGE(TAG, "global_cacert not allocated");
-        return ESP_ERR_NO_MEM;
+        ret = esp_tls_init_global_ca_store();
+        if (ret != ESP_OK) {
+            return ret;
+        }
     }
-    mbedtls_x509_crt_init(global_cacert);
-    int ret = mbedtls_x509_crt_parse(global_cacert, cacert_pem_buf, cacert_pem_bytes);
+    ret = mbedtls_x509_crt_parse(global_cacert, cacert_pem_buf, cacert_pem_bytes);
     if (ret < 0) {
         ESP_LOGE(TAG, "mbedtls_x509_crt_parse returned -0x%x\n\n", -ret);
         mbedtls_x509_crt_free(global_cacert);
@@ -252,9 +263,11 @@ static int create_ssl_handle(esp_tls_t *tls, const char *hostname, size_t hostle
         goto exit;
     }
 
+#ifdef CONFIG_MBEDTLS_SSL_ALPN
     if (cfg->alpn_protos) {
         mbedtls_ssl_conf_alpn_protocols(&tls->conf, cfg->alpn_protos);
     }
+#endif
 
     if (cfg->use_global_ca_store == true) {
         if (global_cacert == NULL) {
@@ -486,9 +499,9 @@ static int get_port(const char *url, struct http_parser_url *u)
     if (u->field_data[UF_PORT].len) {
         return strtol(&url[u->field_data[UF_PORT].off], NULL, 10);
     } else {
-        if (strncmp(&url[u->field_data[UF_SCHEMA].off], "http", u->field_data[UF_SCHEMA].len) == 0) {
+        if (strncasecmp(&url[u->field_data[UF_SCHEMA].off], "http", u->field_data[UF_SCHEMA].len) == 0) {
             return 80;
-        } else if (strncmp(&url[u->field_data[UF_SCHEMA].off], "https", u->field_data[UF_SCHEMA].len) == 0) {
+        } else if (strncasecmp(&url[u->field_data[UF_SCHEMA].off], "https", u->field_data[UF_SCHEMA].len) == 0) {
             return 443;
         }
     }

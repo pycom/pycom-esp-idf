@@ -9,7 +9,7 @@ CoAP server example would startup a daemon task, receive data from CoAP client a
 The Constrained Application Protocol (CoAP) is a specialized web transfer protocol for use with constrained nodes and constrained networks in the Internet of Things.   
 The protocol is designed for machine-to-machine (M2M) applications such as smart energy and building automation.
 
-Please refer to [RFC7252](https://www.rfc-editor.org/rfc/pdfrfc/rfc7252.txt.pdf) for more details.
+please refer to [RFC7252](https://www.rfc-editor.org/rfc/pdfrfc/rfc7252.txt.pdf) for more details.
 
 ## How to use example
 

@@ -17,7 +17,7 @@
 #include "soc/io_mux_reg.h"
 #include "soc/cpu.h"
 
-#include "idf_performance.h"
+#include "test_utils.h"
 
 #define REPEAT_OPS 10000
 
@@ -40,8 +40,8 @@ TEST_CASE("portMUX spinlocks (no contention)", "[freertos]")
     BENCHMARK_START();
 
     for (int i = 0; i < REPEAT_OPS; i++) {
-        portENTER_CRITICAL(&mux);
-        portEXIT_CRITICAL(&mux);
+        portENTER_CRITICAL_ISR(&mux);
+        portEXIT_CRITICAL_ISR(&mux);
     }
     BENCHMARK_END("no contention lock");
 

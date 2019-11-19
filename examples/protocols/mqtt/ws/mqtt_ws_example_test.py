@@ -111,5 +111,6 @@ def test_examples_protocol_mqtt_ws(env, extra_data):
         event_stop_client.set()
         thread1.join()
 
+
 if __name__ == '__main__':
     test_examples_protocol_mqtt_ws()

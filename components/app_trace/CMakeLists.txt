@@ -18,6 +18,7 @@ endif()
 
 set(COMPONENT_REQUIRES)
 set(COMPONENT_PRIV_REQUIRES xtensa-debug-module)
+set(COMPONENT_ADD_LDFRAGMENTS linker.lf)
 
 register_component()
 
@@ -25,4 +26,4 @@ register_component()
 # for gcov
 component_compile_options("-fno-profile-arcs" "-fno-test-coverage")
 
-target_link_libraries(app_trace gcov)
+target_link_libraries(${COMPONENT_TARGET} gcov)

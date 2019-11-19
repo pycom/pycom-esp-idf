@@ -1,5 +1,6 @@
 Build System
 ************
+:link_to_translation:`zh_CN:[中文]`
 
 This document explains the Espressif IoT Development Framework build system and the
 concept of "components"
@@ -187,6 +188,12 @@ The following variables are set at the project level, but exported for use in th
 - ``CC``, ``LD``, ``AR``, ``OBJCOPY``: Full paths to each tool from the gcc xtensa cross-toolchain.
 - ``HOSTCC``, ``HOSTLD``, ``HOSTAR``: Full names of each tool from the host native toolchain.
 - ``IDF_VER``: ESP-IDF version, retrieved from either ``$(IDF_PATH)/version.txt`` file (if present) else using git command ``git describe``. Recommended format here is single liner that specifies major IDF release version, e.g. ``v2.0`` for a tagged release or ``v2.0-275-g0efaa4f`` for an arbitrary commit. Application can make use of this by calling :cpp:func:`esp_get_idf_version`.
+- ``PROJECT_VER``: Project version. 
+
+  * If ``PROJECT_VER`` variable is set in project Makefile file, its value will be used.
+  * Else, if the ``$PROJECT_PATH/version.txt`` exists, its contents will be used as ``PROJECT_VER``.
+  * Else, if the project is located inside a Git repository, the output of git describe will be used.
+  * Otherwise, ``PROJECT_VER`` will be "1".
 
 If you modify any of these variables inside ``component.mk`` then this will not prevent other components from building but it may make your component hard to build and/or debug.
 
@@ -274,6 +281,8 @@ The following variables can be set inside ``component.mk`` to control the build 
   settings. Component-specific additions can be made via ``CXXFLAGS
   +=``. It is also possible (although not recommended) to override
   this variable completely for a component.
+- ``COMPONENT_ADD_LDFRAGMENTS``: Paths to linker fragment files for the linker 
+  script generation functionality. See :doc:`Linker Script Generation <linker-script-generation>`.
 
 To apply compilation flags to a single source file, you can add a variable override as a target, ie::
 
@@ -341,6 +350,16 @@ Setting ``BATCH_BUILD`` implies the following:
 - Verbose output (same as ``V=1``, see below). If you don't want verbose output, also set ``V=0``.
 - If the project configuration is missing new configuration items (from new components or esp-idf updates) then the project use the default values, instead of prompting the user for each item.
 - If the build system needs to invoke ``menuconfig``, an error is printed and the build fails.
+
+.. _make-size:
+
+Advanced Make Targets
+---------------------
+
+- ``make app``, ``make bootloader``, ``make partition table`` can be used to build only the app, bootloader, or partition table from the project as applicable.
+- ``make erase_flash`` and ``make erase_ota`` will use esptool.py to erase the entire flash chip and the OTA selection setting from the flash chip, respectively.
+- ``make size`` prints some size information about the app. ``make size-components`` and ``make size-files`` are similar targets which print more detailed per-component or per-source-file information, respectively.
+
 
 Debugging The Make Process
 --------------------------
@@ -570,6 +589,13 @@ The names are generated from the full name of the file, as given in COMPONENT_EM
 
 For an example of using this technique, see :example:`protocols/https_request` - the certificate file contents are loaded from the text .pem file at compile time.
 
+Code and Data Placements
+------------------------
+
+ESP-IDF has a feature called linker script generation that enables components to define where its code and data will be placed in memory through 
+linker fragment files. These files are processed by the build system, and is used to augment the linker script used for linking 
+app binary. See :doc:`Linker Script Generation <linker-script-generation>` for a quick start guide as well as a detailed discussion
+of the mechanism.
 
 Fully Overriding The Component Makefile
 ---------------------------------------

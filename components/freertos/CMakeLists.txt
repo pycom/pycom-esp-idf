@@ -20,10 +20,10 @@ set(COMPONENT_SRCS "FreeRTOS-openocd.c"
 # app_trace is required by FreeRTOS headers only when CONFIG_SYSVIEW_ENABLE=y,
 # but requirements can't depend on config options, so always require it.
 set(COMPONENT_REQUIRES app_trace)
-
+set(COMPONENT_ADD_LDFRAGMENTS linker.lf)
 register_component()
 
-target_link_libraries(freertos "-Wl,--undefined=uxTopUsedPriority")
+target_link_libraries(${COMPONENT_TARGET} "-Wl,--undefined=uxTopUsedPriority")
 
 set_source_files_properties(
     tasks.c

@@ -108,10 +108,6 @@ Currently, the following peripheral drivers are aware of DFS and will use ``ESP_
 
 - SPI master
 
-- I2C
-
-- I2S (If APLL clock is used then it will use ``ESP_PM_NO_LIGHT_SLEEP`` lock)
-
 - SDMMC
 
 The following drivers will hold ``ESP_PM_APB_FREQ_MAX`` lock while the driver is enabled:
@@ -127,6 +123,10 @@ The following drivers will hold ``ESP_PM_APB_FREQ_MAX`` lock while the driver is
 - CAN - between calls to :cpp:func:`can_driver_install` and :cpp:func:`can_driver_uninstall`
 
 The following peripheral drivers are not aware of DFS yet. Applications need to acquire/release locks when necessary:
+
+- I2C
+
+- I2S
 
 - MCPWM
 

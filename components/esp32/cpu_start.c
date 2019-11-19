@@ -72,7 +72,8 @@
 #include "esp_flash_encrypt.h"
 #include "pm_impl.h"
 #include "trax.h"
-#include "bootloader_common.h"
+#include "esp_ota_ops.h"
+#include "bootloader_flash_config.h"
 
 #define STRINGIFY(s) STRINGIFY2(s)
 #define STRINGIFY2(s) #s
@@ -159,28 +160,44 @@ void IRAM_ATTR call_start_cpu0()
     }
 
 #if CONFIG_SPIRAM_BOOT_INIT
-    if (esp_get_revision() > 0) {
-    	esp_spiram_init_cache();
-    	if (esp_spiram_init() != ESP_OK) {
+    esp_spiram_init_cache();
+    if (esp_spiram_init() != ESP_OK) {
 #if CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
-        	ESP_EARLY_LOGE(TAG, "Failed to init external RAM, needed for external .bss segment");
-        	abort();
+        ESP_EARLY_LOGE(TAG, "Failed to init external RAM, needed for external .bss segment");
+        abort();
 #endif
 
 #if CONFIG_SPIRAM_IGNORE_NOTFOUND
-        	ESP_EARLY_LOGI(TAG, "Failed to init external RAM; continuing without it.");
-        	s_spiram_okay = false;
+        ESP_EARLY_LOGI(TAG, "Failed to init external RAM; continuing without it.");
+        s_spiram_okay = false;
 #else
-        	ESP_EARLY_LOGE(TAG, "Failed to init external RAM!");
-        	abort();
+        ESP_EARLY_LOGE(TAG, "Failed to init external RAM!");
+        abort();
 #endif
-    	}
-# else  // If psram is uninitialized, we need to improve the flash cs timing.
-    	bootloader_common_set_flash_cs_timing();
+    }
 #endif
-}
 
     ESP_EARLY_LOGI(TAG, "Pro cpu up.");
+    if (LOG_LOCAL_LEVEL >= ESP_LOG_INFO) {
+        const esp_app_desc_t *app_desc = esp_ota_get_app_description();
+        ESP_EARLY_LOGI(TAG, "Application information:");
+#ifndef CONFIG_APP_EXCLUDE_PROJECT_NAME_VAR
+        ESP_EARLY_LOGI(TAG, "Project name:     %s", app_desc->project_name);
+#endif
+#ifndef CONFIG_APP_EXCLUDE_PROJECT_VER_VAR
+        ESP_EARLY_LOGI(TAG, "App version:      %s", app_desc->version);
+#endif
+#ifdef CONFIG_APP_SECURE_VERSION
+        ESP_EARLY_LOGI(TAG, "Secure version:   %d", app_desc->secure_version);
+#endif
+#ifdef CONFIG_APP_COMPILE_TIME_DATE
+        ESP_EARLY_LOGI(TAG, "Compile time:     %s %s", app_desc->date, app_desc->time);
+#endif
+        char buf[17];
+        esp_ota_get_app_elf_sha256(buf, sizeof(buf));
+        ESP_EARLY_LOGI(TAG, "ELF file SHA256:  %s...", buf);
+        ESP_EARLY_LOGI(TAG, "ESP-IDF:          %s", app_desc->idf_ver);
+    }
 
 #if !CONFIG_FREERTOS_UNICORE
     if (REG_GET_BIT(EFUSE_BLK0_RDATA3_REG, EFUSE_RD_CHIP_VER_DIS_APP_CPU)) {
@@ -215,20 +232,16 @@ void IRAM_ATTR call_start_cpu0()
 
 
 #if CONFIG_SPIRAM_MEMTEST
-	if (esp_get_revision() > 0) {
-    	if (s_spiram_okay) {
-        	bool ext_ram_ok=esp_spiram_test();
-        	if (!ext_ram_ok) {
-            	ESP_EARLY_LOGE(TAG, "External RAM failed memory test!");
-            	abort();
-        	}
-    	}
-	}
+    if (s_spiram_okay) {
+        bool ext_ram_ok=esp_spiram_test();
+        if (!ext_ram_ok) {
+            ESP_EARLY_LOGE(TAG, "External RAM failed memory test!");
+            abort();
+        }
+    }
 #endif
 #if CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
-	if (esp_get_revision() > 0) {
-    	memset(&_ext_ram_bss_start, 0, (&_ext_ram_bss_end - &_ext_ram_bss_start) * sizeof(_ext_ram_bss_start));
-	}
+    memset(&_ext_ram_bss_start, 0, (&_ext_ram_bss_end - &_ext_ram_bss_start) * sizeof(_ext_ram_bss_start));
 #endif
     /* Initialize heap allocator. WARNING: This *needs* to happen *after* the app cpu has booted.
        If the heap allocator is initialized first, it will put free memory linked list items into
@@ -294,19 +307,17 @@ void start_cpu0_default(void)
     esp_err_t err;
     esp_setup_syscall_table();
 
-	if (esp_get_revision() > 0) {
-    	if (s_spiram_okay) {
+    if (s_spiram_okay) {
 #if CONFIG_SPIRAM_BOOT_INIT && (CONFIG_SPIRAM_USE_CAPS_ALLOC || CONFIG_SPIRAM_USE_MALLOC)
-        	esp_err_t r=esp_spiram_add_to_heapalloc();
-        	if (r != ESP_OK) {
-            	ESP_EARLY_LOGE(TAG, "External RAM could not be added to heap!");
-            	abort();
-        	}
+        esp_err_t r=esp_spiram_add_to_heapalloc();
+        if (r != ESP_OK) {
+            ESP_EARLY_LOGE(TAG, "External RAM could not be added to heap!");
+            abort();
+        }
 #if CONFIG_SPIRAM_USE_MALLOC
-        	heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
+        heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
 #endif
 #endif
-		}
     }
 
 //Enable trace memory and immediately start trace.
@@ -386,6 +397,16 @@ void start_cpu0_default(void)
     spi_flash_init();
     /* init default OS-aware flash access critical section */
     spi_flash_guard_set(&g_flash_guard_default_ops);
+
+    uint8_t revision = esp_efuse_get_chip_ver();
+    ESP_LOGI(TAG, "Chip Revision: %d", revision);
+    if (revision > CONFIG_ESP32_REV_MIN) {
+        ESP_LOGW(TAG, "Chip revision is higher than the one configured in menuconfig. Suggest to upgrade it.");
+    } else if(revision != CONFIG_ESP32_REV_MIN) {
+        ESP_LOGE(TAG, "ESP-IDF can't support this chip revision. Modify minimum supported revision in menuconfig");
+        abort();
+    }
+
 #ifdef CONFIG_PM_ENABLE
     esp_pm_impl_init();
 #ifdef CONFIG_PM_DFS_INIT_AUTO
@@ -400,10 +421,26 @@ void start_cpu0_default(void)
 
 #if CONFIG_ESP32_ENABLE_COREDUMP
     esp_core_dump_init();
+    size_t core_data_sz = 0;
+    size_t core_data_addr = 0;
+    if (esp_core_dump_image_get(&core_data_addr, &core_data_sz) == ESP_OK && core_data_sz > 0) {
+        ESP_LOGI(TAG, "Found core dump %d bytes in flash @ 0x%x", core_data_sz, core_data_addr);
+    }
 #endif
 
 #if CONFIG_SW_COEXIST_ENABLE
     esp_coex_adapter_register(&g_coex_adapter_funcs);
+#endif
+
+    bootloader_flash_update_id();
+#if !CONFIG_SPIRAM_BOOT_INIT  // If psram is uninitialized, we need to improve some flash configuration.
+    esp_image_header_t fhdr;
+    const esp_partition_t *partition = esp_ota_get_running_partition();
+    spi_flash_read(partition->address, &fhdr, sizeof(esp_image_header_t));
+    bootloader_flash_clock_config(&fhdr);
+    bootloader_flash_gpio_config(&fhdr);
+    bootloader_flash_dummy_config(&fhdr);
+    bootloader_flash_cs_timing_config();
 #endif
 
     portBASE_TYPE res = xTaskCreatePinnedToCore(&main_task, "main",
@@ -478,13 +515,11 @@ static void main_task(void* args)
 
     // Now we have startup stack RAM available for heap, enable any DMA pool memory
 #if CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL
-	if (esp_get_revision() > 0) {
-    	esp_err_t r = esp_spiram_reserve_dma_pool(CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL);
-    	if (r != ESP_OK) {
-        	ESP_EARLY_LOGE(TAG, "Could not reserve internal/DMA pool (error 0x%x)", r);
-        	abort();
-    	}
-	}
+    esp_err_t r = esp_spiram_reserve_dma_pool(CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL);
+    if (r != ESP_OK) {
+        ESP_EARLY_LOGE(TAG, "Could not reserve internal/DMA pool (error 0x%x)", r);
+        abort();
+    }
 #endif
 
     //Initialize task wdt if configured to do so
@@ -512,6 +547,12 @@ static void main_task(void* args)
     // Now that the application is about to start, disable boot watchdog
 #ifndef CONFIG_BOOTLOADER_WDT_DISABLE_IN_USER_CODE
     rtc_wdt_disable();
+#endif
+#ifdef CONFIG_EFUSE_SECURE_VERSION_EMULATE
+    const esp_partition_t *efuse_partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_EFUSE_EM, NULL);
+    if (efuse_partition) {
+        esp_efuse_init(efuse_partition->address, efuse_partition->size);
+    }
 #endif
     app_main();
     vTaskDelete(NULL);

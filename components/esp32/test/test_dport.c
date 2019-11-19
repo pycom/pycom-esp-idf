@@ -11,12 +11,14 @@
 #include "freertos/xtensa_timer.h"
 #include "soc/cpu.h"
 #include "unity.h"
+#include "test_utils.h"
 #include "rom/uart.h"
 #include "soc/uart_reg.h"
 #include "soc/dport_reg.h"
 #include "soc/rtc.h"
 #include "esp_intr_alloc.h"
 #include "driver/timer.h"
+
 #define MHZ (1000000)
 static volatile bool exit_flag;
 static bool dport_test_result;
@@ -388,10 +390,8 @@ static void accessDPORT2(void *pvParameters)
 
     TEST_ESP_OK(esp_intr_alloc(ETS_INTERNAL_TIMER2_INTR_SOURCE, ESP_INTR_FLAG_LEVEL5 | ESP_INTR_FLAG_IRAM, NULL, NULL, &inth));
 
-    XTHAL_SET_CCOMPARE(2, XTHAL_GET_CCOUNT() + 21);
-    int sync = 0;
     while (exit_flag == false) {
-        ets_delay_us(++sync % 10);
+        XTHAL_SET_CCOMPARE(2, XTHAL_GET_CCOUNT() + 21);
         for (int i = 0; i < 200; ++i) {
             if (DPORT_REG_READ(DPORT_DATE_REG) != DPORT_REG_READ(DPORT_DATE_REG)) {
                 dport_test_result = false;

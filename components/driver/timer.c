@@ -39,19 +39,19 @@ static const char* TIMER_TAG = "timer_group";
 static timg_dev_t *TG[2] = {&TIMERG0, &TIMERG1};
 static portMUX_TYPE timer_spinlock[TIMER_GROUP_MAX] = {portMUX_INITIALIZER_UNLOCKED, portMUX_INITIALIZER_UNLOCKED};
 
-#define TIMER_ENTER_CRITICAL(mux)      portENTER_CRITICAL(mux);
-#define TIMER_EXIT_CRITICAL(mux)       portEXIT_CRITICAL(mux);
+#define TIMER_ENTER_CRITICAL(mux)      portENTER_CRITICAL_SAFE(mux);
+#define TIMER_EXIT_CRITICAL(mux)       portEXIT_CRITICAL_SAFE(mux);
 
 esp_err_t timer_get_counter_value(timer_group_t group_num, timer_idx_t timer_num, uint64_t* timer_val)
 {
     TIMER_CHECK(group_num < TIMER_GROUP_MAX, TIMER_GROUP_NUM_ERROR, ESP_ERR_INVALID_ARG);
     TIMER_CHECK(timer_num < TIMER_MAX, TIMER_NUM_ERROR, ESP_ERR_INVALID_ARG);
     TIMER_CHECK(timer_val != NULL, TIMER_PARAM_ADDR_ERROR, ESP_ERR_INVALID_ARG);
-    portENTER_CRITICAL(&timer_spinlock[group_num]);
+    portENTER_CRITICAL_SAFE(&timer_spinlock[group_num]);
     TG[group_num]->hw_timer[timer_num].update = 1;
     *timer_val = ((uint64_t) TG[group_num]->hw_timer[timer_num].cnt_high << 32)
         | (TG[group_num]->hw_timer[timer_num].cnt_low);
-    portEXIT_CRITICAL(&timer_spinlock[group_num]);
+    portEXIT_CRITICAL_SAFE(&timer_spinlock[group_num]);
     return ESP_OK;
 }
 
@@ -154,10 +154,10 @@ esp_err_t timer_get_alarm_value(timer_group_t group_num, timer_idx_t timer_num, 
     TIMER_CHECK(group_num < TIMER_GROUP_MAX, TIMER_GROUP_NUM_ERROR, ESP_ERR_INVALID_ARG);
     TIMER_CHECK(timer_num < TIMER_MAX, TIMER_NUM_ERROR, ESP_ERR_INVALID_ARG);
     TIMER_CHECK(alarm_value != NULL, TIMER_PARAM_ADDR_ERROR, ESP_ERR_INVALID_ARG);
-    portENTER_CRITICAL(&timer_spinlock[group_num]);
+    portENTER_CRITICAL_SAFE(&timer_spinlock[group_num]);
     *alarm_value = ((uint64_t) TG[group_num]->hw_timer[timer_num].alarm_high << 32)
                 | (TG[group_num]->hw_timer[timer_num].alarm_low);
-    portEXIT_CRITICAL(&timer_spinlock[group_num]);
+    portEXIT_CRITICAL_SAFE(&timer_spinlock[group_num]);
     return ESP_OK;
 }
 
@@ -219,6 +219,11 @@ esp_err_t timer_init(timer_group_t group_num, timer_idx_t timer_num, const timer
         periph_module_enable(PERIPH_TIMG1_MODULE);
     }
     TIMER_ENTER_CRITICAL(&timer_spinlock[group_num]);
+    //Some applications use a software reset, at the reset time, timer_group happens to generate an interrupt.
+    //but software reset does not clear interrupt status. This is not safe for application when enable the interrupt of timer_group.
+    //we need to disable the interrupt and clear the interrupt status here.
+    TG[group_num]->int_ena.val &= (~BIT(timer_num));
+    TG[group_num]->int_clr_timers.val = BIT(timer_num);
     TG[group_num]->hw_timer[timer_num].config.autoreload = config->auto_reload;
     TG[group_num]->hw_timer[timer_num].config.divider = (uint16_t) config->divider;
     TG[group_num]->hw_timer[timer_num].config.enable = config->counter_en;

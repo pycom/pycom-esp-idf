@@ -42,16 +42,14 @@ static esp_err_t test_header_get_handler(httpd_req_t *req)
         buf = malloc(++buf_len);
         if (!buf) {
             ESP_LOGE(TAG, "Failed to allocate memory of %d bytes!", buf_len);
-            httpd_resp_set_status(req, HTTPD_500);
-            httpd_resp_send(req, "Memory allocation failed", sizeof("Memory allocation failed"));
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory allocation failed");
             return ESP_ERR_NO_MEM;
         }
         /* Copy null terminated value string into buffer */
         if (httpd_req_get_hdr_value_str(req, "Header1", buf, buf_len) == ESP_OK) {
             ESP_LOGI(TAG, "Header1 content: %s", buf);
             if (strcmp("Value1", buf) != 0) {
-                httpd_resp_set_status(req, HTTPD_500);
-                httpd_resp_send(req, "Memory allocation failed", sizeof("Memory allocation failed"));
+                httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Wrong value of Header1 received");
                 free(buf);
                 return ESP_ERR_INVALID_ARG;
             } else {
@@ -59,16 +57,14 @@ static esp_err_t test_header_get_handler(httpd_req_t *req)
             }
         } else {
             ESP_LOGE(TAG, "Error in getting value of Header1");
-            httpd_resp_set_status(req, HTTPD_500);
-            httpd_resp_send(req, "Memory allocation failed", sizeof("Memory allocation failed"));
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Error in getting value of Header1");
             free(buf);
             return ESP_FAIL;
         }
         free(buf);
     } else {
         ESP_LOGE(TAG, "Header1 not found");
-        httpd_resp_set_status(req, HTTPD_500);
-        httpd_resp_send(req, "Memory allocation failed", sizeof("Memory allocation failed"));
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Header1 not found");
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -77,16 +73,14 @@ static esp_err_t test_header_get_handler(httpd_req_t *req)
         buf = malloc(++buf_len);
         if (!buf) {
             ESP_LOGE(TAG, "Failed to allocate memory of %d bytes!", buf_len);
-            httpd_resp_set_status(req, HTTPD_500);
-            httpd_resp_send(req, "Memory allocation failed", sizeof("Memory allocation failed"));
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory allocation failed");
             return ESP_ERR_NO_MEM;
         }
         /* Copy null terminated value string into buffer */
         if (httpd_req_get_hdr_value_str(req, "Header3", buf, buf_len) == ESP_OK) {
             ESP_LOGI(TAG, "Header3 content: %s", buf);
             if (strcmp("Value3", buf) != 0) {
-                httpd_resp_set_status(req, HTTPD_500);
-                httpd_resp_send(req, "Memory allocation failed", sizeof("Memory allocation failed"));
+                httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Wrong value of Header3 received");
                 free(buf);
                 return ESP_ERR_INVALID_ARG;
             } else {
@@ -94,16 +88,14 @@ static esp_err_t test_header_get_handler(httpd_req_t *req)
             }
         } else {
             ESP_LOGE(TAG, "Error in getting value of Header3");
-            httpd_resp_set_status(req, HTTPD_500);
-            httpd_resp_send(req, "Memory allocation failed", sizeof("Memory allocation failed"));
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Error in getting value of Header3");
             free(buf);
             return ESP_FAIL;
         }
         free(buf);
     } else {
         ESP_LOGE(TAG, "Header3 not found");
-        httpd_resp_set_status(req, HTTPD_500);
-        httpd_resp_send(req, "Memory allocation failed", sizeof("Memory allocation failed"));
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Header3 not found");
         return ESP_ERR_NOT_FOUND;
     }
 
@@ -111,8 +103,7 @@ static esp_err_t test_header_get_handler(httpd_req_t *req)
     buf = malloc(++buf_len);
     if (!buf) {
         ESP_LOGE(TAG, "Failed to allocate memory of %d bytes!", buf_len);
-        httpd_resp_set_status(req, HTTPD_500);
-        httpd_resp_send(req, "Memory allocation failed", sizeof("Memory allocation failed"));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory allocation failed");
         return ESP_ERR_NO_MEM;
     }
     if (httpd_req_get_hdr_value_str(req, "Header2", buf, buf_len) == ESP_OK) {
@@ -120,8 +111,7 @@ static esp_err_t test_header_get_handler(httpd_req_t *req)
         httpd_resp_send(req, buf, strlen(buf));
     } else {
         ESP_LOGE(TAG, "Header2 not found");
-        httpd_resp_set_status(req, HTTPD_500);
-        httpd_resp_send(req, "Memory allocation failed", sizeof("Memory allocation failed"));
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Header2 not found");
         return ESP_FAIL;
     }
 
@@ -155,6 +145,7 @@ esp_err_t echo_post_handler(httpd_req_t *req)
     int    ret;
 
     if (!buf) {
+        ESP_LOGE(TAG, "Failed to allocate memory of %d bytes!", req->content_len + 1);
         httpd_resp_send_500(req);
         return ESP_FAIL;
     }
@@ -184,12 +175,15 @@ esp_err_t echo_post_handler(httpd_req_t *req)
     if (hdr_len) {
         /* Read Custom header value */
         req_hdr = malloc(hdr_len + 1);
-        if (req_hdr) {
-            httpd_req_get_hdr_value_str(req, "Custom", req_hdr, hdr_len + 1);
-
-            /* Set as additional header for response packet */
-            httpd_resp_set_hdr(req, "Custom", req_hdr);
+        if (!req_hdr) {
+            ESP_LOGE(TAG, "Failed to allocate memory of %d bytes!", hdr_len + 1);
+            httpd_resp_send_500(req);
+            return ESP_FAIL;
         }
+        httpd_req_get_hdr_value_str(req, "Custom", req_hdr, hdr_len + 1);
+
+        /* Set as additional header for response packet */
+        httpd_resp_set_hdr(req, "Custom", req_hdr);
     }
     httpd_resp_send(req, buf, req->content_len);
     free (req_hdr);
