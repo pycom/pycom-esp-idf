@@ -180,7 +180,7 @@ TEST_CASE("can write to UART while another task is reading", "[vfs]")
     flush_stdin_stdout();
 
     ESP_ERROR_CHECK( uart_driver_install(CONFIG_CONSOLE_UART_NUM,
-            256, 0, 0, NULL, 0) );
+            256, 0, 0, NULL, 0, NULL) );
     esp_vfs_dev_uart_use_driver(CONFIG_CONSOLE_UART_NUM);
 
 

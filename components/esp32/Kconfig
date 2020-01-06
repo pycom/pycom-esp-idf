@@ -1152,7 +1152,6 @@ menu Wi-Fi
             bool "Static"
         config ESP32_WIFI_DYNAMIC_TX_BUFFER
             bool "Dynamic"
-            depends on !SPIRAM_USE_MALLOC
     endchoice
 
     config ESP32_WIFI_TX_BUFFER_TYPE
