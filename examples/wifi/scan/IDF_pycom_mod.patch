@@ -1,0 +1,2491 @@
+diff --git a/components/bootloader/subproject/signature_verification_key.bin b/components/bootloader/subproject/signature_verification_key.bin
+new file mode 100644
+index 000000000..758554001
+--- /dev/null
++++ b/components/bootloader/subproject/signature_verification_key.bin
+@@ -0,0 +1 @@
++YÏçIA))‰Ô->!ìPb4kè¹JœÊ¬He‚™£toÈ¡ÅŠK¡/¹œØ†”÷r›ÆfMÓ—D;þÿ|(E
+\ No newline at end of file
+diff --git a/components/bootloader_support/src/esp_image_format.c b/components/bootloader_support/src/esp_image_format.c
+index 7f5595251..1344b47b2 100644
+--- a/components/bootloader_support/src/esp_image_format.c
++++ b/components/bootloader_support/src/esp_image_format.c
+@@ -18,6 +18,7 @@
+ #include <soc/cpu.h>
+ #include <esp_image_format.h>
+ #include <esp_secure_boot.h>
++#define LOG_LOCAL_LEVEL ESP_LOG_ERROR
+ #include <esp_log.h>
+ #include <esp_spi_flash.h>
+ #include <bootloader_flash.h>
+@@ -194,15 +195,17 @@ static esp_err_t image_load(esp_image_load_mode_t mode, const esp_partition_pos_
+        rewritten the header - rely on esptool.py having verified the bootloader at flashing time, instead.
+     */
+     if (!is_bootloader) {
+-#ifdef SECURE_BOOT_CHECK_SIGNATURE
+-        // secure boot images have a signature appended
+-        err = verify_secure_boot_signature(sha_handle, data);
+-#else
+-        // No secure boot, but SHA-256 can be appended for basic corruption detection
++        if (esp_secure_boot_enabled()) {
++#ifdef CONFIG_SECURE_BOOT_ENABLED
++          // secure boot images have a signature appended
++          err = verify_secure_boot_signature(sha_handle, data);
++#endif // CONFIG_SECURE_BOOT_ENABLED
++        } else {
++          // No secure boot, but SHA-256 can be appended for basic corruption detection
+         if (sha_handle != NULL && !esp_cpu_in_ocd_debug_mode()) {
+-            err = verify_simple_hash(sha_handle, data);
++              err = verify_simple_hash(sha_handle, data);
++          }
+         }
+-#endif // SECURE_BOOT_CHECK_SIGNATURE
+     } else { // is_bootloader
+         // bootloader may still have a sha256 digest handle open
+         if (sha_handle != NULL) {
+diff --git a/components/driver/dma.c b/components/driver/dma.c
+new file mode 100644
+index 000000000..dcdde106e
+--- /dev/null
++++ b/components/driver/dma.c
+@@ -0,0 +1,349 @@
++// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#include "dma.h"
++#include "rom/ets_sys.h"
++#include "string.h"
++#include "stdlib.h"
++
++#define QUEUE_BLOCK_LENGTH  (4096L)
++
++#if 0
++// For test
++static uint32 flag = 0;
++dma_queue_t quespi0, quespi1;
++dma_queue_t quespi10, quespi11;
++ping_pong_buf_t PingPongBuf0spi;
++uint8_t bufspi[2048] = {0};
++
++ping_pong_buf_t PingPongBuf1spi;
++uint8_t bufspi1[2048] = {0};
++
++dma_element_t dmaEle0, dmaEle1;
++dma_element_t dmaEle10, dmaEle11;
++#endif
++void SHOWQUEUESPI(ping_pong_buf_t *pcfg)
++{
++    uint32_t i;
++    ets_printf("obj=%x pingbuffer=%x pongbuf=%x \r\n",
++              pcfg, pcfg->ping->bufAdr, pcfg->pong->bufAdr);
++    ets_printf("pingQue first=%x %08x last=%x %08x\r\n",
++              pcfg->ping->firstQueue, *pcfg->ping->firstQueue, pcfg->ping->lastQueue, *pcfg->ping->lastQueue);
++    ets_printf("pongQue first=%x %08x last=%x %08x\r\n",
++              pcfg->pong->firstQueue, *pcfg->ping->firstQueue, pcfg->pong->lastQueue, *pcfg->pong->lastQueue);
++    dma_queue_t *addr = (dma_queue_t*)pcfg->ping->firstQueue;
++    dma_queue_t *addr1 = (dma_queue_t*)pcfg->pong->firstQueue;
++    for (i = 0; i < pcfg->queueCnt; ++i) {
++        ets_printf("ping queue%d buf:%08x,len=%d,size=%d,cut_link:%08x,next_link:%08x\r\n", i,
++                  addr->buf_ptr, addr->datalen, addr->blocksize, addr, addr->next_link_ptr);
++        addr = (dma_queue_t*)addr->next_link_ptr;
++    }
++    for (i = 0; i < pcfg->queueCnt; ++i) {
++        ets_printf("pong queue%d buf:%08x,len=%d,size=%d,cut_link:%08x,next_link:%08x\r\n", i,
++                  addr1->buf_ptr, addr1->datalen, addr1->blocksize, addr1, addr1->next_link_ptr);
++        addr1 = (dma_queue_t*)addr1->next_link_ptr;
++    }
++}
++
++/**
++ * @brief Fill a link
++ *
++ */
++static void fill_one_link(uint8_t own, uint8_t eof, uint8_t sub_sof, uint16_t size, uint16_t length,
++                          uint32_t *buf_ptr, dma_queue_t *nxt_ptr, dma_queue_t *i2s_queue)
++{
++    i2s_queue->owner = own;
++    i2s_queue->eof = eof;
++    i2s_queue->sub_sof = sub_sof;
++    i2s_queue->datalen = 0x0FFF & length;
++    i2s_queue->blocksize = size ;
++    i2s_queue->buf_ptr = (uint32_t)buf_ptr;
++    i2s_queue->next_link_ptr = (uint32_t)nxt_ptr;
++    i2s_queue->unused = 0;
++}
++
++/**
++ * @brief Fill the queue
++ *
++ */
++static int dma_queue_fill(uint32_t cnt, uint32_t len, ping_pong_buf_t *cfg)
++{
++    if (0 == cnt) {
++        return -1;
++    }
++    // ping queue list
++    dma_queue_t *pingAry[cnt];
++    // pong queue list
++    dma_queue_t *pongAry[cnt];
++    uint32_t i, j;
++    memset(&pingAry, 0, sizeof(pingAry));
++    memset(&pongAry, 0, sizeof(pongAry));
++    cnt = 1;
++    for (i = 0; i < cnt; ++i) {
++        // if (flag == 0)
++        //    pingAry[i] = &quespi0;
++        // else
++        //    pingAry[i] = &quespi10;
++        pingAry[i] = (dma_queue_t*)malloc(sizeof(dma_queue_t));
++        // LOGD("ping queue list%d=%x %x %x\r\n", i, pingAry[i], &pingAry[i]->buf_ptr, &pingAry[i]->next_link_ptr);
++        if (NULL == pingAry[i]) {
++            for (j = 0; j < i; ++j) {
++                free(pingAry[j]);
++                pingAry[j] = NULL;
++            }
++            return -2;
++        }
++    }
++    for (i = 0; i < cnt; ++i) {
++        // if (flag == 0)
++        //     pongAry[i] = &quespi1;
++        // else
++        //     pongAry[i] = &quespi11;
++
++        pongAry[i] = (dma_queue_t*)malloc(sizeof(dma_queue_t));
++        //LOGD("pong queue list%d=%x %x %x\r\n", i, pongAry[i], &pongAry[i]->buf_ptr, &pongAry[i]->next_link_ptr);
++        if (NULL == pongAry[i]) {
++            for (j = 0; j < cnt; ++j) {
++                free(pingAry[j]);
++                pingAry[j] = NULL;
++            }
++            for (j = 0; j < i; ++j) {
++                free(pongAry[j]);
++                pongAry[j] = NULL;
++            }
++            return -2;
++        }
++    }
++
++    cfg->ping->firstQueue = pingAry[0];
++    cfg->pong->firstQueue = pongAry[0];
++    if (1 == cnt) {
++        cfg->ping->lastQueue = pingAry[0];
++        cfg->pong->lastQueue = pongAry[0];
++    } else {
++        cfg->ping->lastQueue = pingAry[cnt - 1];
++        cfg->pong->lastQueue = pongAry[cnt - 1];
++    }
++    uint32_t remainSize = len;
++    uint32_t bufSize = QUEUE_BLOCK_LENGTH;
++    for (i = 0; i < cnt; ++i) {
++        if (1 == cnt) {
++            // Queue list include only one link, and set up eof bit.
++            if (QUEUE_BLOCK_LENGTH == len) {
++                bufSize = len - 1;
++            } else {
++                bufSize = len;
++            }
++            fill_one_link(1, 1, 0, bufSize, bufSize, cfg->ping->bufAdr, pongAry[i], pingAry[i]);
++            fill_one_link(1, 1, 0, bufSize, bufSize, cfg->pong->bufAdr, pingAry[i], pongAry[i]);
++        } else {
++            if (i == (cnt - 1)) {
++                // ping/pong queue list last link connect to the pong/ping first link, and set up eof bit.
++                bufSize = remainSize;
++                fill_one_link(1, 1, 0, bufSize, bufSize, cfg->ping->bufAdr + ((QUEUE_BLOCK_LENGTH / sizeof(uint32_t)) * i),
++                              pongAry[0], pingAry[i]);
++                fill_one_link(1, 1, 0, bufSize, bufSize, cfg->pong->bufAdr + ((QUEUE_BLOCK_LENGTH / sizeof(uint32_t)) * i),
++                              pingAry[0], pongAry[i]);
++            } else {
++                // Conncet the next link.
++                fill_one_link(1, 0, 0, bufSize - 1, bufSize - 1, cfg->ping->bufAdr + ((QUEUE_BLOCK_LENGTH / sizeof(uint32_t)) * i), pingAry[i + 1], pingAry[i]);
++                fill_one_link(1, 0, 0, bufSize - 1, bufSize - 1, cfg->pong->bufAdr + ((QUEUE_BLOCK_LENGTH / sizeof(uint32_t)) * i), pongAry[i + 1], pongAry[i]);
++            }
++        }
++        remainSize -= bufSize;
++    }
++    return 0;
++}
++
++
++/**
++ * @brief Create a ping-pong buffer object used by DMA.
++ *
++ */
++ping_pong_buf_t* dma_buf_create(uint32_t bufLen)
++{
++    if (0 == bufLen) {
++        return NULL;
++    }
++    uint32_t i, j;
++    uint32_t queueCnt ;
++    uint8_t * pBuf = NULL;
++    i = bufLen / QUEUE_BLOCK_LENGTH;
++    j = bufLen % QUEUE_BLOCK_LENGTH;
++    if (0 == j) {
++        queueCnt = i;
++    } else {
++        queueCnt = i + 1;
++    }
++    // if (flag > 1) {
++    //     flag = 0;
++    // }
++    ets_printf("\r\nbufLen=%d queueCnt=%d\r\n", bufLen, queueCnt);
++
++    ping_pong_buf_t* pcfg;
++    pcfg = (ping_pong_buf_t*)malloc(sizeof(ping_pong_buf_t));
++    // if (flag == 0)
++    //     pcfg = &PingPongBuf0spi;//
++    // else
++    //     pcfg = &PingPongBuf1spi;//
++
++    if (NULL == pcfg) {
++        return NULL;
++    }
++//    if (flag == 0) {
++//        pBuf = bufspi; // ((uint8_t*)malloc(bufLen * 2)); // buflen is number of bytes buffer.malloc ping and pong buffer.
++//        pcfg->ping = &dmaEle0;
++//        pcfg->pong = &dmaEle1;
++//    } else {
++//        pBuf = bufspi1; // ((uint8_t*)malloc(bufLen * 2)); // buflen is number of bytes buffer.malloc ping and pong buffer.
++//        pcfg->ping = &dmaEle10;
++//        pcfg->pong = &dmaEle11;
++//    }
++    pBuf = ((uint8_t*)malloc(bufLen * 2)); // buflen is number of bytes buffer.malloc ping and pong buffer.
++    pcfg->ping = (dma_element_t*)malloc(sizeof(dma_element_t));
++    pcfg->pong = (dma_element_t*)malloc(sizeof(dma_element_t));
++    if ((NULL == pBuf)
++        || (NULL == pcfg->pong)
++        || (NULL == pcfg->ping)) {
++
++        if (pBuf) {free(pBuf); pBuf = NULL;}
++        if (pcfg->pong){ free(pcfg->pong); pcfg->pong = NULL;}
++        if (pcfg->ping){ free(pcfg->ping); pcfg->ping = NULL;}
++        if (pcfg) {free(pcfg); pcfg = NULL;}
++        ets_printf("Malloc ping->bufAdr failed");
++        return NULL;
++    }
++    //
++    memset(pBuf, 0, (bufLen * 2));
++    pcfg->ping->bufAdr = (uint32_t*)pBuf;
++    pcfg->pong->bufAdr = (uint32_t*)(pBuf + bufLen);
++
++    if (dma_queue_fill(queueCnt, bufLen, pcfg) < 0) {
++        free(pcfg->ping->bufAdr);
++        pcfg->ping->bufAdr = NULL;
++        pcfg->pong->bufAdr = NULL;
++        if (pBuf) {free(pBuf); pBuf = NULL;}
++        if (pcfg->pong){ free(pcfg->pong); pcfg->pong = NULL;}
++        if (pcfg->ping){ free(pcfg->ping); pcfg->ping = NULL;}
++        if (pcfg) {free(pcfg); pcfg = NULL;}
++        return NULL;
++    }
++    pcfg->len = bufLen;         // Buffer length
++    pcfg->queueCnt = queueCnt;  // Number of queue
++ //   flag++;
++
++    SHOWQUEUESPI(pcfg);
++    return pcfg;
++}
++
++/**
++ * @brief Reset the dma buffer length.
++ *
++ */
++int dma_buf_len_reset(ping_pong_buf_t *obj)
++{
++    if (NULL == obj) {
++        return -1;
++    }
++    dma_queue_t *dmaQueCur = obj->ping->firstQueue;
++    dma_queue_t *dmaQueNext = NULL;
++
++    ets_printf("next_link_ptr=%x \r\n", obj->backupQue.next_link_ptr);
++    if (obj->backupQue.next_link_ptr) {
++        while (dmaQueNext != obj->ping->firstQueue) {
++            dmaQueNext = (dma_queue_t*)dmaQueCur->next_link_ptr;
++            if ((dma_queue_t*)obj->backupQue.next_link_ptr == dmaQueNext) {
++                ets_printf("find next_link_ptr=%x \r\n", dmaQueNext);
++                break;
++            }
++            dmaQueCur = dmaQueNext;
++        }
++        memcpy(dmaQueCur, &obj->backupQue, sizeof(obj->backupQue));
++        memset(&obj->backupQue, 0, sizeof(obj->backupQue));
++    }
++    SHOWQUEUESPI(obj);
++    return 0;
++}
++
++/**
++ * @brief Set the buffer length before the start.
++ *
++ */
++int dma_buf_len_set(ping_pong_buf_t *obj, uint32_t len)
++{
++    if (NULL == obj) {
++        return -1;
++    }
++    if (len < obj->len) {
++        int i, k, cnt;
++        i = len / QUEUE_BLOCK_LENGTH;
++        k = len % QUEUE_BLOCK_LENGTH;
++        if (0 == k) {
++            cnt = i;
++        } else {
++            cnt = i + 1;
++        }
++        dma_queue_t *dmaQueCur = obj->ping->firstQueue;
++        dma_queue_t *dmaQueNext = NULL;
++        while (--cnt) {
++            dmaQueNext = (dma_queue_t*)dmaQueCur->next_link_ptr;
++            dmaQueCur = dmaQueNext;
++        }
++        memcpy(&obj->backupQue, dmaQueCur, sizeof(obj->backupQue));
++        dmaQueCur->next_link_ptr = 0;
++        dmaQueCur->datalen = k;
++    }
++    return len;
++}
++
++/**
++ * @brief Destroy the ping-pong buffer instance.
++ *
++ */
++void dma_buf_destroy(ping_pong_buf_t *obj)
++{
++    ping_pong_buf_t *temp = obj;
++    SHOWQUEUESPI(temp);
++    if (NULL != temp) {
++        // Free the link list
++        uint32_t i = 0;
++        dma_queue_t *curtCfg = temp->ping->firstQueue;
++        dma_queue_t *nextCfg = NULL;
++        for (i = 0; i < temp->queueCnt; ++i) {
++            nextCfg = (dma_queue_t*)curtCfg->next_link_ptr;
++            //  LOGD("i=%d curtCfg=%x,nextCfg=0x%x", i, curtCfg, nextCfg);
++            free(curtCfg);
++            curtCfg =  NULL;
++            curtCfg = nextCfg;
++        }
++        curtCfg = temp->pong->firstQueue;
++        nextCfg = NULL;
++        for (i = 0; i < temp->queueCnt; ++i) {
++            nextCfg = (dma_queue_t*)curtCfg->next_link_ptr;
++            // LOGD("i=%d curtCfg=%x,nextCfg=0x%x", i, curtCfg, nextCfg);
++              free(curtCfg);
++            curtCfg =  NULL;
++            curtCfg = nextCfg;
++        }
++        // Free the buffer
++        free(temp->ping->bufAdr);
++        temp->ping->bufAdr = NULL;
++        free(temp->ping);
++        temp->ping = NULL;
++        free(temp->pong);
++        temp->pong = NULL;
++        free(temp);
++        temp = NULL;
++    }
++}
+diff --git a/components/driver/include/driver/dma.h b/components/driver/include/driver/dma.h
+new file mode 100644
+index 000000000..ca02f06e7
+--- /dev/null
++++ b/components/driver/include/driver/dma.h
+@@ -0,0 +1,127 @@
++// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#ifndef _DRIVER_DMA_H_
++#define _DRIVER_DMA_H__
++#include <esp_types.h>
++
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/** \defgroup Driver_APIs Driver APIs
++  * @brief Driver APIs
++  */
++
++/** @addtogroup Driver_APIs
++  * @{
++  */
++
++/**
++ * @brief DMA queue description.
++ */
++typedef struct {
++    uint32_t  blocksize: 12;
++    uint32_t  datalen: 12;
++    uint32_t  unused: 5;
++    uint32_t  sub_sof: 1;
++    uint32_t  eof: 1;
++    uint32_t  owner: 1;
++
++    uint32_t  buf_ptr;
++    uint32_t  next_link_ptr;
++} dma_queue_t;
++
++/**
++ * @brief DMA element description
++ */
++typedef struct {
++    uint32_t          *bufAdr;
++    dma_queue_t     *firstQueue;
++    dma_queue_t     *lastQueue;
++} dma_element_t;
++
++/**
++ * @brief DMA ping-pong buffer object description
++ */
++typedef struct {
++    dma_element_t  *ping;
++    dma_element_t  *pong;
++    uint32_t         len;
++    uint32_t          queueCnt;
++    dma_queue_t     backupQue;
++} ping_pong_buf_t;
++
++
++/**
++ * @brief Create a ping-pong buffer object used by DMA.
++ *
++ * @param [in] bufLen
++ *             Set the buffer length.
++ *             --------------------
++ *             | ping   | Pong    |
++ *             --------------------
++ *             | bufLen | bufLen  |
++ *             --------------------
++ *
++ * @return uint32*, NULL:indicates parameter error, others indicates ping-pong buffer address.
++ */
++ping_pong_buf_t* dma_buf_create(uint32_t bufLen);
++
++/**
++ * @brief Reset the dma buffer length.
++ *
++ * @param [in] obj
++ *             Pointer to a struct ping_pong_buf_t that indicates the object length to be reset to bufLen.
++ *
++ * @return uint32*, -1:indicates parameter error, 0 :indicates success.
++ */
++int dma_buf_len_reset(ping_pong_buf_t *obj);
++
++/**
++ * @brief Set the buffer length before the start.
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t.
++ * @param [in] len
++ *             Set the transmit length .
++ *
++ * @return uint32*, -1:indicates parameter error, others indicates success.
++ */
++int dma_buf_len_set(ping_pong_buf_t *obj, uint32_t len);
++
++/**
++ * @brief Destroy the ping-pong buffer instance.
++ *
++ * @param [in] obj
++ *             Pointer to a struct ping_pong_buf_t that indicates the object to be destroy.
++ *
++ * @return uint32*, NULL:indicates parameter error, others indicates ping buffer address.
++ */
++void dma_buf_destroy(ping_pong_buf_t *obj);
++
++/**
++  * @}
++  */
++
++/**
++  * @}
++  */
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif // __DMA_H__
+diff --git a/components/driver/include/driver/spi.h b/components/driver/include/driver/spi.h
+new file mode 100644
+index 000000000..eb32ba0a8
+--- /dev/null
++++ b/components/driver/include/driver/spi.h
+@@ -0,0 +1,479 @@
++// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++#ifndef _DRIVER_SPI_H_
++#define _DRIVER_SPI_H_
++#include "spi.h"
++#include "soc/spi_reg.h"
++#include <esp_types.h>
++#include "dma.h"
++
++//*****************************************************************************
++//
++// Make sure all of the definitions in this header have a C binding.
++//
++//*****************************************************************************
++
++#ifdef __cplusplus
++extern "C"
++{
++#endif
++
++/**
++ * @brief Support SPI1/SPI2/SPI3 module.
++ *
++ */
++typedef enum {
++    SpiNum_SPI1  = 0x1,
++    SpiNum_SPI2  = 0x2,
++    SpiNum_SPI3  = 0x3,
++    SpiNum_Max   = SpiNum_SPI3,
++} spi_num_e;
++
++/**
++ * @brief The SPI module can work in either master or slave mode.
++ *
++ */
++typedef enum {
++    SpiMode_Master = 0,
++    SpiMode_Slave  = 1,
++} spi_mode_e;
++
++/**
++ *  @brief SPI sub mode
++ *
++ * Support 4 sub modes based on SPI clock polarity and phase.
++ * SPI_CPOL SPI_CPHA  SubMode
++ *   0        0        0
++ *   0        1        1
++ *   1        0        2
++ *   1        1        3
++ */
++typedef enum {
++    SpiSubMode_0 = 0,
++    SpiSubMode_1 = 1,
++    SpiSubMode_2 = 2,
++    SpiSubMode_3 = 3,
++} spi_sub_mode_e;
++
++/**
++ * @brief The SPI module working speed.
++ *
++ * @attention Max speed 80MHz
++ *
++ */
++typedef enum {
++    SpiSpeed_2MHz  = 40,
++    SpiSpeed_5MHz  = 16,
++    SpiSpeed_8MHz  = 10,
++    SpiSpeed_10MHz = 8,
++    SpiSpeed_16MHz = 5,
++    SpiSpeed_20MHz = 4,
++} spi_speed_e;
++
++/**
++ * @brief The SPI mode working speed.
++ *
++ */
++typedef enum {
++    SpiBitOrder_MSBFirst = 0,
++    SpiBitOrder_LSBFirst = 1,
++} spi_bit_order_e;
++
++// @brief SPI interrupt source defined.
++typedef enum {
++    SpiIntSrc_TransDone = SPI_TRANS_DONE,
++    SpiIntSrc_WrStaDone = SPI_SLV_WR_STA_DONE,
++    SpiIntSrc_RdStaDone = SPI_SLV_RD_STA_DONE,
++    SpiIntSrc_WrBufDone = SPI_SLV_WR_BUF_DONE,
++    SpiIntSrc_RdBufDone = SPI_SLV_RD_BUF_DONE,
++    SpiIntSrc_OneBufRecvDone = SPI_IN_SUC_EOF_INT_ENA,
++    SpiIntSrc_OneBufSendDone = SPI_OUT_EOF_INT_ENA,
++} spi_int_src_e;
++
++/**
++ * @brief The SPI mode working speed.
++ *
++ */
++typedef enum {
++    SpiWorkMode_Half = 0,
++    SpiWorkMode_Full = 1,
++} spi_work_mode_e;
++
++/**
++ * @brief The SPI DMA channels.
++ *
++ */
++typedef enum {
++    SpiDMAchannel_0 = 1,
++    SpiDMAchannel_l = 2,
++} spi_dma_channel_e;
++
++/**
++ * @brief The SPI dma direction.
++ *
++ */
++typedef enum {
++ //   SpiDmaDir_Default   = 0,
++    SpiDmaDir_In        = 1,
++    SpiDmaDir_Out       = 2,
++} spi_dma_dir_e;
++
++#pragma pack(1)
++/**
++ * @brief SPI attribute
++ */
++typedef struct {
++    spi_mode_e          mode;           ///< Master or slave mode
++    spi_sub_mode_e      subMode;        ///< SPI SPI_CPOL SPI_CPHA mode
++    spi_speed_e         speed;          ///< SPI Clock
++    spi_bit_order_e     bitOrder;       ///< SPI bit order
++    spi_work_mode_e     halfMode;       ///< Half or Full work mode
++} spi_attr_t;
++
++/**
++ * @brief SPI attribute
++ */
++typedef struct {
++    uint16_t    cmd;                ///< Command value
++    uint8_t     cmdLen;             ///< Command byte length
++    uint32_t    *addr;              ///< Point to address value
++    uint8_t     addrLen;            ///< Address byte length
++    uint32_t    *txData;            ///< Point to send data buffer
++    uint8_t     txDataLen;          ///< Send data byte length.
++    uint32_t    *rxData;            ///< Point to recevie data buffer
++    uint8_t     rxDataLen;          ///< Recevie Data byte length.
++} spi_data_t;
++
++// SPI DMA attribite
++typedef struct {
++    spi_num_e          spiNum;     ///< Spi number
++    uint32_t          mode;       ///< Spi work mode
++    uint32_t          bufSize;    ///< Size of buffer
++    spi_dma_dir_e       dir;        ///< Direction of data,in or out.
++    spi_dma_channel_e   channel;    ///< Channel of DMA
++    ping_pong_buf_t     *buf;       ///< Buffer address
++} spi_dma_attr_t;
++#pragma pack()
++
++#if 1
++// Waiting for test
++/**
++ * @brief Get SPI ping buffer address.
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ *
++ * @return uint32_t*, NULL:indicates parameter error, others indicates ping buffer address.
++ */
++uint32_t* spi_dma_ping_buf_get(spi_dma_attr_t *obj);
++
++/**
++ * @brief Get SPI pong buffer address.
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ *
++ * @return uint32_t*, NULL:indicates parameter error, others indicates pong buffer address.
++ */
++uint32_t* spi_dma_pong_buf_get(spi_dma_attr_t *obj);
++
++/**
++ * @brief Get without working ping-pong buffer address.
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ *
++ * @return uint32_t*, NULL:indicates parameter error, others indicates not working buffer address.
++ */
++uint32_t* spi_dma_status_get(spi_dma_attr_t *obj);
++
++/**
++ * @brief Configrate the Ping-Pong buffer to the destination
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ *
++ * @return None.
++ */
++int32_t spi_dma_memcpy(spi_dma_attr_t *obj, void *src, uint32_t len);
++
++/**
++ * @brief Configrate the Ping-Pong buffer to the destination
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ *
++ * @return None.
++ */
++void spi_dma_dest_add_set(spi_dma_attr_t *obj);
++
++/**
++ * @brief Reset the SPI DMA instance
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ * @param [in] isr
++ *             Indicates which function to be called, when interrupt hanpened.
++ *
++ * @return None.
++ */
++void spi_dma_rest(spi_dma_attr_t *obj);
++
++/**
++ * @brief Initialize DMA and create a SPI DMA instance
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ * @param [in] isr
++ *             Indicates which function to be called, when interrupt hanpened.
++ *
++ * @return -1:indicates parameter error, -2: DMA buffer init failure, others indicates success.
++ */
++int spi_dma_init(spi_dma_attr_t *obj, void *isr);
++
++/**
++ * @brief Destroy the SPI DMA instance
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ *
++ * @return int, -1:indicates parameter error, others indicates success.
++ */
++int spi_dma_uninit(spi_dma_attr_t *obj);
++
++/**
++ * @brief Configrate the Ping-Pong buffer to the destination
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ *
++ * @return None.
++ */
++void spi_dma_int_enable(spi_num_e spiNum, spi_int_src_e intSrc);
++
++/**
++ * @brief Configrate the Ping-Pong buffer to the destination
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ *
++ * @return None.
++ */
++void spi_dma_int_disable(spi_num_e spiNum, spi_int_src_e intSrc);
++
++/**
++ * @brief Configrate the Ping-Pong buffer to the destination
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ *
++ * @return None.
++ */
++void spi_dma_int_clear(spi_num_e spiNum);
++
++/**
++ * @brief Configrate the Ping-Pong buffer to the destination
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ *
++ * @return None.
++ */
++int32_t spi_dma_int_status_get(spi_num_e spiNum);
++
++/**
++ * @brief Start e SPI DMA instance
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ * @param [in] len
++ *             Indicates how many data to be called.
++ *
++ * @return None.
++ */
++void spi_dma_start(spi_dma_attr_t *obj, uint32_t len);
++
++/**
++ * @brief Stop the SPI DMA transmit
++ *
++ * @param [in] obj
++ *             Pointer to a struct spi_dma_attr_t that indicates SPI DMA working attribution.
++ *
++ * @return None.
++ */
++void spi_dma_stop(spi_dma_attr_t *obj);
++
++#endif
++
++/**
++ * @brief Initialize SPI module.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ * @param [in] pAttr
++ *              Pointer to a struct spi_attr_t that indicates SPI working attribution.
++ *
++ * @return void.
++ */
++void spi_init(spi_num_e spiNum, spi_attr_t* pAttr);
++
++/**
++ * @brief Set slave address value by master.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ * @param [in] addr
++ *             Slave address to be set.
++ *
++ * @return void.
++ */
++void spi_master_cfg_addr(spi_num_e spiNum, uint32_t addr);
++
++/**
++ * @brief Set command value by master.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ * @param [in] cmd
++ *             Command will be send to slave.
++ *
++ * @return void.
++ */
++void spi_master_cfg_cmd(spi_num_e spiNum, uint32_t cmd);
++
++/**
++ * @brief Send data to slave from master.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ * @param [in] pInData
++ *             Pointer to a spi_data_t strcuture that indicates data, address and command will be send.
++ *
++ * @return int, -1:indicates failure,others indicates success.
++ */
++int spi_master_send_data(spi_num_e spiNum, spi_data_t* pInData);
++
++/**
++ * @brief Receive data from slave by master.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ * @param [in] pOutData
++ *             Point to data buffer.
++ *
++ * @return int, -1:indicates failure,others indicates success.
++ *
++ */
++int spi_master_recv_data(spi_num_e spiNum, spi_data_t* pData);
++
++/**
++ * @brief Load data to slave send buffer.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ * @param [in] pOutData
++ *             Point to data buffer.
++ * @param [in] outLen
++ *             The number of bytes to be set.
++ *
++ * @return int, -1:indicates failure,others indicates success.
++ */
++int spi_slave_send_data(spi_num_e spiNum, uint32_t *pOutData, uint8_t outLen);
++
++/**
++ * @brief Receive data by slave.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ * @param [in] isrFunc
++ *             isrFunc is a pointer to the function to be called when the SPI interrupt occurs.
++ *
++ * @return int, -1:indicates failure,others indicates success.
++ */
++int spi_slave_recv_data(spi_num_e spiNum, void(*isrFunc)(void*));
++
++/**
++ * @brief Set slave status by master.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ *
++ * @param [in] data
++ *             Data will be write to slave SPI_WR_STATUS.
++ *
++ * @return void.
++ */
++void spi_master_send_status(spi_num_e spiNum, uint8_t data);
++
++/**
++ * @brief Get salve status by master.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ *
++ * @return int, -1: indicates failure; other value in slave status.
++ */
++int spi_master_recv_status(spi_num_e spiNum);
++
++/**
++ * @brief Enable SPI module interrupt source.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ *
++ * @param [in] intSrc
++ *              Indicates which interrupt source to enable.
++ *
++ * @return void.
++ */
++void spi_int_enable(spi_num_e spiNum, spi_int_src_e intSrc);
++
++/**
++ * @brief Disable SPI module interrupt source.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ *
++ * @param [in] intSrc
++ *              Indicates which interrupt source to disable.
++ *
++ * @return void.
++ */
++void spi_int_disable(spi_num_e spiNum, spi_int_src_e intSrc);
++
++/**
++ * @brief Clear all of spi interrupt.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ *
++ * @return void.
++ */
++void spi_int_clear(spi_num_e spiNum);
++
++/**
++ * @brief Get the spi interrupt status.
++ *
++ * @param [in] spiNum
++ *             Indicates which submode to be used, SPI or HSPI.
++ *
++ * @return void.
++ */
++int32_t spi_int_status_get(spi_num_e i2sNum);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif //  __SPI_H__
+diff --git a/components/driver/include/driver/uart.h b/components/driver/include/driver/uart.h
+index e716e5424..01b11f584 100644
+--- a/components/driver/include/driver/uart.h
++++ b/components/driver/include/driver/uart.h
+@@ -530,7 +530,8 @@ esp_err_t uart_intr_config(uart_port_t uart_num, const uart_intr_config_t *intr_
+  *     - ESP_OK   Success
+  *     - ESP_FAIL Parameter error
+  */
+-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags);
++typedef void (*uart_rx_callback_t)(int uart_id, int rx_byte);
++esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback);
+ 
+ /**
+  * @brief Uninstall UART driver.
+diff --git a/components/driver/spi.c b/components/driver/spi.c
+new file mode 100644
+index 000000000..f7397cef7
+--- /dev/null
++++ b/components/driver/spi.c
+@@ -0,0 +1,380 @@
++// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++
++//     http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#include <string.h>
++
++#include "spi.h"
++#include "soc/spi_reg.h"
++#include "soc/rtc_cntl_reg.h"
++
++#include "rom/ets_sys.h"
++
++#include "esp_intr.h"
++#include "esp_attr.h"
++#include "soc/dport_reg.h"
++
++//*****************************************************************************
++//
++// Make sure all of the definitions in this header have a C binding.
++//
++//*****************************************************************************
++#ifdef __cplusplus
++extern "C"
++{
++#endif
++
++/**
++ * @brief Defines slave commands.Default value based on slave ESP8266 & ESP32.
++ */
++#define MASTER_WRITE_DATA_TO_SLAVE_CMD                      2
++#define MASTER_READ_DATA_FROM_SLAVE_CMD                     3
++#define MASTER_WRITE_STATUS_TO_SLAVE_CMD                    1
++#define MASTER_READ_STATUS_FROM_SLAVE_CMD                   4
++
++
++/**
++ * @brief Based on pAttr initialize SPI module.
++ *
++ */
++void spi_init(spi_num_e spiNum, spi_attr_t* pAttr)
++{
++    if ((spiNum > SpiNum_Max)
++        || (NULL == pAttr)) {
++        return;
++    }
++
++    CLEAR_PERI_REG_MASK(SPI_SLAVE_REG(spiNum), SPI_TRANS_DONE << 5);
++    SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_CS_SETUP);
++
++    // SPI_CPOL & SPI_CPHA
++    switch (pAttr->subMode) {
++    case SpiSubMode_1:
++        CLEAR_PERI_REG_MASK(SPI_PIN_REG(spiNum), SPI_CK_IDLE_EDGE);
++        SET_PERI_REG_MASK(SPI_USER_REG(spiNum),  SPI_CK_OUT_EDGE); // CHPA_FALLING_EDGE_SAMPLE
++        break;
++    case SpiSubMode_2:
++        SET_PERI_REG_MASK(SPI_PIN_REG(spiNum), SPI_CK_IDLE_EDGE);
++        SET_PERI_REG_MASK(SPI_USER_REG(spiNum),  SPI_CK_OUT_EDGE); // CHPA_FALLING_EDGE_SAMPLE
++        break;
++    case SpiSubMode_3:
++        SET_PERI_REG_MASK(SPI_PIN_REG(spiNum), SPI_CK_IDLE_EDGE);
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum),  SPI_CK_OUT_EDGE);
++        break;
++    case SpiSubMode_0:
++    default:
++        CLEAR_PERI_REG_MASK(SPI_PIN_REG(spiNum), SPI_CK_IDLE_EDGE);
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum),  SPI_CK_OUT_EDGE);
++        // To do nothing
++        break;
++    }
++
++    // SPI bit order
++    if (SpiBitOrder_MSBFirst == pAttr->bitOrder) {
++        CLEAR_PERI_REG_MASK(SPI_CTRL_REG(spiNum), SPI_WR_BIT_ORDER);
++        CLEAR_PERI_REG_MASK(SPI_CTRL_REG(spiNum), SPI_RD_BIT_ORDER);
++    } else if (SpiBitOrder_LSBFirst == pAttr->bitOrder) {
++        SET_PERI_REG_MASK(SPI_CTRL_REG(spiNum), SPI_WR_BIT_ORDER);
++        SET_PERI_REG_MASK(SPI_CTRL_REG(spiNum), SPI_RD_BIT_ORDER);
++    } else {
++        // To do nothing
++    }
++
++    // SPI bit order
++    if (SpiWorkMode_Half == pAttr->halfMode) {
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_DOUTDIN);
++    } else if (SpiWorkMode_Full == pAttr->halfMode) {
++        SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_DOUTDIN);
++    }
++    // May be not must to do.
++    WRITE_PERI_REG(SPI_USER1_REG(spiNum), 0);
++    // SPI mode type
++    if (SpiMode_Master == pAttr->mode) {
++        // SPI mode type
++        SET_PERI_REG_BITS(SPI_CTRL2_REG(spiNum), SPI_MISO_DELAY_MODE, 0, SPI_MISO_DELAY_MODE_S); ////??????
++        // SPI_SET_MISO_DELAY_NUM(spiNum,0);////???????
++        //SET_PERI_REG_BITS(SPI_CTRL2_REG(spiNum), SPI_MISO_DELAY_NUM,0,SPI_MISO_DELAY_NUM_S);////??????
++
++        CLEAR_PERI_REG_MASK(SPI_SLAVE_REG(spiNum), SPI_SLAVE_MODE);
++        // SPI Send buffer
++        // CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MISO_HIGHPART );// By default slave send buffer C0-C7
++        // SPI Speed
++        if (1 < (pAttr->speed)) {
++            uint8_t i, k;
++            i = (pAttr->speed / 40) ? (pAttr->speed / 40) : 1;
++
++            k = pAttr->speed / i;
++            CLEAR_PERI_REG_MASK(SPI_CLOCK_REG(spiNum), SPI_CLK_EQU_SYSCLK);
++            WRITE_PERI_REG(SPI_CLOCK_REG(spiNum),
++                           (((i - 1) & SPI_CLKDIV_PRE) << SPI_CLKDIV_PRE_S) |
++                           (((k - 1) & SPI_CLKCNT_N) << SPI_CLKCNT_N_S) |
++                           ((((k + 1) / 2 - 1) & SPI_CLKCNT_H) << SPI_CLKCNT_H_S) |
++                           (((k - 1) & SPI_CLKCNT_L) << SPI_CLKCNT_L_S)); //clear bit 31,set SPI clock div
++        } else {
++            WRITE_PERI_REG(SPI_CLOCK_REG(spiNum), SPI_CLK_EQU_SYSCLK); // 80Mhz speed
++        }
++        // Enable MOSI
++        SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_CS_SETUP | SPI_CS_HOLD | SPI_USR_MOSI);
++
++        // CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_CS_HOLD);/////////////add
++        SET_PERI_REG_MASK(SPI_CTRL2_REG(spiNum), ((0x4 & SPI_MISO_DELAY_NUM) << SPI_MISO_DELAY_NUM_S)); //delay num
++
++    } else if (SpiMode_Slave == pAttr->mode) {
++
++        // SPI mode type
++        SET_PERI_REG_MASK(SPI_SLAVE_REG(spiNum), SPI_SLAVE_MODE);
++        // SPI mode type
++        SET_PERI_REG_MASK(SPI_SLAVE_REG(spiNum), SPI_SLV_WR_RD_BUF_EN);
++        // SPI Send buffer
++        // SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MISO_HIGHPART);// By default slave send buffer C8-C15
++
++        // If do not set delay cycles, slave not working,master cann't get the data.
++        SET_PERI_REG_MASK(SPI_CTRL2_REG(spiNum), ((0x2 & SPI_MOSI_DELAY_NUM) << SPI_MOSI_DELAY_NUM_S)); //delay num
++        // SPI Speed
++        WRITE_PERI_REG(SPI_CLOCK_REG(spiNum), 0);
++
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_CS_SETUP);/////////////add
++        SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MOSI);
++
++        // By default format::CMD(8bits)+ADDR(8bits)+DATA(32bytes)
++        // set pAttr->cmdLen bit slave recieve command length
++        // set 1 bytes status buffer length
++        // set pAttr->addrLen bit slave recieve read address length
++        // set pAttr->addrLen bit slave recieve write address length
++        // set 32 bytes slave recieve buffer length
++        SET_PERI_REG_BITS(SPI_USER2_REG(spiNum), SPI_USR_COMMAND_BITLEN,
++                          (7), SPI_USR_COMMAND_BITLEN_S);
++        SET_PERI_REG_BITS(SPI_SLAVE1_REG(spiNum), SPI_SLV_STATUS_BITLEN,
++                          (7), SPI_SLV_STATUS_BITLEN_S);
++        SET_PERI_REG_BITS(SPI_SLAVE1_REG(spiNum), SPI_SLV_WR_ADDR_BITLEN,
++                          (7), SPI_SLV_WR_ADDR_BITLEN_S);
++        SET_PERI_REG_BITS(SPI_SLAVE1_REG(spiNum), SPI_SLV_RD_ADDR_BITLEN,
++                          (7), SPI_SLV_RD_ADDR_BITLEN_S);
++        SET_PERI_REG_BITS(SPI_SLV_WRBUF_DLEN_REG(spiNum), SPI_SLV_WRBUF_DBITLEN,
++                          (32 * 8 - 1), SPI_SLV_WRBUF_DBITLEN_S);
++        SET_PERI_REG_BITS(SPI_SLV_RDBUF_DLEN_REG(spiNum), SPI_SLV_RDBUF_DBITLEN,
++                          (32 * 8 - 1), SPI_SLV_RDBUF_DBITLEN_S);
++    } else {
++        // To do nothing
++    }
++
++    char i;
++    for (i = 0; i < 16; ++i) {
++        WRITE_PERI_REG((SPI_W0_REG(spiNum) + (i << 2)), 0);
++    }
++}
++
++/**
++ * @brief Set address value by master mode.
++ *
++ */
++IRAM_ATTR void spi_master_cfg_addr(spi_num_e spiNum, uint32_t addr)
++{
++    if (spiNum > SpiNum_Max) {
++        return;
++    }
++    // Set address
++    SET_PERI_REG_BITS(SPI_ADDR_REG(spiNum), SPI_USR_ADDR_VALUE, addr, SPI_USR_ADDR_VALUE_S);
++}
++
++/**
++ * @brief Set command value by master mode.
++ *
++ */
++IRAM_ATTR void spi_master_cfg_cmd(spi_num_e spiNum, uint32_t cmd)
++{
++    if (spiNum > SpiNum_Max) {
++        return;
++    }
++    // SPI_USER2 bit28-31 is cmd length,cmd bit length is value(0-15)+1,
++    // bit15-0 is cmd value.
++    SET_PERI_REG_BITS(SPI_USER2_REG(spiNum), SPI_USR_COMMAND_VALUE, cmd, SPI_USR_COMMAND_VALUE_S);
++}
++
++/**
++ * @brief Send data to slave.
++ *
++ */
++int  spi_master_send_data(spi_num_e spiNum, spi_data_t* pInData)
++{
++    char idx = 0;
++    if ((spiNum > SpiNum_Max)
++        || (NULL == pInData)
++        || (64 < pInData->txDataLen)) {
++        return -1;
++    }
++    uint32_t *value = pInData->txData;
++    while (READ_PERI_REG(SPI_CMD_REG(spiNum))&SPI_USR);
++    // Set command by user.
++    if (pInData->cmdLen != 0) {
++        // Max command length 16 bits.
++        SET_PERI_REG_BITS(SPI_USER2_REG(spiNum), SPI_USR_COMMAND_BITLEN,
++                          ((pInData->cmdLen << 3) - 1), SPI_USR_COMMAND_BITLEN_S);
++        // Enable command
++        SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_COMMAND);
++        // Load command
++        spi_master_cfg_cmd(spiNum, pInData->cmd);
++    } else {
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_COMMAND);
++        SET_PERI_REG_BITS(SPI_USER2_REG(spiNum), SPI_USR_COMMAND_BITLEN,
++                          0, SPI_USR_COMMAND_BITLEN_S);
++    }
++    // Set Address by user.
++    if (pInData->addrLen == 0) {
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_ADDR);
++        SET_PERI_REG_BITS(SPI_USER1_REG(spiNum), SPI_USR_ADDR_BITLEN,
++                          0, SPI_USR_ADDR_BITLEN_S);
++    } else {
++        if (NULL == pInData->addr) {
++            return -1;
++        }
++        SET_PERI_REG_BITS(SPI_USER1_REG(spiNum), SPI_USR_ADDR_BITLEN,
++                          ((pInData->addrLen << 3) - 1), SPI_USR_ADDR_BITLEN_S);
++        // Enable address
++        SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_ADDR);
++        // Load address
++        spi_master_cfg_addr(spiNum, *pInData->addr);
++    }
++    // Set data by user.
++    if (pInData->txDataLen != 0) {
++        if (NULL == value) {
++            return -1;
++        }
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MISO);
++        // Enable MOSI
++        SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MOSI);
++        // Load send buffer
++        do {
++            WRITE_PERI_REG((SPI_W0_REG(spiNum) + (idx << 2)), *value++);
++        } while (++idx < ((pInData->txDataLen / 4) + ((pInData->txDataLen % 4) ? 1 : 0)));
++
++        // Set data send buffer length.Max data length 64 bytes.
++        SET_PERI_REG_BITS(SPI_MOSI_DLEN_REG(spiNum), SPI_USR_MOSI_DBITLEN, ((pInData->txDataLen << 3) - 1), SPI_USR_MOSI_DBITLEN_S);
++
++        SET_PERI_REG_BITS(SPI_MISO_DLEN_REG(spiNum), SPI_USR_MISO_DBITLEN, ((pInData->rxDataLen << 3) - 1), SPI_USR_MISO_DBITLEN_S);
++    } else {
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MOSI);
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MISO);
++        SET_PERI_REG_BITS(SPI_MOSI_DLEN_REG(spiNum), SPI_USR_MOSI_DBITLEN,
++                          0, SPI_USR_MOSI_DBITLEN_S);
++
++    }
++    // Start send data
++    SET_PERI_REG_MASK(SPI_CMD_REG(spiNum), SPI_USR);
++    while (!(READ_PERI_REG(SPI_SLAVE_REG(spiNum))&SPI_TRANS_DONE));
++    CLEAR_PERI_REG_MASK(SPI_SLAVE_REG(spiNum), SPI_TRANS_DONE);
++    return 0;
++}
++
++/**
++ * @brief Receive data from slave.
++ *
++ */
++IRAM_ATTR int spi_master_recv_data(spi_num_e spiNum, spi_data_t* pData)
++{
++    char idx = 0;
++    if ((spiNum > SpiNum_Max)
++        || (NULL == pData)) {
++        return -1;
++    }
++    uint32_t *value = pData->rxData;
++    while (READ_PERI_REG(SPI_CMD_REG(spiNum))&SPI_USR);
++    // Set command by user.
++    if (pData->cmdLen != 0) {
++        // Max command length 16 bits.
++        SET_PERI_REG_BITS(SPI_USER2_REG(spiNum), SPI_USR_COMMAND_BITLEN,
++                          ((pData->cmdLen << 3) - 1), SPI_USR_COMMAND_BITLEN_S);
++        // Enable command
++        SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_COMMAND);
++        // Load command
++        spi_master_cfg_cmd(spiNum, pData->cmd);
++    } else {
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_COMMAND);
++        SET_PERI_REG_BITS(SPI_USER2_REG(spiNum), SPI_USR_COMMAND_BITLEN,
++                          0, SPI_USR_COMMAND_BITLEN_S);
++    }
++    // Set Address by user.
++    if (pData->addrLen == 0) {
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_ADDR);
++        SET_PERI_REG_BITS(SPI_USER1_REG(spiNum), SPI_USR_ADDR_BITLEN,
++                          0, SPI_USR_ADDR_BITLEN_S);
++    } else {
++        if (NULL == pData->addr) {
++            return -1;
++        }
++        SET_PERI_REG_BITS(SPI_USER1_REG(spiNum), SPI_USR_ADDR_BITLEN,
++                          ((pData->addrLen << 3) - 1), SPI_USR_ADDR_BITLEN_S);
++        // Enable address
++        SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_ADDR);
++        // Load address
++        spi_master_cfg_addr(spiNum, *pData->addr);
++    }
++    // Set data by user.
++    if (pData->rxDataLen != 0) {
++        if (NULL == value) {
++            return -1;
++        }
++        // Clear MOSI enable
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MOSI);
++        // Enable MOSI
++        SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MISO);
++        // Set data send buffer length.Max data length 64 bytes.
++        SET_PERI_REG_BITS(SPI_MISO_DLEN_REG(spiNum), SPI_USR_MISO_DBITLEN, ((pData->rxDataLen << 3) - 1), SPI_USR_MISO_DBITLEN_S);
++    } else {
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MOSI);
++        CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MISO);
++        SET_PERI_REG_BITS(SPI_MISO_DLEN_REG(spiNum), SPI_USR_MISO_DBITLEN, 0, SPI_USR_MISO_DBITLEN_S);
++    }
++    // Start send data
++    SET_PERI_REG_MASK(SPI_CMD_REG(spiNum), SPI_USR);
++
++    while (READ_PERI_REG(SPI_CMD_REG(spiNum))&SPI_USR);
++    // Read data out
++    do {
++        *value++ =  READ_PERI_REG(SPI_W0_REG(spiNum) + (idx << 2));
++    } while (++idx < ((pData->rxDataLen / 4) + ((pData->rxDataLen % 4) ? 1 : 0)));
++
++    return 0;
++}
++
++
++/**
++ * @brief Send data to slave(ESP32,RD_STATUS or WR_STATUS).
++ *
++ */
++void  spi_master_send_status(spi_num_e spiNum, uint8_t data)
++{
++    if (spiNum > SpiNum_Max) {
++        return;
++    }
++    while (READ_PERI_REG(SPI_CMD_REG(spiNum))&SPI_USR);
++    // enable MOSI
++    SET_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MOSI);
++    CLEAR_PERI_REG_MASK(SPI_USER_REG(spiNum), SPI_USR_MISO | SPI_USR_DUMMY | SPI_USR_ADDR);
++
++    // 8bits cmd, 0x04 is eps32 slave write cmd value
++    WRITE_PERI_REG(SPI_USER2_REG(spiNum),
++                   ((7 & SPI_USR_COMMAND_BITLEN) << SPI_USR_COMMAND_BITLEN_S)
++                   | MASTER_WRITE_STATUS_TO_SLAVE_CMD);
++    // Set data send buffer length.
++    SET_PERI_REG_BITS(SPI_MOSI_DLEN_REG(spiNum), SPI_USR_MOSI_DBITLEN,
++                      ((sizeof(data) << 3) - 1), SPI_USR_MOSI_DBITLEN_S);
++
++    WRITE_PERI_REG(SPI_W0_REG(spiNum), (uint32_t)(data));
++    // start SPI
++    SET_PERI_REG_MASK(SPI_CMD_REG(spiNum), SPI_USR);
++}
++
++#ifdef __cplusplus
++}
++#endif
+diff --git a/components/driver/uart.c b/components/driver/uart.c
+index f45e417de..62d0e5716 100644
+--- a/components/driver/uart.c
++++ b/components/driver/uart.c
+@@ -741,6 +741,8 @@ static int uart_find_pattern_from_last(uint8_t* buf, int length, uint8_t pat_chr
+     return len;
+ }
+ 
++static uart_rx_callback_t uart_rx_callback[UART_NUM_MAX] = { NULL };
++
+ //internal isr handler for default driver code.
+ static void uart_rx_intr_handler_default(void *param)
+ {
+@@ -872,7 +874,11 @@ static void uart_rx_intr_handler_default(void *param)
+             if (p_uart->rx_buffer_full_flg == false) {
+                 //We have to read out all data in RX FIFO to clear the interrupt signal
+                 for(buf_idx = 0; buf_idx < rx_fifo_len; buf_idx++) {
+-                    p_uart->rx_data_buf[buf_idx] = uart_reg->fifo.rw_byte;
++                    uint8_t rx_data = uart_reg->fifo.rw_byte;
++                    p_uart->rx_data_buf[buf_idx] = rx_data;
++                    if (uart_rx_callback[uart_num]) {
++                        uart_rx_callback[uart_num](uart_num, rx_data);
++                    }
+                 }
+                 uint8_t pat_chr = uart_reg->at_cmd_char.data;
+                 int pat_num = uart_reg->at_cmd_char.char_num;
+@@ -1110,6 +1116,7 @@ int uart_tx_chars(uart_port_t uart_num, const char* buffer, uint32_t len)
+         return 0;
+     }
+     xSemaphoreTake(p_uart_obj[uart_num]->tx_mux, (portTickType)portMAX_DELAY);
++    xSemaphoreTake(p_uart_obj[uart_num]->tx_done_sem, 0);
+     int tx_len = uart_fill_fifo(uart_num, (const char*) buffer, len);
+     xSemaphoreGive(p_uart_obj[uart_num]->tx_mux);
+     return tx_len;
+@@ -1328,7 +1335,7 @@ esp_err_t uart_flush_input(uart_port_t uart_num)
+     return ESP_OK;
+ }
+ 
+-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags)
++esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback)
+ {
+     esp_err_t r;
+     UART_CHECK((uart_num < UART_NUM_MAX), "uart_num error", ESP_FAIL);
+@@ -1387,6 +1394,7 @@ esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_b
+         return ESP_FAIL;
+     }
+ 
++    uart_rx_callback[uart_num] = rx_callback;
+     r=uart_isr_register(uart_num, uart_rx_intr_handler_default, p_uart_obj[uart_num], intr_alloc_flags, &p_uart_obj[uart_num]->intr_handle);
+     if (r!=ESP_OK) goto err;
+     uart_intr_config_t uart_intr = {
+diff --git a/components/esp32/Kconfig b/components/esp32/Kconfig
+index cbb736522..4c5bf4246 100644
+--- a/components/esp32/Kconfig
++++ b/components/esp32/Kconfig
+@@ -1152,7 +1152,6 @@ menu Wi-Fi
+             bool "Static"
+         config ESP32_WIFI_DYNAMIC_TX_BUFFER
+             bool "Dynamic"
+-            depends on !SPIRAM_USE_MALLOC
+     endchoice
+ 
+     config ESP32_WIFI_TX_BUFFER_TYPE
+diff --git a/components/esp32/system_api.c b/components/esp32/system_api.c
+index 0dc168378..30688f2d2 100644
+--- a/components/esp32/system_api.c
++++ b/components/esp32/system_api.c
+@@ -379,3 +379,11 @@ void esp_chip_info(esp_chip_info_t* out_info)
+         out_info->features |= CHIP_FEATURE_EMB_FLASH;
+     }
+ }
++IRAM_ATTR uint32_t esp_get_revision(void)
++{
++    uint32_t reg = REG_READ(EFUSE_BLK0_RDATA3_REG);
++    if ((reg & EFUSE_RD_CHIP_VER_REV1_M) != 0) {
++        return 1;
++    }
++    return 0;
++}
+diff --git a/components/freemodbus/port/portserial.c b/components/freemodbus/port/portserial.c
+index dee5fdd36..76dba5159 100644
+--- a/components/freemodbus/port/portserial.c
++++ b/components/freemodbus/port/portserial.c
+@@ -231,7 +231,7 @@ BOOL xMBPortSerialInit(UCHAR ucPORT, ULONG ulBaudRate,
+             FALSE, "mb config failure, uart_param_config() returned (0x%x).", (uint32_t)xErr);
+     // Install UART driver, and get the queue.
+     xErr = uart_driver_install(ucUartNumber, MB_SERIAL_BUF_SIZE, MB_SERIAL_BUF_SIZE,
+-            MB_QUEUE_LENGTH, &xMbUartQueue, ESP_INTR_FLAG_LOWMED);
++            MB_QUEUE_LENGTH, &xMbUartQueue, ESP_INTR_FLAG_LOWMED, NULL);
+     MB_PORT_CHECK((xErr == ESP_OK), FALSE,
+             "mb serial driver failure, uart_driver_install() returned (0x%x).", (uint32_t)xErr);
+ #ifndef MB_TIMER_PORT_ENABLED
+diff --git a/components/freertos/include/freertos/FreeRTOSConfig.h b/components/freertos/include/freertos/FreeRTOSConfig.h
+index 80185f9e0..cb3aaae30 100644
+--- a/components/freertos/include/freertos/FreeRTOSConfig.h
++++ b/components/freertos/include/freertos/FreeRTOSConfig.h
+@@ -257,6 +257,7 @@ int xt_clock_freq(void) __attribute__((deprecated));
+ #define INCLUDE_pcTaskGetTaskName			1
+ #define INCLUDE_xTaskGetIdleTaskHandle      1
+ #define INCLUDE_pxTaskGetStackStart			1
++#define INCLUDE_xTimerGetTimerDaemonTaskHandle 1
+ 
+ #define INCLUDE_xSemaphoreGetMutexHolder    1
+ 
+diff --git a/components/lwip/port/esp32/include/lwipopts.h b/components/lwip/port/esp32/include/lwipopts.h
+index de0ee9c31..3e089c1df 100644
+--- a/components/lwip/port/esp32/include/lwipopts.h
++++ b/components/lwip/port/esp32/include/lwipopts.h
+@@ -43,7 +43,7 @@
+ #include "esp_task.h"
+ #include "esp_system.h"
+ #include "sdkconfig.h"
+-#include "sntp.h"
++
+ #include "netif/dhcp_state.h"
+ 
+ /* Enable all Espressif-only options */
+@@ -833,29 +833,24 @@ enum {
+ #define LWIP_DHCP_MAX_NTP_SERVERS       CONFIG_LWIP_DHCP_MAX_NTP_SERVERS
+ #define LWIP_TIMEVAL_PRIVATE            0
+ 
+-/*
+-   --------------------------------------
+-   ------------ SNTP options ------------
+-   --------------------------------------
+-*/
+-/*
+- * SNTP update delay - in milliseconds
+- */
+-#define SNTP_UPDATE_DELAY              CONFIG_LWIP_SNTP_UPDATE_DELAY
++extern void mach_rtc_set_us_since_epoch (uint64_t nowus);
++extern uint64_t mach_rtc_get_us_since_epoch (void);
++extern void mach_rtc_synced (void);
++extern uint32_t sntp_update_period;
++
++#define SNTP_SUPPRESS_DELAY_CHECK
++#define SNTP_UPDATE_DELAY               sntp_update_period
+ 
+ #define SNTP_SET_SYSTEM_TIME_US(sec, us)  \
+     do { \
+-        struct timeval tv = { .tv_sec = sec, .tv_usec = us }; \
+-        sntp_sync_time(&tv); \
++        mach_rtc_set_us_since_epoch((1000000ull * (sec)) + (us)); \
++        mach_rtc_synced(); \
+     } while (0);
+ 
+ #define SNTP_GET_SYSTEM_TIME(sec, us) \
+     do { \
+-        struct timeval tv = { .tv_sec = 0, .tv_usec = 0 }; \
+-        gettimeofday(&tv, NULL); \
+-        (sec) = tv.tv_sec;  \
+-        (us) = tv.tv_usec; \
+-        sntp_set_sync_status(SNTP_SYNC_STATUS_RESET); \
++        (us) = mach_rtc_get_us_since_epoch() % 1000000ull; \
++        (sec) = mach_rtc_get_us_since_epoch() / 1000000ull; \
+     } while (0);
+ 
+ #define SOC_SEND_LOG //printf
+diff --git a/components/protocomm/src/transports/protocomm_console.c b/components/protocomm/src/transports/protocomm_console.c
+index e1e10a772..b2ef8274c 100644
+--- a/components/protocomm/src/transports/protocomm_console.c
++++ b/components/protocomm/src/transports/protocomm_console.c
+@@ -77,7 +77,7 @@ static void protocomm_console_task(void *arg)
+     uart_event_t event;
+ 
+     ESP_LOGD(TAG, "Initializing UART on port %d", uart_num);
+-    uart_driver_install(uart_num, 256, 0, 8, &uart_queue, 0);
++    uart_driver_install(uart_num, 256, 0, 8, &uart_queue, 0, NULL);
+     /* Initialize the console */
+     esp_console_config_t console_config = {
+             .max_cmdline_args = 8,
+diff --git a/components/soc/esp32/include/soc/spi_reg.h b/components/soc/esp32/include/soc/spi_reg.h
+index fac2965c7..3c6773226 100644
+--- a/components/soc/esp32/include/soc/spi_reg.h
++++ b/components/soc/esp32/include/soc/spi_reg.h
+@@ -132,6 +132,13 @@
+ #define SPI_FLASH_PER_V  0x1
+ #define SPI_FLASH_PER_S  16
+ 
++/* SPI_USR_ADDR_VALUE : R/W ;bitpos:[31:0] ;default: 32'h0 ; */
++/*description: [31:8]:address to slave [7:0]:Reserved.*/
++#define SPI_USR_ADDR_VALUE  0xFFFFFFFF
++#define SPI_USR_ADDR_VALUE_M  ((SPI_USR_ADDR_VALUE_V)<<(SPI_USR_ADDR_VALUE_S))
++#define SPI_USR_ADDR_VALUE_V  0xFFFFFFFF
++#define SPI_USR_ADDR_VALUE_S  0
++
+ #define SPI_ADDR_REG(i)          (REG_SPI_BASE(i) + 0x4)
+ //The CSV actually is wrong here. It indicates that the lower 8 bits of this register are reserved. This is not true,
+ //all 32 bits of SPI_ADDR_REG are usable/used.
+diff --git a/components/spi_flash/flash_ops.c b/components/spi_flash/flash_ops.c
+index b535e8008..821038761 100644
+--- a/components/spi_flash/flash_ops.c
++++ b/components/spi_flash/flash_ops.c
+@@ -121,14 +121,6 @@ static __attribute__((unused)) bool is_safe_write_address(size_t addr, size_t si
+         UNSAFE_WRITE_ADDRESS;
+     }
+ 
+-    const esp_partition_t *p = esp_ota_get_running_partition();
+-    if (addr >= p->address && addr < p->address + p->size) {
+-        UNSAFE_WRITE_ADDRESS;
+-    }
+-    if (addr < p->address && addr + size > p->address) {
+-        UNSAFE_WRITE_ADDRESS;
+-    }
+-
+     return result;
+ }
+ 
+diff --git a/components/vfs/test/test_vfs_uart.c b/components/vfs/test/test_vfs_uart.c
+index 2e45d76bf..2956c6612 100644
+--- a/components/vfs/test/test_vfs_uart.c
++++ b/components/vfs/test/test_vfs_uart.c
+@@ -180,7 +180,7 @@ TEST_CASE("can write to UART while another task is reading", "[vfs]")
+     flush_stdin_stdout();
+ 
+     ESP_ERROR_CHECK( uart_driver_install(CONFIG_CONSOLE_UART_NUM,
+-            256, 0, 0, NULL, 0) );
++            256, 0, 0, NULL, 0, NULL) );
+     esp_vfs_dev_uart_use_driver(CONFIG_CONSOLE_UART_NUM);
+ 
+ 
+diff --git a/examples/wifi/scan/main/scan.c b/examples/wifi/scan/main/scan.c
+index fa27bf7f2..6d94165ec 100644
+--- a/examples/wifi/scan/main/scan.c
++++ b/examples/wifi/scan/main/scan.c
+@@ -125,3 +125,7 @@ void app_main()
+ 
+     wifi_scan();
+ }
++
++void vPortCleanUpTCB (void *tcb) {
++
++}
+diff --git a/examples/wifi/scan/sdkconfig b/examples/wifi/scan/sdkconfig
+new file mode 100644
+index 000000000..bb3296587
+--- /dev/null
++++ b/examples/wifi/scan/sdkconfig
+@@ -0,0 +1,815 @@
++#
++# Automatically generated file; DO NOT EDIT.
++# Espressif IoT Development Framework Configuration
++#
++CONFIG_IDF_TARGET="esp32"
++
++#
++# SDK tool configuration
++#
++CONFIG_TOOLPREFIX="xtensa-esp32-elf-"
++CONFIG_PYTHON="python"
++CONFIG_MAKE_WARN_UNDEFINED_VARIABLES=y
++
++#
++# Application manager
++#
++CONFIG_APP_COMPILE_TIME_DATE=y
++CONFIG_APP_EXCLUDE_PROJECT_VER_VAR=y
++CONFIG_APP_EXCLUDE_PROJECT_NAME_VAR=y
++
++#
++# Bootloader config
++#
++CONFIG_LOG_BOOTLOADER_LEVEL_NONE=y
++CONFIG_LOG_BOOTLOADER_LEVEL_ERROR=
++CONFIG_LOG_BOOTLOADER_LEVEL_WARN=
++CONFIG_LOG_BOOTLOADER_LEVEL_INFO=
++CONFIG_LOG_BOOTLOADER_LEVEL_DEBUG=
++CONFIG_LOG_BOOTLOADER_LEVEL_VERBOSE=
++CONFIG_LOG_BOOTLOADER_LEVEL=0
++CONFIG_BOOTLOADER_SPI_WP_PIN=7
++CONFIG_BOOTLOADER_VDDSDIO_BOOST_1_9V=y
++CONFIG_BOOTLOADER_FACTORY_RESET=
++CONFIG_BOOTLOADER_APP_TEST=
++CONFIG_BOOTLOADER_WDT_ENABLE=
++CONFIG_APP_ROLLBACK_ENABLE=
++
++#
++# Security features
++#
++CONFIG_SECURE_SIGNED_APPS_NO_SECURE_BOOT=
++CONFIG_SECURE_BOOT_ENABLED=
++CONFIG_FLASH_ENCRYPTION_ENABLED=
++
++#
++# Serial flasher config
++#
++CONFIG_ESPTOOLPY_PORT="/dev/ttyUSB0"
++CONFIG_ESPTOOLPY_BAUD_115200B=
++CONFIG_ESPTOOLPY_BAUD_230400B=
++CONFIG_ESPTOOLPY_BAUD_921600B=y
++CONFIG_ESPTOOLPY_BAUD_2MB=
++CONFIG_ESPTOOLPY_BAUD_OTHER=
++CONFIG_ESPTOOLPY_BAUD_OTHER_VAL=115200
++CONFIG_ESPTOOLPY_BAUD=921600
++CONFIG_ESPTOOLPY_COMPRESSED=y
++CONFIG_FLASHMODE_QIO=y
++CONFIG_FLASHMODE_QOUT=
++CONFIG_FLASHMODE_DIO=
++CONFIG_FLASHMODE_DOUT=
++CONFIG_ESPTOOLPY_FLASHMODE="dio"
++CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
++CONFIG_ESPTOOLPY_FLASHFREQ_40M=
++CONFIG_ESPTOOLPY_FLASHFREQ_26M=
++CONFIG_ESPTOOLPY_FLASHFREQ_20M=
++CONFIG_ESPTOOLPY_FLASHFREQ="80m"
++CONFIG_ESPTOOLPY_FLASHSIZE_1MB=
++CONFIG_ESPTOOLPY_FLASHSIZE_2MB=
++CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
++CONFIG_ESPTOOLPY_FLASHSIZE_8MB=
++CONFIG_ESPTOOLPY_FLASHSIZE_16MB=
++CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
++CONFIG_ESPTOOLPY_FLASHSIZE_DETECT=y
++CONFIG_ESPTOOLPY_BEFORE_RESET=
++CONFIG_ESPTOOLPY_BEFORE_NORESET=y
++CONFIG_ESPTOOLPY_BEFORE="no_reset"
++CONFIG_ESPTOOLPY_AFTER_RESET=
++CONFIG_ESPTOOLPY_AFTER_NORESET=y
++CONFIG_ESPTOOLPY_AFTER="no_reset"
++CONFIG_MONITOR_BAUD_9600B=
++CONFIG_MONITOR_BAUD_57600B=
++CONFIG_MONITOR_BAUD_115200B=y
++CONFIG_MONITOR_BAUD_230400B=
++CONFIG_MONITOR_BAUD_921600B=
++CONFIG_MONITOR_BAUD_2MB=
++CONFIG_MONITOR_BAUD_OTHER=
++CONFIG_MONITOR_BAUD_OTHER_VAL=115200
++CONFIG_MONITOR_BAUD=115200
++
++#
++# Example Configuration
++#
++CONFIG_WIFI_SSID="myssid"
++CONFIG_WIFI_PASSWORD="mypassword"
++CONFIG_WIFI_FAST_SCAN=y
++CONFIG_WIFI_ALL_CHANNEL_SCAN=
++CONFIG_WIFI_CONNECT_AP_BY_SIGNAL=y
++CONFIG_WIFI_CONNECT_AP_BY_SECURITY=
++CONFIG_FAST_SCAN_THRESHOLD=y
++CONFIG_FAST_SCAN_MINIMUM_SIGNAL=-127
++CONFIG_EXAMPLE_OPEN=y
++CONFIG_EXAMPLE_WEP=
++CONFIG_EXAMPLE_WPA=
++CONFIG_EXAMPLE_WPA2=
++
++#
++# Partition Table
++#
++CONFIG_PARTITION_TABLE_SINGLE_APP=y
++CONFIG_PARTITION_TABLE_TWO_OTA=
++CONFIG_PARTITION_TABLE_CUSTOM=
++CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
++CONFIG_PARTITION_TABLE_FILENAME="partitions_singleapp.csv"
++CONFIG_PARTITION_TABLE_OFFSET=0x8000
++CONFIG_PARTITION_TABLE_MD5=
++
++#
++# Compiler options
++#
++CONFIG_OPTIMIZATION_LEVEL_DEBUG=
++CONFIG_OPTIMIZATION_LEVEL_RELEASE=y
++CONFIG_OPTIMIZATION_ASSERTIONS_ENABLED=
++CONFIG_OPTIMIZATION_ASSERTIONS_SILENT=y
++CONFIG_OPTIMIZATION_ASSERTIONS_DISABLED=
++CONFIG_CXX_EXCEPTIONS=
++CONFIG_STACK_CHECK_NONE=y
++CONFIG_STACK_CHECK_NORM=
++CONFIG_STACK_CHECK_STRONG=
++CONFIG_STACK_CHECK_ALL=
++CONFIG_STACK_CHECK=
++CONFIG_WARN_WRITE_STRINGS=
++CONFIG_DISABLE_GCC8_WARNINGS=
++
++#
++# Component config
++#
++
++#
++# Application Level Tracing
++#
++CONFIG_ESP32_APPTRACE_DEST_TRAX=
++CONFIG_ESP32_APPTRACE_DEST_NONE=y
++CONFIG_ESP32_APPTRACE_ENABLE=
++CONFIG_ESP32_APPTRACE_LOCK_ENABLE=y
++CONFIG_AWS_IOT_SDK=
++
++#
++# Bluetooth
++#
++CONFIG_BT_ENABLED=y
++
++#
++# Bluetooth controller
++#
++CONFIG_BTDM_CONTROLLER_MODE_BLE_ONLY=y
++CONFIG_BTDM_CONTROLLER_MODE_BR_EDR_ONLY=
++CONFIG_BTDM_CONTROLLER_MODE_BTDM=
++CONFIG_BTDM_CONTROLLER_BLE_MAX_CONN=3
++CONFIG_BTDM_CTRL_BR_EDR_SCO_DATA_PATH_EFF=0
++CONFIG_BTDM_CONTROLLER_BLE_MAX_CONN_EFF=3
++CONFIG_BTDM_CONTROLLER_BR_EDR_MAX_ACL_CONN_EFF=0
++CONFIG_BTDM_CONTROLLER_BR_EDR_MAX_SYNC_CONN_EFF=0
++CONFIG_BTDM_CONTROLLER_PINNED_TO_CORE_0=y
++CONFIG_BTDM_CONTROLLER_PINNED_TO_CORE_1=
++CONFIG_BTDM_CONTROLLER_PINNED_TO_CORE=0
++CONFIG_BTDM_CONTROLLER_HCI_MODE_VHCI=y
++CONFIG_BTDM_CONTROLLER_HCI_MODE_UART_H4=
++
++#
++# MODEM SLEEP Options
++#
++CONFIG_BTDM_CONTROLLER_MODEM_SLEEP=y
++CONFIG_BTDM_MODEM_SLEEP_MODE_ORIG=y
++CONFIG_BTDM_MODEM_SLEEP_MODE_EVED=
++CONFIG_BTDM_LPCLK_SEL_MAIN_XTAL=y
++CONFIG_BLE_SCAN_DUPLICATE=y
++CONFIG_SCAN_DUPLICATE_BY_DEVICE_ADDR=y
++CONFIG_SCAN_DUPLICATE_BY_ADV_DATA=
++CONFIG_SCAN_DUPLICATE_BY_ADV_DATA_AND_DEVICE_ADDR=
++CONFIG_SCAN_DUPLICATE_TYPE=0
++CONFIG_DUPLICATE_SCAN_CACHE_SIZE=20
++CONFIG_BLE_MESH_SCAN_DUPLICATE_EN=
++CONFIG_BTDM_CONTROLLER_FULL_SCAN_SUPPORTED=
++CONFIG_BLE_ADV_REPORT_FLOW_CONTROL_SUPPORTED=y
++CONFIG_BLE_ADV_REPORT_FLOW_CONTROL_NUM=100
++CONFIG_BLE_ADV_REPORT_DISCARD_THRSHOLD=20
++CONFIG_BLUEDROID_ENABLED=y
++CONFIG_BLUEDROID_PINNED_TO_CORE_0=y
++CONFIG_BLUEDROID_PINNED_TO_CORE_1=
++CONFIG_BLUEDROID_PINNED_TO_CORE=0
++CONFIG_BTC_TASK_STACK_SIZE=3328
++CONFIG_BTU_TASK_STACK_SIZE=4096
++CONFIG_BLUEDROID_MEM_DEBUG=
++CONFIG_CLASSIC_BT_ENABLED=
++CONFIG_GATTS_ENABLE=y
++CONFIG_GATTS_SEND_SERVICE_CHANGE_MANUAL=
++CONFIG_GATTS_SEND_SERVICE_CHANGE_AUTO=y
++CONFIG_GATTS_SEND_SERVICE_CHANGE_MODE=0
++CONFIG_GATTC_ENABLE=y
++CONFIG_GATTC_CACHE_NVS_FLASH=y
++CONFIG_BLE_SMP_ENABLE=y
++CONFIG_SMP_SLAVE_CON_PARAMS_UPD_ENABLE=y
++CONFIG_BT_STACK_NO_LOG=y
++CONFIG_BT_ACL_CONNECTIONS=4
++CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST=y
++CONFIG_BT_BLE_DYNAMIC_ENV_MEMORY=y
++CONFIG_BLE_HOST_QUEUE_CONGESTION_CHECK=y
++CONFIG_SMP_ENABLE=y
++CONFIG_BLE_ACTIVE_SCAN_REPORT_ADV_SCAN_RSP_INDIVIDUALLY=
++CONFIG_BLE_ESTABLISH_LINK_CONNECTION_TIMEOUT=30
++CONFIG_BT_RESERVE_DRAM=0xdb5c
++
++#
++# Driver configurations
++#
++
++#
++# ADC configuration
++#
++CONFIG_ADC_FORCE_XPD_FSM=
++CONFIG_ADC2_DISABLE_DAC=y
++
++#
++# SPI configuration
++#
++CONFIG_SPI_MASTER_IN_IRAM=
++CONFIG_SPI_MASTER_ISR_IN_IRAM=y
++CONFIG_SPI_SLAVE_IN_IRAM=y
++CONFIG_SPI_SLAVE_ISR_IN_IRAM=y
++
++#
++# eFuse Bit Manager
++#
++CONFIG_EFUSE_CUSTOM_TABLE=
++CONFIG_EFUSE_VIRTUAL=
++CONFIG_EFUSE_CODE_SCHEME_COMPAT_NONE=
++CONFIG_EFUSE_CODE_SCHEME_COMPAT_3_4=y
++CONFIG_EFUSE_CODE_SCHEME_COMPAT_REPEAT=
++CONFIG_EFUSE_MAX_BLK_LEN=192
++
++#
++# ESP32-specific
++#
++CONFIG_IDF_TARGET_ESP32=y
++CONFIG_ESP32_REV_MIN_0=y
++CONFIG_ESP32_REV_MIN_1=
++CONFIG_ESP32_REV_MIN_2=
++CONFIG_ESP32_REV_MIN_3=
++CONFIG_ESP32_REV_MIN=0
++CONFIG_ESP32_DPORT_WORKAROUND=y
++CONFIG_ESP32_DEFAULT_CPU_FREQ_80=
++CONFIG_ESP32_DEFAULT_CPU_FREQ_160=y
++CONFIG_ESP32_DEFAULT_CPU_FREQ_240=
++CONFIG_ESP32_DEFAULT_CPU_FREQ_MHZ=160
++CONFIG_SPIRAM_SUPPORT=y
++
++#
++# SPI RAM config
++#
++CONFIG_SPIRAM_BOOT_INIT=y
++CONFIG_SPIRAM_IGNORE_NOTFOUND=y
++CONFIG_SPIRAM_USE_MEMMAP=
++CONFIG_SPIRAM_USE_CAPS_ALLOC=
++CONFIG_SPIRAM_USE_MALLOC=y
++CONFIG_SPIRAM_TYPE_AUTO=y
++CONFIG_SPIRAM_TYPE_ESPPSRAM32=
++CONFIG_SPIRAM_TYPE_ESPPSRAM64=
++CONFIG_SPIRAM_SIZE=-1
++CONFIG_SPIRAM_SPEED_40M=y
++CONFIG_SPIRAM_SPEED_80M=
++CONFIG_SPIRAM_MEMTEST=
++CONFIG_SPIRAM_CACHE_WORKAROUND=y
++CONFIG_SPIRAM_BANKSWITCH_ENABLE=
++CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
++CONFIG_WIFI_LWIP_ALLOCATION_FROM_SPIRAM_FIRST=y
++CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=16384
++CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=
++CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=
++
++#
++# PSRAM clock and cs IO for ESP32-DOWD
++#
++CONFIG_D0WD_PSRAM_CLK_IO=17
++CONFIG_D0WD_PSRAM_CS_IO=16
++
++#
++# PSRAM clock and cs IO for ESP32-D2WD
++#
++CONFIG_D2WD_PSRAM_CLK_IO=9
++CONFIG_D2WD_PSRAM_CS_IO=10
++
++#
++# PSRAM clock and cs IO for ESP32-PICO
++#
++CONFIG_PICO_PSRAM_CS_IO=16
++CONFIG_MEMMAP_TRACEMEM=
++CONFIG_MEMMAP_TRACEMEM_TWOBANKS=
++CONFIG_ESP32_TRAX=
++CONFIG_TRACEMEM_RESERVE_DRAM=0x0
++CONFIG_TWO_UNIVERSAL_MAC_ADDRESS=
++CONFIG_FOUR_UNIVERSAL_MAC_ADDRESS=y
++CONFIG_NUMBER_OF_UNIVERSAL_MAC_ADDRESS=4
++CONFIG_SYSTEM_EVENT_QUEUE_SIZE=32
++CONFIG_SYSTEM_EVENT_TASK_STACK_SIZE=2560
++CONFIG_MAIN_TASK_STACK_SIZE=4096
++CONFIG_IPC_TASK_STACK_SIZE=1024
++CONFIG_TIMER_TASK_STACK_SIZE=2560
++CONFIG_NEWLIB_STDOUT_LINE_ENDING_CRLF=y
++CONFIG_NEWLIB_STDOUT_LINE_ENDING_LF=
++CONFIG_NEWLIB_STDOUT_LINE_ENDING_CR=
++CONFIG_NEWLIB_STDIN_LINE_ENDING_CRLF=
++CONFIG_NEWLIB_STDIN_LINE_ENDING_LF=
++CONFIG_NEWLIB_STDIN_LINE_ENDING_CR=y
++CONFIG_NEWLIB_NANO_FORMAT=
++CONFIG_CONSOLE_UART_DEFAULT=y
++CONFIG_CONSOLE_UART_CUSTOM=
++CONFIG_CONSOLE_UART_NONE=
++CONFIG_CONSOLE_UART_NUM=0
++CONFIG_CONSOLE_UART_BAUDRATE=115200
++CONFIG_ULP_COPROC_ENABLED=
++CONFIG_ULP_COPROC_RESERVE_MEM=0
++CONFIG_ESP32_PANIC_PRINT_HALT=
++CONFIG_ESP32_PANIC_PRINT_REBOOT=y
++CONFIG_ESP32_PANIC_SILENT_REBOOT=
++CONFIG_ESP32_PANIC_GDBSTUB=
++CONFIG_ESP32_DEBUG_OCDAWARE=y
++CONFIG_ESP32_DEBUG_STUBS_ENABLE=
++CONFIG_INT_WDT=
++CONFIG_TASK_WDT=
++CONFIG_BROWNOUT_DET=
++CONFIG_ESP32_TIME_SYSCALL_USE_RTC_FRC1=y
++CONFIG_ESP32_TIME_SYSCALL_USE_RTC=
++CONFIG_ESP32_TIME_SYSCALL_USE_FRC1=
++CONFIG_ESP32_TIME_SYSCALL_USE_NONE=
++CONFIG_ESP32_RTC_CLOCK_SOURCE_INTERNAL_RC=y
++CONFIG_ESP32_RTC_CLOCK_SOURCE_EXTERNAL_CRYSTAL=
++CONFIG_ESP32_RTC_CLOCK_SOURCE_EXTERNAL_OSC=
++CONFIG_ESP32_RTC_CLOCK_SOURCE_INTERNAL_8MD256=
++CONFIG_ESP32_RTC_CLK_CAL_CYCLES=1024
++CONFIG_ESP32_DEEP_SLEEP_WAKEUP_DELAY=2000
++CONFIG_ESP32_XTAL_FREQ_40=y
++CONFIG_ESP32_XTAL_FREQ_26=
++CONFIG_ESP32_XTAL_FREQ_AUTO=
++CONFIG_ESP32_XTAL_FREQ=40
++CONFIG_DISABLE_BASIC_ROM_CONSOLE=
++CONFIG_ESP_TIMER_PROFILING=
++CONFIG_COMPATIBLE_PRE_V2_1_BOOTLOADERS=
++CONFIG_ESP_ERR_TO_NAME_LOOKUP=
++CONFIG_ESP32_DPORT_DIS_INTERRUPT_LVL=5
++
++#
++# Wi-Fi
++#
++CONFIG_SW_COEXIST_ENABLE=
++CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM=8
++CONFIG_ESP32_WIFI_DYNAMIC_RX_BUFFER_NUM=16
++CONFIG_ESP32_WIFI_STATIC_TX_BUFFER=
++CONFIG_ESP32_WIFI_DYNAMIC_TX_BUFFER=y
++CONFIG_ESP32_WIFI_TX_BUFFER_TYPE=1
++CONFIG_ESP32_WIFI_DYNAMIC_TX_BUFFER_NUM=32
++CONFIG_ESP32_WIFI_CSI_ENABLED=
++CONFIG_ESP32_WIFI_AMPDU_TX_ENABLED=y
++CONFIG_ESP32_WIFI_TX_BA_WIN=6
++CONFIG_ESP32_WIFI_AMPDU_RX_ENABLED=y
++CONFIG_ESP32_WIFI_RX_BA_WIN=16
++CONFIG_ESP32_WIFI_NVS_ENABLED=y
++CONFIG_ESP32_WIFI_TASK_PINNED_TO_CORE_0=y
++CONFIG_ESP32_WIFI_TASK_PINNED_TO_CORE_1=
++CONFIG_ESP32_WIFI_SOFTAP_BEACON_MAX_LEN=752
++CONFIG_ESP32_WIFI_MGMT_SBUF_NUM=32
++CONFIG_ESP32_WIFI_DEBUG_LOG_ENABLE=
++CONFIG_ESP32_WIFI_IRAM_OPT=
++
++#
++# PHY
++#
++CONFIG_ESP32_PHY_CALIBRATION_AND_DATA_STORAGE=y
++CONFIG_ESP32_PHY_INIT_DATA_IN_PARTITION=
++CONFIG_ESP32_PHY_MAX_WIFI_TX_POWER=20
++CONFIG_ESP32_PHY_MAX_TX_POWER=20
++
++#
++# Power Management
++#
++CONFIG_PM_ENABLE=
++
++#
++# ADC-Calibration
++#
++CONFIG_ADC_CAL_EFUSE_TP_ENABLE=y
++CONFIG_ADC_CAL_EFUSE_VREF_ENABLE=y
++CONFIG_ADC_CAL_LUT_ENABLE=y
++
++#
++# Event Loop Library
++#
++CONFIG_EVENT_LOOP_PROFILING=
++
++#
++# ESP HTTP client
++#
++CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
++
++#
++# HTTP Server
++#
++CONFIG_HTTPD_MAX_REQ_HDR_LEN=512
++CONFIG_HTTPD_MAX_URI_LEN=512
++CONFIG_HTTPD_ERR_RESP_NO_DELAY=y
++CONFIG_HTTPD_PURGE_BUF_LEN=32
++CONFIG_HTTPD_LOG_PURGE_DATA=
++
++#
++# ESP HTTPS OTA
++#
++CONFIG_OTA_ALLOW_HTTP=
++
++#
++# Core dump
++#
++CONFIG_ESP32_ENABLE_COREDUMP_TO_FLASH=
++CONFIG_ESP32_ENABLE_COREDUMP_TO_UART=y
++CONFIG_ESP32_ENABLE_COREDUMP_TO_NONE=
++CONFIG_ESP32_ENABLE_COREDUMP=y
++CONFIG_ESP32_CORE_DUMP_MAX_TASKS_NUM=64
++CONFIG_ESP32_CORE_DUMP_UART_DELAY=0
++
++#
++# Ethernet
++#
++CONFIG_DMA_RX_BUF_NUM=10
++CONFIG_DMA_TX_BUF_NUM=10
++CONFIG_EMAC_L2_TO_L3_RX_BUF_MODE=
++CONFIG_EMAC_CHECK_LINK_PERIOD_MS=2000
++CONFIG_EMAC_TASK_PRIORITY=20
++CONFIG_EMAC_TASK_STACK_SIZE=2000
++
++#
++# FAT Filesystem support
++#
++CONFIG_FATFS_CODEPAGE_DYNAMIC=
++CONFIG_FATFS_CODEPAGE_437=y
++CONFIG_FATFS_CODEPAGE_720=
++CONFIG_FATFS_CODEPAGE_737=
++CONFIG_FATFS_CODEPAGE_771=
++CONFIG_FATFS_CODEPAGE_775=
++CONFIG_FATFS_CODEPAGE_850=
++CONFIG_FATFS_CODEPAGE_852=
++CONFIG_FATFS_CODEPAGE_855=
++CONFIG_FATFS_CODEPAGE_857=
++CONFIG_FATFS_CODEPAGE_860=
++CONFIG_FATFS_CODEPAGE_861=
++CONFIG_FATFS_CODEPAGE_862=
++CONFIG_FATFS_CODEPAGE_863=
++CONFIG_FATFS_CODEPAGE_864=
++CONFIG_FATFS_CODEPAGE_865=
++CONFIG_FATFS_CODEPAGE_866=
++CONFIG_FATFS_CODEPAGE_869=
++CONFIG_FATFS_CODEPAGE_932=
++CONFIG_FATFS_CODEPAGE_936=
++CONFIG_FATFS_CODEPAGE_949=
++CONFIG_FATFS_CODEPAGE_950=
++CONFIG_FATFS_CODEPAGE=437
++CONFIG_FATFS_LFN_NONE=y
++CONFIG_FATFS_LFN_HEAP=
++CONFIG_FATFS_LFN_STACK=
++CONFIG_FATFS_FS_LOCK=0
++CONFIG_FATFS_TIMEOUT_MS=10000
++CONFIG_FATFS_PER_FILE_CACHE=y
++CONFIG_FATFS_ALLOC_PREFER_EXTRAM=y
++
++#
++# Modbus configuration
++#
++CONFIG_MB_QUEUE_LENGTH=0
++CONFIG_MB_SERIAL_TASK_STACK_SIZE=768
++CONFIG_MB_SERIAL_BUF_SIZE=0
++CONFIG_MB_SERIAL_TASK_PRIO=10
++CONFIG_MB_CONTROLLER_SLAVE_ID_SUPPORT=
++CONFIG_MB_CONTROLLER_NOTIFY_TIMEOUT=20
++CONFIG_MB_CONTROLLER_NOTIFY_QUEUE_SIZE=0
++CONFIG_MB_CONTROLLER_STACK_SIZE=0
++CONFIG_MB_EVENT_QUEUE_TIMEOUT=20
++CONFIG_MB_TIMER_PORT_ENABLED=
++
++#
++# FreeRTOS
++#
++CONFIG_FREERTOS_UNICORE=
++CONFIG_FREERTOS_NO_AFFINITY=0x7FFFFFFF
++CONFIG_FREERTOS_CORETIMER_0=y
++CONFIG_FREERTOS_CORETIMER_1=
++CONFIG_FREERTOS_HZ=1000
++CONFIG_FREERTOS_ASSERT_ON_UNTESTED_FUNCTION=y
++CONFIG_FREERTOS_CHECK_STACKOVERFLOW_NONE=
++CONFIG_FREERTOS_CHECK_STACKOVERFLOW_PTRVAL=
++CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY=y
++CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK=
++CONFIG_FREERTOS_INTERRUPT_BACKTRACE=y
++CONFIG_FREERTOS_THREAD_LOCAL_STORAGE_POINTERS=2
++CONFIG_FREERTOS_ASSERT_FAIL_ABORT=y
++CONFIG_FREERTOS_ASSERT_FAIL_PRINT_CONTINUE=
++CONFIG_FREERTOS_ASSERT_DISABLE=
++CONFIG_FREERTOS_IDLE_TASK_STACKSIZE=1024
++CONFIG_FREERTOS_ISR_STACKSIZE=2560
++CONFIG_FREERTOS_LEGACY_HOOKS=
++CONFIG_FREERTOS_MAX_TASK_NAME_LEN=16
++CONFIG_SUPPORT_STATIC_ALLOCATION=y
++CONFIG_ENABLE_STATIC_TASK_CLEAN_UP_HOOK=y
++CONFIG_TIMER_TASK_PRIORITY=10
++CONFIG_TIMER_TASK_STACK_DEPTH=2560
++CONFIG_TIMER_QUEUE_LENGTH=10
++CONFIG_FREERTOS_QUEUE_REGISTRY_SIZE=0
++CONFIG_FREERTOS_USE_TRACE_FACILITY=
++CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=
++CONFIG_FREERTOS_DEBUG_INTERNALS=
++CONFIG_FREERTOS_CHECK_MUTEX_GIVEN_BY_OWNER=y
++CONFIG_FREERTOS_CHECK_PORT_CRITICAL_COMPLIANCE=
++
++#
++# Heap memory debugging
++#
++CONFIG_HEAP_POISONING_DISABLED=y
++CONFIG_HEAP_POISONING_LIGHT=
++CONFIG_HEAP_POISONING_COMPREHENSIVE=
++CONFIG_HEAP_TRACING=
++
++#
++# libsodium
++#
++CONFIG_LIBSODIUM_USE_MBEDTLS_SHA=y
++
++#
++# Log output
++#
++CONFIG_LOG_DEFAULT_LEVEL_NONE=y
++CONFIG_LOG_DEFAULT_LEVEL_ERROR=
++CONFIG_LOG_DEFAULT_LEVEL_WARN=
++CONFIG_LOG_DEFAULT_LEVEL_INFO=
++CONFIG_LOG_DEFAULT_LEVEL_DEBUG=
++CONFIG_LOG_DEFAULT_LEVEL_VERBOSE=
++CONFIG_LOG_DEFAULT_LEVEL=0
++CONFIG_LOG_COLORS=
++
++#
++# LWIP
++#
++CONFIG_L2_TO_L3_COPY=
++CONFIG_LWIP_IRAM_OPTIMIZATION=
++CONFIG_LWIP_MAX_SOCKETS=10
++CONFIG_USE_ONLY_LWIP_SELECT=
++CONFIG_LWIP_SO_REUSE=y
++CONFIG_LWIP_SO_REUSE_RXTOALL=y
++CONFIG_LWIP_SO_RCVBUF=y
++CONFIG_LWIP_DHCP_MAX_NTP_SERVERS=2
++CONFIG_LWIP_IP_FRAG=
++CONFIG_LWIP_IP_REASSEMBLY=
++CONFIG_LWIP_STATS=
++CONFIG_LWIP_ETHARP_TRUST_IP_MAC=y
++CONFIG_ESP_GRATUITOUS_ARP=
++CONFIG_TCPIP_RECVMBOX_SIZE=32
++CONFIG_LWIP_DHCP_DOES_ARP_CHECK=y
++CONFIG_LWIP_DHCP_RESTORE_LAST_IP=y
++
++#
++# DHCP server
++#
++CONFIG_LWIP_DHCPS_LEASE_UNIT=60
++CONFIG_LWIP_DHCPS_MAX_STATION_NUM=8
++CONFIG_LWIP_AUTOIP=
++CONFIG_LWIP_NETIF_LOOPBACK=y
++CONFIG_LWIP_LOOPBACK_MAX_PBUFS=8
++
++#
++# TCP
++#
++CONFIG_LWIP_MAX_ACTIVE_TCP=16
++CONFIG_LWIP_MAX_LISTENING_TCP=16
++CONFIG_TCP_MAXRTX=12
++CONFIG_TCP_SYNMAXRTX=6
++CONFIG_TCP_MSS=1436
++CONFIG_TCP_MSL=60000
++CONFIG_TCP_SND_BUF_DEFAULT=5744
++CONFIG_TCP_WND_DEFAULT=5744
++CONFIG_TCP_RECVMBOX_SIZE=6
++CONFIG_TCP_QUEUE_OOSEQ=y
++CONFIG_ESP_TCP_KEEP_CONNECTION_WHEN_IP_CHANGES=y
++CONFIG_TCP_OVERSIZE_MSS=y
++CONFIG_TCP_OVERSIZE_QUARTER_MSS=
++CONFIG_TCP_OVERSIZE_DISABLE=
++CONFIG_LWIP_WND_SCALE=
++
++#
++# UDP
++#
++CONFIG_LWIP_MAX_UDP_PCBS=16
++CONFIG_UDP_RECVMBOX_SIZE=6
++CONFIG_TCPIP_TASK_STACK_SIZE=3072
++CONFIG_TCPIP_TASK_AFFINITY_NO_AFFINITY=
++CONFIG_TCPIP_TASK_AFFINITY_CPU0=y
++CONFIG_TCPIP_TASK_AFFINITY_CPU1=
++CONFIG_TCPIP_TASK_AFFINITY=0x0
++CONFIG_PPP_SUPPORT=y
++CONFIG_PPP_NOTIFY_PHASE_SUPPORT=
++CONFIG_PPP_PAP_SUPPORT=y
++CONFIG_PPP_CHAP_SUPPORT=y
++CONFIG_PPP_MSCHAP_SUPPORT=y
++CONFIG_PPP_MPPE_SUPPORT=y
++CONFIG_PPP_DEBUG_ON=
++
++#
++# ICMP
++#
++CONFIG_LWIP_MULTICAST_PING=
++CONFIG_LWIP_BROADCAST_PING=
++
++#
++# LWIP RAW API
++#
++CONFIG_LWIP_MAX_RAW_PCBS=16
++
++#
++# mbedTLS
++#
++CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC=
++CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
++CONFIG_MBEDTLS_DEFAULT_MEM_ALLOC=
++CONFIG_MBEDTLS_CUSTOM_MEM_ALLOC=
++CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN=16384
++CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=
++CONFIG_MBEDTLS_DEBUG=
++CONFIG_MBEDTLS_HARDWARE_AES=y
++CONFIG_MBEDTLS_HARDWARE_MPI=
++CONFIG_MBEDTLS_HARDWARE_SHA=
++CONFIG_MBEDTLS_HAVE_TIME=y
++CONFIG_MBEDTLS_HAVE_TIME_DATE=
++CONFIG_MBEDTLS_TLS_SERVER_AND_CLIENT=y
++CONFIG_MBEDTLS_TLS_SERVER_ONLY=
++CONFIG_MBEDTLS_TLS_CLIENT_ONLY=
++CONFIG_MBEDTLS_TLS_DISABLED=
++CONFIG_MBEDTLS_TLS_SERVER=y
++CONFIG_MBEDTLS_TLS_CLIENT=y
++CONFIG_MBEDTLS_TLS_ENABLED=y
++
++#
++# TLS Key Exchange Methods
++#
++CONFIG_MBEDTLS_PSK_MODES=
++CONFIG_MBEDTLS_KEY_EXCHANGE_RSA=y
++CONFIG_MBEDTLS_KEY_EXCHANGE_DHE_RSA=y
++CONFIG_MBEDTLS_KEY_EXCHANGE_ELLIPTIC_CURVE=y
++CONFIG_MBEDTLS_KEY_EXCHANGE_ECDHE_RSA=y
++CONFIG_MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA=y
++CONFIG_MBEDTLS_KEY_EXCHANGE_ECDH_ECDSA=y
++CONFIG_MBEDTLS_KEY_EXCHANGE_ECDH_RSA=y
++CONFIG_MBEDTLS_SSL_RENEGOTIATION=y
++CONFIG_MBEDTLS_SSL_PROTO_SSL3=
++CONFIG_MBEDTLS_SSL_PROTO_TLS1=y
++CONFIG_MBEDTLS_SSL_PROTO_TLS1_1=y
++CONFIG_MBEDTLS_SSL_PROTO_TLS1_2=y
++CONFIG_MBEDTLS_SSL_PROTO_DTLS=
++CONFIG_MBEDTLS_SSL_ALPN=y
++CONFIG_MBEDTLS_SSL_SESSION_TICKETS=y
++
++#
++# Symmetric Ciphers
++#
++CONFIG_MBEDTLS_AES_C=y
++CONFIG_MBEDTLS_CAMELLIA_C=
++CONFIG_MBEDTLS_DES_C=
++CONFIG_MBEDTLS_RC4_DISABLED=y
++CONFIG_MBEDTLS_RC4_ENABLED_NO_DEFAULT=
++CONFIG_MBEDTLS_RC4_ENABLED=
++CONFIG_MBEDTLS_BLOWFISH_C=
++CONFIG_MBEDTLS_XTEA_C=
++CONFIG_MBEDTLS_CCM_C=y
++CONFIG_MBEDTLS_GCM_C=y
++CONFIG_MBEDTLS_RIPEMD160_C=
++
++#
++# Certificates
++#
++CONFIG_MBEDTLS_PEM_PARSE_C=y
++CONFIG_MBEDTLS_PEM_WRITE_C=y
++CONFIG_MBEDTLS_X509_CRL_PARSE_C=y
++CONFIG_MBEDTLS_X509_CSR_PARSE_C=y
++CONFIG_MBEDTLS_ECP_C=y
++CONFIG_MBEDTLS_ECDH_C=y
++CONFIG_MBEDTLS_ECDSA_C=y
++CONFIG_MBEDTLS_ECP_DP_SECP192R1_ENABLED=y
++CONFIG_MBEDTLS_ECP_DP_SECP224R1_ENABLED=y
++CONFIG_MBEDTLS_ECP_DP_SECP256R1_ENABLED=y
++CONFIG_MBEDTLS_ECP_DP_SECP384R1_ENABLED=y
++CONFIG_MBEDTLS_ECP_DP_SECP521R1_ENABLED=y
++CONFIG_MBEDTLS_ECP_DP_SECP192K1_ENABLED=y
++CONFIG_MBEDTLS_ECP_DP_SECP224K1_ENABLED=y
++CONFIG_MBEDTLS_ECP_DP_SECP256K1_ENABLED=y
++CONFIG_MBEDTLS_ECP_DP_BP256R1_ENABLED=y
++CONFIG_MBEDTLS_ECP_DP_BP384R1_ENABLED=y
++CONFIG_MBEDTLS_ECP_DP_BP512R1_ENABLED=y
++CONFIG_MBEDTLS_ECP_DP_CURVE25519_ENABLED=y
++CONFIG_MBEDTLS_ECP_NIST_OPTIM=y
++
++#
++# mDNS
++#
++CONFIG_MDNS_MAX_SERVICES=10
++
++#
++# ESP-MQTT Configurations
++#
++CONFIG_MQTT_PROTOCOL_311=
++CONFIG_MQTT_TRANSPORT_SSL=
++CONFIG_MQTT_TRANSPORT_WEBSOCKET=
++CONFIG_MQTT_USE_CUSTOM_CONFIG=
++CONFIG_MQTT_TASK_CORE_SELECTION_ENABLED=
++CONFIG_MQTT_CUSTOM_OUTBOX=
++
++#
++# NVS
++#
++
++#
++# OpenSSL
++#
++CONFIG_OPENSSL_DEBUG=
++CONFIG_OPENSSL_ASSERT_DO_NOTHING=y
++CONFIG_OPENSSL_ASSERT_EXIT=
++
++#
++# PThreads
++#
++CONFIG_ESP32_PTHREAD_TASK_PRIO_DEFAULT=5
++CONFIG_ESP32_PTHREAD_TASK_STACK_SIZE_DEFAULT=2048
++CONFIG_PTHREAD_STACK_MIN=768
++CONFIG_ESP32_DEFAULT_PTHREAD_CORE_NO_AFFINITY=y
++CONFIG_ESP32_DEFAULT_PTHREAD_CORE_0=
++CONFIG_ESP32_DEFAULT_PTHREAD_CORE_1=
++CONFIG_ESP32_PTHREAD_TASK_CORE_DEFAULT=-1
++CONFIG_ESP32_PTHREAD_TASK_NAME_DEFAULT="pthread"
++
++#
++# SPI Flash driver
++#
++CONFIG_SPI_FLASH_VERIFY_WRITE=
++CONFIG_SPI_FLASH_ENABLE_COUNTERS=
++CONFIG_SPI_FLASH_ROM_DRIVER_PATCH=y
++CONFIG_SPI_FLASH_WRITING_DANGEROUS_REGIONS_ABORTS=y
++CONFIG_SPI_FLASH_WRITING_DANGEROUS_REGIONS_FAILS=
++CONFIG_SPI_FLASH_WRITING_DANGEROUS_REGIONS_ALLOWED=
++CONFIG_SPI_FLASH_YIELD_DURING_ERASE=
++
++#
++# SPIFFS Configuration
++#
++CONFIG_SPIFFS_MAX_PARTITIONS=3
++
++#
++# SPIFFS Cache Configuration
++#
++CONFIG_SPIFFS_CACHE=y
++CONFIG_SPIFFS_CACHE_WR=y
++CONFIG_SPIFFS_CACHE_STATS=
++CONFIG_SPIFFS_PAGE_CHECK=y
++CONFIG_SPIFFS_GC_MAX_RUNS=10
++CONFIG_SPIFFS_GC_STATS=
++CONFIG_SPIFFS_PAGE_SIZE=256
++CONFIG_SPIFFS_OBJ_NAME_LEN=32
++CONFIG_SPIFFS_USE_MAGIC=y
++CONFIG_SPIFFS_USE_MAGIC_LENGTH=y
++CONFIG_SPIFFS_META_LENGTH=4
++CONFIG_SPIFFS_USE_MTIME=y
++
++#
++# Debug Configuration
++#
++CONFIG_SPIFFS_DBG=
++CONFIG_SPIFFS_API_DBG=
++CONFIG_SPIFFS_GC_DBG=
++CONFIG_SPIFFS_CACHE_DBG=
++CONFIG_SPIFFS_CHECK_DBG=
++CONFIG_SPIFFS_TEST_VISUALISATION=
++
++#
++# TCP/IP Adapter
++#
++CONFIG_IP_LOST_TIMER_INTERVAL=120
++CONFIG_TCPIP_LWIP=y
++
++#
++# Unity unit testing library
++#
++CONFIG_UNITY_ENABLE_FLOAT=y
++CONFIG_UNITY_ENABLE_DOUBLE=y
++CONFIG_UNITY_ENABLE_COLOR=
++CONFIG_UNITY_ENABLE_IDF_TEST_RUNNER=y
++CONFIG_UNITY_ENABLE_FIXTURE=
++
++#
++# Virtual file system
++#
++CONFIG_SUPPRESS_SELECT_DEBUG_OUTPUT=
++CONFIG_SUPPORT_TERMIOS=
++
++#
++# Wear Levelling
++#
++CONFIG_WL_SECTOR_SIZE_512=
++CONFIG_WL_SECTOR_SIZE_4096=y
++CONFIG_WL_SECTOR_SIZE=4096
++
++#
++# Wi-Fi Provisioning Manager
++#
++CONFIG_WIFI_PROV_SCAN_MAX_ENTRIES=16
+diff --git a/examples/wifi/scan/secure_boot_signing_key.pem b/examples/wifi/scan/secure_boot_signing_key.pem
+new file mode 100644
+index 000000000..13e6fc795
+--- /dev/null
++++ b/examples/wifi/scan/secure_boot_signing_key.pem
+@@ -0,0 +1,5 @@
++-----BEGIN EC PRIVATE KEY-----
++MHcCAQEEICMyAIK9+SQEoSM06ju1q2PHfyQf34uN0J6WS0OFwP9OoAoGCCqGSM49
++AwEHoUQDQgAEWc/nSUEpKYnULT4h7AVQYjRr6AK5SpzKrEhlgpmjdBBvyKHFBopL
++oS+5nNiGlPdym8YYZk3THReXRDv+/3woRQ==
++-----END EC PRIVATE KEY-----
+diff --git a/examples/wifi/scan/signature_verification_key.bin b/examples/wifi/scan/signature_verification_key.bin
+new file mode 100644
+index 000000000..758554001
+--- /dev/null
++++ b/examples/wifi/scan/signature_verification_key.bin
+@@ -0,0 +1 @@
++YÏçIA))‰Ô->!ìPb4kè¹JœÊ¬He‚™£toÈ¡ÅŠK¡/¹œØ†”÷r›ÆfMÓ—D;þÿ|(E
+\ No newline at end of file
