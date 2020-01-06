@@ -379,11 +379,3 @@ void esp_chip_info(esp_chip_info_t* out_info)
         out_info->features |= CHIP_FEATURE_EMB_FLASH;
     }
 }
-IRAM_ATTR uint32_t esp_get_revision(void)
-{
-    uint32_t reg = REG_READ(EFUSE_BLK0_RDATA3_REG);
-    if ((reg & EFUSE_RD_CHIP_VER_REV1_M) != 0) {
-        return 1;
-    }
-    return 0;
-}

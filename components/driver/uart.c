@@ -649,18 +649,31 @@ esp_err_t uart_set_tx_idle_num(uart_port_t uart_num, uint16_t idle_num)
     return ESP_OK;
 }
 
+static periph_module_t get_periph_module(uart_port_t uart_num)
+{
+    periph_module_t periph_module = PERIPH_UART0_MODULE;
+    if (uart_num == UART_NUM_0) {
+        periph_module = PERIPH_UART0_MODULE;
+    } else if (uart_num == UART_NUM_1) {
+        periph_module = PERIPH_UART1_MODULE;
+    } else if (uart_num == UART_NUM_2) {
+        periph_module = PERIPH_UART2_MODULE;
+    } else {
+        assert(0 && "uart_num error");
+    }
+    return periph_module;
+}
+
 esp_err_t uart_param_config(uart_port_t uart_num, const uart_config_t *uart_config)
 {
     esp_err_t r;
     UART_CHECK((uart_num < UART_NUM_MAX), "uart_num error", ESP_FAIL);
     UART_CHECK((uart_config), "param null", ESP_FAIL);
-    if(uart_num == UART_NUM_0) {
-        periph_module_enable(PERIPH_UART0_MODULE);
-    } else if(uart_num == UART_NUM_1) {
-        periph_module_enable(PERIPH_UART1_MODULE);
-    } else if(uart_num == UART_NUM_2) {
-        periph_module_enable(PERIPH_UART2_MODULE);
+    periph_module_t periph_module = get_periph_module(uart_num);
+    if (uart_num != CONFIG_CONSOLE_UART_NUM) {
+        periph_module_reset(periph_module);
     }
+    periph_module_enable(periph_module);
     r = uart_set_hw_flow_ctrl(uart_num, uart_config->flow_ctrl, uart_config->rx_flow_ctrl_thresh);
     if (r != ESP_OK) return r;
 
@@ -727,8 +740,6 @@ static int uart_find_pattern_from_last(uint8_t* buf, int length, uint8_t pat_chr
     }
     return len;
 }
-
-static uart_rx_callback_t uart_rx_callback[UART_NUM_MAX] = { NULL };
 
 //internal isr handler for default driver code.
 static void uart_rx_intr_handler_default(void *param)
@@ -861,11 +872,7 @@ static void uart_rx_intr_handler_default(void *param)
             if (p_uart->rx_buffer_full_flg == false) {
                 //We have to read out all data in RX FIFO to clear the interrupt signal
                 for(buf_idx = 0; buf_idx < rx_fifo_len; buf_idx++) {
-                    uint8_t rx_data = uart_reg->fifo.rw_byte;
-                    p_uart->rx_data_buf[buf_idx] = rx_data;
-                    if (uart_rx_callback[uart_num]) {
-                        uart_rx_callback[uart_num](uart_num, rx_data);
-                    }
+                    p_uart->rx_data_buf[buf_idx] = uart_reg->fifo.rw_byte;
                 }
                 uint8_t pat_chr = uart_reg->at_cmd_char.data;
                 int pat_num = uart_reg->at_cmd_char.char_num;
@@ -1103,7 +1110,6 @@ int uart_tx_chars(uart_port_t uart_num, const char* buffer, uint32_t len)
         return 0;
     }
     xSemaphoreTake(p_uart_obj[uart_num]->tx_mux, (portTickType)portMAX_DELAY);
-    xSemaphoreTake(p_uart_obj[uart_num]->tx_done_sem, 0);
     int tx_len = uart_fill_fifo(uart_num, (const char*) buffer, len);
     xSemaphoreGive(p_uart_obj[uart_num]->tx_mux);
     return tx_len;
@@ -1322,7 +1328,7 @@ esp_err_t uart_flush_input(uart_port_t uart_num)
     return ESP_OK;
 }
 
-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback)
+esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags)
 {
     esp_err_t r;
     UART_CHECK((uart_num < UART_NUM_MAX), "uart_num error", ESP_FAIL);
@@ -1381,7 +1387,6 @@ esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_b
         return ESP_FAIL;
     }
 
-    uart_rx_callback[uart_num] = rx_callback;
     r=uart_isr_register(uart_num, uart_rx_intr_handler_default, p_uart_obj[uart_num], intr_alloc_flags, &p_uart_obj[uart_num]->intr_handle);
     if (r!=ESP_OK) goto err;
     uart_intr_config_t uart_intr = {
@@ -1453,14 +1458,9 @@ esp_err_t uart_driver_delete(uart_port_t uart_num)
     free(p_uart_obj[uart_num]);
     p_uart_obj[uart_num] = NULL;
 
-    if (uart_num != CONFIG_CONSOLE_UART_NUM ) {
-       if(uart_num == UART_NUM_0) {
-           periph_module_disable(PERIPH_UART0_MODULE);
-       } else if(uart_num == UART_NUM_1) {
-           periph_module_disable(PERIPH_UART1_MODULE);
-       } else if(uart_num == UART_NUM_2) {
-           periph_module_disable(PERIPH_UART2_MODULE);
-       }
+    if (uart_num != CONFIG_CONSOLE_UART_NUM) {
+       periph_module_t periph_module = get_periph_module(uart_num);
+       periph_module_disable(periph_module);
     }
     return ESP_OK;
 }

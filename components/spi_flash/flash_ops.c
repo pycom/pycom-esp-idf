@@ -121,6 +121,14 @@ static __attribute__((unused)) bool is_safe_write_address(size_t addr, size_t si
         UNSAFE_WRITE_ADDRESS;
     }
 
+    const esp_partition_t *p = esp_ota_get_running_partition();
+    if (addr >= p->address && addr < p->address + p->size) {
+        UNSAFE_WRITE_ADDRESS;
+    }
+    if (addr < p->address && addr + size > p->address) {
+        UNSAFE_WRITE_ADDRESS;
+    }
+
     return result;
 }
 
@@ -514,7 +522,17 @@ esp_err_t IRAM_ATTR spi_flash_read(size_t src, void *dstv, size_t size)
             goto out;
         }
         COUNTER_ADD_BYTES(read, read_size);
+#ifdef ESP_PLATFORM
+        if (esp_ptr_external_ram(dstv)) {
+            spi_flash_guard_end();
+            memcpy(dstv, ((uint8_t *) t) + left_off, size);
+            spi_flash_guard_start();
+        } else {
+            memcpy(dstv, ((uint8_t *) t) + left_off, size);
+        }
+#else
         memcpy(dstv, ((uint8_t *) t) + left_off, size);
+#endif
         goto out;
     }
     uint8_t *dstc = (uint8_t *) dstv;

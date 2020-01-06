@@ -18,13 +18,13 @@
 #include <soc/cpu.h>
 #include <esp_image_format.h>
 #include <esp_secure_boot.h>
-#define LOG_LOCAL_LEVEL ESP_LOG_ERROR
 #include <esp_log.h>
 #include <esp_spi_flash.h>
 #include <bootloader_flash.h>
 #include <bootloader_random.h>
 #include <bootloader_sha.h>
 #include "bootloader_util.h"
+#include "bootloader_common.h"
 
 /* Checking signatures as part of verifying images is necessary:
    - Always if secure boot is enabled
@@ -194,17 +194,15 @@ static esp_err_t image_load(esp_image_load_mode_t mode, const esp_partition_pos_
        rewritten the header - rely on esptool.py having verified the bootloader at flashing time, instead.
     */
     if (!is_bootloader) {
-        if (esp_secure_boot_enabled()) {
-#ifdef CONFIG_SECURE_BOOT_ENABLED
-          // secure boot images have a signature appended
-          err = verify_secure_boot_signature(sha_handle, data);
-#endif // CONFIG_SECURE_BOOT_ENABLED
-        } else {
-          // No secure boot, but SHA-256 can be appended for basic corruption detection
+#ifdef SECURE_BOOT_CHECK_SIGNATURE
+        // secure boot images have a signature appended
+        err = verify_secure_boot_signature(sha_handle, data);
+#else
+        // No secure boot, but SHA-256 can be appended for basic corruption detection
         if (sha_handle != NULL && !esp_cpu_in_ocd_debug_mode()) {
-              err = verify_simple_hash(sha_handle, data);
-          }
+            err = verify_simple_hash(sha_handle, data);
         }
+#endif // SECURE_BOOT_CHECK_SIGNATURE
     } else { // is_bootloader
         // bootloader may still have a sha256 digest handle open
         if (sha_handle != NULL) {
@@ -281,6 +279,9 @@ static esp_err_t verify_image_header(uint32_t src_addr, const esp_image_header_t
         if (!silent) {
             ESP_LOGE(TAG, "image at 0x%x has invalid magic byte", src_addr);
         }
+        err = ESP_ERR_IMAGE_INVALID;
+    }
+    if (bootloader_common_check_chip_validity(image, ESP_IMAGE_APPLICATION) != ESP_OK) {
         err = ESP_ERR_IMAGE_INVALID;
     }
     if (!silent) {

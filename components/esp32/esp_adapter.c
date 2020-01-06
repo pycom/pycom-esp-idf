@@ -367,7 +367,6 @@ static int32_t IRAM_ATTR task_ms_to_tick_wrapper(uint32_t ms)
     return (int32_t)(ms / portTICK_PERIOD_MS);
 }
 
-
 static int32_t task_get_max_priority_wrapper(void)
 {
     return (int32_t)(configMAX_PRIORITIES);
@@ -441,6 +440,13 @@ static uint32_t coex_status_get_wrapper(void)
 #endif
 }
 
+static void coex_condition_set_wrapper(uint32_t type, bool dissatisfy)
+{
+#if CONFIG_SW_COEXIST_ENABLE
+    coex_condition_set(type, dissatisfy);
+#endif
+}
+
 static int coex_wifi_request_wrapper(uint32_t event, uint32_t latency, uint32_t duration)
 {
 #if CONFIG_SW_COEXIST_ENABLE
@@ -502,6 +508,11 @@ void IRAM_ATTR coex_bb_reset_unlock_wrapper(uint32_t restore)
 #endif
 }
 
+int32_t IRAM_ATTR coex_is_in_isr_wrapper(void)
+{
+    return !xPortCanYield();
+}
+
 wifi_osi_funcs_t g_wifi_osi_funcs = {
     ._version = ESP_WIFI_OS_ADAPTER_VERSION,
     ._set_isr = set_isr_wrapper,
@@ -523,24 +534,24 @@ wifi_osi_funcs_t g_wifi_osi_funcs = {
     ._mutex_lock = mutex_lock_wrapper,
     ._mutex_unlock = mutex_unlock_wrapper,
     ._queue_create = queue_create_wrapper,
-    ._queue_delete = vQueueDelete,
+    ._queue_delete = (void(*)(void *))vQueueDelete,
     ._queue_send = queue_send_wrapper,
     ._queue_send_from_isr = queue_send_from_isr_wrapper,
     ._queue_send_to_back = queue_send_to_back_wrapper,
     ._queue_send_to_front = queue_send_to_front_wrapper,
     ._queue_recv = queue_recv_wrapper,
-    ._queue_msg_waiting = uxQueueMessagesWaiting,
-    ._event_group_create = xEventGroupCreate,
-    ._event_group_delete = vEventGroupDelete,
-    ._event_group_set_bits = xEventGroupSetBits,
-    ._event_group_clear_bits = xEventGroupClearBits,
+    ._queue_msg_waiting = (uint32_t(*)(void *))uxQueueMessagesWaiting,
+    ._event_group_create = (void *(*)(void))xEventGroupCreate,
+    ._event_group_delete = (void(*)(void *))vEventGroupDelete,
+    ._event_group_set_bits = (uint32_t(*)(void *,uint32_t))xEventGroupSetBits,
+    ._event_group_clear_bits = (uint32_t(*)(void *,uint32_t))xEventGroupClearBits,
     ._event_group_wait_bits = event_group_wait_bits_wrapper,
     ._task_create_pinned_to_core = task_create_pinned_to_core_wrapper,
     ._task_create = task_create_wrapper,
-    ._task_delete = vTaskDelete,
+    ._task_delete = (void(*)(void *))vTaskDelete,
     ._task_delay = vTaskDelay,
     ._task_ms_to_tick = task_ms_to_tick_wrapper,
-    ._task_get_current_task = xTaskGetCurrentTaskHandle,
+    ._task_get_current_task = (void *(*)(void))xTaskGetCurrentTaskHandle,
     ._task_get_max_priority = task_get_max_priority_wrapper,
     ._malloc = malloc,
     ._free = free,
@@ -593,6 +604,7 @@ wifi_osi_funcs_t g_wifi_osi_funcs = {
     ._sc_ack_send = sc_ack_send_wrapper,
     ._sc_ack_send_stop = sc_ack_send_stop,
     ._coex_status_get = coex_status_get_wrapper,
+    ._coex_condition_set = coex_condition_set_wrapper,
     ._coex_wifi_request = coex_wifi_request_wrapper,
     ._coex_wifi_release = coex_wifi_release_wrapper,
     ._magic = ESP_WIFI_OS_ADAPTER_MAGIC,
@@ -611,7 +623,7 @@ coex_adapter_funcs_t g_coex_adapter_funcs = {
     ._semphr_give_from_isr = semphr_give_from_isr_wrapper,
     ._semphr_take = semphr_take_wrapper,
     ._semphr_give = semphr_give_wrapper,
-    ._is_in_isr = xPortInIsrContext,
+    ._is_in_isr = coex_is_in_isr_wrapper,
     ._malloc_internal =  malloc_internal_wrapper,
     ._free = free,
     ._timer_disarm = timer_disarm_wrapper,

@@ -152,20 +152,6 @@ static const char *HTTP_METHOD_MAPPING[] = {
     "OPTIONS"
 };
 
-/**
- * Enum for the HTTP status codes.
- */
-enum HttpStatus_Code
-{
-    /* 3xx - Redirection */
-    HttpStatus_MovedPermanently  = 301,
-    HttpStatus_Found             = 302,
-
-    /* 4xx - Client Error */
-    HttpStatus_Unauthorized      = 401
-};
-
-
 static esp_err_t esp_http_client_request_send(esp_http_client_handle_t client, int write_len);
 static esp_err_t esp_http_client_connect(esp_http_client_handle_t client);
 static esp_err_t esp_http_client_send_post_data(esp_http_client_handle_t client);
@@ -307,6 +293,21 @@ esp_err_t esp_http_client_get_username(esp_http_client_handle_t client, char **v
     return ESP_OK;
 }
 
+esp_err_t esp_http_client_set_username(esp_http_client_handle_t client, const char *username)
+{
+    if (client == NULL) {
+        ESP_LOGE(TAG, "client must not be NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (username == NULL && client->connection_info.username != NULL) {
+        free(client->connection_info.username);
+        client->connection_info.username = NULL;
+    } else if (username != NULL) {
+        client->connection_info.username = strdup(username);
+    }
+    return ESP_OK;
+}
+
 esp_err_t esp_http_client_get_password(esp_http_client_handle_t client, char **value)
 {
     if (client == NULL || value == NULL) {
@@ -314,6 +315,22 @@ esp_err_t esp_http_client_get_password(esp_http_client_handle_t client, char **v
         return ESP_ERR_INVALID_ARG;
     }
     *value = client->connection_info.password;
+    return ESP_OK;
+}
+
+esp_err_t esp_http_client_set_password(esp_http_client_handle_t client, char *password)
+{
+    if (client == NULL) {
+        ESP_LOGE(TAG, "client must not be NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (password == NULL && client->connection_info.password != NULL) {
+        memset(client->connection_info.password, 0, strlen(client->connection_info.password));
+        free(client->connection_info.password);
+        client->connection_info.password = NULL;
+    } else if (password != NULL) {
+        client->connection_info.password = strdup(password);
+    }
     return ESP_OK;
 }
 
@@ -520,6 +537,10 @@ esp_http_client_handle_t esp_http_client_init(const esp_http_client_config_t *co
     if (config->client_key_pem) {
         esp_transport_ssl_set_client_key_data(ssl, config->client_key_pem, strlen(config->client_key_pem));
     }
+
+    if (config->skip_cert_common_name_check) {
+        esp_transport_ssl_skip_common_name_check(ssl);
+    }
 #endif
 
     if (_set_config(client, config) != ESP_OK) {
@@ -617,13 +638,12 @@ esp_err_t esp_http_client_set_redirection(esp_http_client_handle_t client)
     if (client->location == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
+    ESP_LOGD(TAG, "Redirect to %s", client->location);
     return esp_http_client_set_url(client, client->location);
 }
 
 static esp_err_t esp_http_check_response(esp_http_client_handle_t client)
 {
-    char *auth_header = NULL;
-
     if (client->redirect_counter >= client->max_redirection_count || client->disable_auto_redirect) {
         ESP_LOGE(TAG, "Error, reach max_redirection_count count=%d", client->redirect_counter);
         return ESP_ERR_HTTP_MAX_REDIRECT;
@@ -631,44 +651,12 @@ static esp_err_t esp_http_check_response(esp_http_client_handle_t client)
     switch (client->response->status_code) {
         case HttpStatus_MovedPermanently:
         case HttpStatus_Found:
-            ESP_LOGI(TAG, "Redirect to %s", client->location);
-            esp_http_client_set_url(client, client->location);
+            esp_http_client_set_redirection(client);
             client->redirect_counter ++;
             client->process_again = 1;
             break;
         case HttpStatus_Unauthorized:
-            auth_header = client->auth_header;
-            if (auth_header) {
-                http_utils_trim_whitespace(&auth_header);
-                ESP_LOGD(TAG, "UNAUTHORIZED: %s", auth_header);
-                client->redirect_counter ++;
-                if (http_utils_str_starts_with(auth_header, "Digest") == 0) {
-                    ESP_LOGD(TAG, "type = Digest");
-                    client->connection_info.auth_type = HTTP_AUTH_TYPE_DIGEST;
-                } else if (http_utils_str_starts_with(auth_header, "Basic") == 0) {
-                    ESP_LOGD(TAG, "type = Basic");
-                    client->connection_info.auth_type = HTTP_AUTH_TYPE_BASIC;
-                } else {
-                    client->connection_info.auth_type = HTTP_AUTH_TYPE_NONE;
-                    ESP_LOGE(TAG, "This authentication method is not supported: %s", auth_header);
-                    break;
-                }
-
-                _clear_auth_data(client);
-
-                client->auth_data->method = strdup(HTTP_METHOD_MAPPING[client->connection_info.method]);
-
-                client->auth_data->nc = 1;
-                client->auth_data->realm = http_utils_get_string_between(auth_header, "realm=\"", "\"");
-                client->auth_data->algorithm = http_utils_get_string_between(auth_header, "algorithm=", ",");
-                client->auth_data->qop = http_utils_get_string_between(auth_header, "qop=\"", "\"");
-                client->auth_data->nonce = http_utils_get_string_between(auth_header, "nonce=\"", "\"");
-                client->auth_data->opaque = http_utils_get_string_between(auth_header, "opaque=\"", "\"");
-                client->process_again = 1;
-            } else {
-                client->connection_info.auth_type = HTTP_AUTH_TYPE_NONE;
-                ESP_LOGW(TAG, "This request requires authentication, but does not provide header information for that");
-            }
+            esp_http_client_add_auth(client);
     }
     return ESP_OK;
 }
@@ -697,10 +685,7 @@ esp_err_t esp_http_client_set_url(esp_http_client_handle_t client, const char *u
     }
     old_port = client->connection_info.port;
 
-    // Whether the passed url is absolute or is just a path
-    bool is_absolute_url = (bool) purl.field_data[UF_HOST].len;
-
-    if (is_absolute_url) {
+    if (purl.field_data[UF_HOST].len) {
         http_utils_assign_string(&client->connection_info.host, url + purl.field_data[UF_HOST].off, purl.field_data[UF_HOST].len);
         HTTP_MEM_CHECK(TAG, client->connection_info.host, return ESP_ERR_NO_MEM);
     }
@@ -757,14 +742,7 @@ esp_err_t esp_http_client_set_url(esp_http_client_handle_t client, const char *u
         } else {
             return ESP_ERR_NO_MEM;
         }
-    } else if (is_absolute_url) {
-        // Only reset authentication info if the passed URL is full
-        free(client->connection_info.username);
-        free(client->connection_info.password);
-        client->connection_info.username = NULL;
-        client->connection_info.password = NULL;
-    }
-
+    } 
 
     //Reset path and query if there are no information
     if (purl.field_data[UF_PATH].len) {
@@ -1248,5 +1226,50 @@ esp_http_client_transport_t esp_http_client_get_transport_type(esp_http_client_h
         return HTTP_TRANSPORT_OVER_TCP;
     } else {
         return HTTP_TRANSPORT_UNKNOWN;
+    }
+}
+
+void esp_http_client_add_auth(esp_http_client_handle_t client)
+{
+    if (client == NULL) {
+        return;
+    }
+    if (client->state != HTTP_STATE_RES_COMPLETE_HEADER) {
+        return;
+    }
+
+    char *auth_header = client->auth_header;
+    if (auth_header) {
+        http_utils_trim_whitespace(&auth_header);
+        ESP_LOGD(TAG, "UNAUTHORIZED: %s", auth_header);
+        client->redirect_counter++;
+        if (http_utils_str_starts_with(auth_header, "Digest") == 0) {
+            ESP_LOGD(TAG, "type = Digest");
+            client->connection_info.auth_type = HTTP_AUTH_TYPE_DIGEST;
+#ifdef CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH
+        } else if (http_utils_str_starts_with(auth_header, "Basic") == 0) {
+            ESP_LOGD(TAG, "type = Basic");
+            client->connection_info.auth_type = HTTP_AUTH_TYPE_BASIC;
+#endif
+        } else {
+            client->connection_info.auth_type = HTTP_AUTH_TYPE_NONE;
+            ESP_LOGE(TAG, "This authentication method is not supported: %s", auth_header);
+            return;
+        }
+
+        _clear_auth_data(client);
+
+        client->auth_data->method = strdup(HTTP_METHOD_MAPPING[client->connection_info.method]);
+
+        client->auth_data->nc = 1;
+        client->auth_data->realm = http_utils_get_string_between(auth_header, "realm=\"", "\"");
+        client->auth_data->algorithm = http_utils_get_string_between(auth_header, "algorithm=", ",");
+        client->auth_data->qop = http_utils_get_string_between(auth_header, "qop=\"", "\"");
+        client->auth_data->nonce = http_utils_get_string_between(auth_header, "nonce=\"", "\"");
+        client->auth_data->opaque = http_utils_get_string_between(auth_header, "opaque=\"", "\"");
+        client->process_again = 1;
+    } else {
+        client->connection_info.auth_type = HTTP_AUTH_TYPE_NONE;
+        ESP_LOGW(TAG, "This request requires authentication, but does not provide header information for that");
     }
 }

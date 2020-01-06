@@ -398,15 +398,6 @@ void start_cpu0_default(void)
     /* init default OS-aware flash access critical section */
     spi_flash_guard_set(&g_flash_guard_default_ops);
 
-    uint8_t revision = esp_efuse_get_chip_ver();
-    ESP_LOGI(TAG, "Chip Revision: %d", revision);
-    if (revision > CONFIG_ESP32_REV_MIN) {
-        ESP_LOGW(TAG, "Chip revision is higher than the one configured in menuconfig. Suggest to upgrade it.");
-    } else if(revision != CONFIG_ESP32_REV_MIN) {
-        ESP_LOGE(TAG, "ESP-IDF can't support this chip revision. Modify minimum supported revision in menuconfig");
-        abort();
-    }
-
 #ifdef CONFIG_PM_ENABLE
     esp_pm_impl_init();
 #ifdef CONFIG_PM_DFS_INIT_AUTO
@@ -430,13 +421,17 @@ void start_cpu0_default(void)
 
 #if CONFIG_SW_COEXIST_ENABLE
     esp_coex_adapter_register(&g_coex_adapter_funcs);
+    coex_pre_init();
 #endif
 
     bootloader_flash_update_id();
-#if !CONFIG_SPIRAM_BOOT_INIT  // If psram is uninitialized, we need to improve some flash configuration.
-    esp_image_header_t fhdr;
-    const esp_partition_t *partition = esp_ota_get_running_partition();
-    spi_flash_read(partition->address, &fhdr, sizeof(esp_image_header_t));
+#if !CONFIG_SPIRAM_BOOT_INIT
+    // Read the application binary image header. This will also decrypt the header if the image is encrypted.
+    esp_image_header_t fhdr = {0};
+    // This assumes that DROM is the first segment in the application binary, i.e. that we can read
+    // the binary header through cache by accessing SOC_DROM_LOW address.
+    memcpy(&fhdr, (void*) SOC_DROM_LOW, sizeof(fhdr));
+    // If psram is uninitialized, we need to improve some flash configuration.
     bootloader_flash_clock_config(&fhdr);
     bootloader_flash_gpio_config(&fhdr);
     bootloader_flash_dummy_config(&fhdr);
