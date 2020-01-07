@@ -50,10 +50,6 @@
 	path = components/expat/expat
 	url = https://github.com/libexpat/libexpat.git
 
-[submodule "components/lwip/lwip"]
-	path = components/lwip/lwip
-	url = https://github.com/espressif/esp-lwip.git
-
 [submodule "components/mqtt/esp-mqtt"]
 	path = components/mqtt/esp-mqtt
 	url = https://github.com/espressif/esp-mqtt.git
@@ -71,3 +67,6 @@
 [submodule "examples/build_system/cmake/import_lib/main/lib/tinyxml2"]
 	path = examples/build_system/cmake/import_lib/main/lib/tinyxml2
 	url = https://github.com/leethomason/tinyxml2
+[submodule "components/lwip/lwip"]
+	path = components/lwip/lwip
+	url = https://github.com/espressif/esp-lwip.git
