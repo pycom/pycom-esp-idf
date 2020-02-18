@@ -13,7 +13,7 @@
 // limitations under the License.
 #include "nvs_page.hpp"
 #if defined(ESP_PLATFORM)
-#include <rom/crc.h>
+#include <esp32/rom/crc.h>
 #else
 #include "crc.h"
 #endif
@@ -308,6 +308,58 @@ esp_err_t Page::readItem(uint8_t nsIndex, ItemType datatype, const char* key, vo
     return ESP_OK;
 }
 
+esp_err_t Page::cmpItem(uint8_t nsIndex, ItemType datatype, const char* key, const void* data, size_t dataSize, uint8_t chunkIdx, VerOffset chunkStart)
+{
+    size_t index = 0;
+    Item item;
+
+    if (mState == PageState::INVALID) {
+        return ESP_ERR_NVS_INVALID_STATE;
+    }
+
+    esp_err_t rc = findItem(nsIndex, datatype, key, index, item, chunkIdx, chunkStart);
+    if (rc != ESP_OK) {
+        return rc;
+    }
+
+    if (!isVariableLengthType(datatype)) {
+        if (dataSize != getAlignmentForType(datatype)) {
+            return ESP_ERR_NVS_TYPE_MISMATCH;
+        }
+
+        if (memcmp(data, item.data, dataSize)) {
+            return ESP_ERR_NVS_CONTENT_DIFFERS;
+        }
+        return ESP_OK;
+    }
+
+    if (dataSize < static_cast<size_t>(item.varLength.dataSize)) {
+        return ESP_ERR_NVS_INVALID_LENGTH;
+    }
+
+    const uint8_t* dst = reinterpret_cast<const uint8_t*>(data);
+    size_t left = item.varLength.dataSize;
+    for (size_t i = index + 1; i < index + item.span; ++i) {
+        Item ditem;
+        rc = readEntry(i, ditem);
+        if (rc != ESP_OK) {
+            return rc;
+        }
+        size_t willCopy = ENTRY_SIZE;
+        willCopy = (left < willCopy)?left:willCopy;
+        if (memcmp(dst, ditem.rawData, willCopy)) {
+            return ESP_ERR_NVS_CONTENT_DIFFERS;
+        }
+        left -= willCopy;
+        dst += willCopy;
+    }
+    if (Item::calculateCrc32(reinterpret_cast<const uint8_t*>(data), item.varLength.dataSize) != item.varLength.dataCrc32) {
+        return ESP_ERR_NVS_NOT_FOUND;
+    }
+
+    return ESP_OK;
+}
+
 esp_err_t Page::eraseItem(uint8_t nsIndex, ItemType datatype, const char* key, uint8_t chunkIdx, VerOffset chunkStart)
 {
     size_t index = 0;
@@ -570,9 +622,9 @@ esp_err_t Page::mLoadEntryTable()
                 }
             }
 
-            /* Note that logic for duplicate detections works fine even 
-             * when old-format blob is present along with new-format blob-index 
-             * for same key on active page. Since datatype is not used in hash calculation, 
+            /* Note that logic for duplicate detections works fine even
+             * when old-format blob is present along with new-format blob-index
+             * for same key on active page. Since datatype is not used in hash calculation,
              * old-format blob will be removed.*/
             if (duplicateIndex < i) {
                 eraseEntryAndSpan(duplicateIndex);
@@ -812,6 +864,7 @@ esp_err_t Page::findItem(uint8_t nsIndex, ItemType datatype, const char* key, si
             if (key == nullptr && nsIndex == NS_ANY && chunkIdx == CHUNK_ANY) {
                 continue; // continue for bruteforce search on blob indices.
             }
+            itemIndex = i;
             return ESP_ERR_NVS_TYPE_MISMATCH;
         }
 

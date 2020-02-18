@@ -421,7 +421,7 @@ void blemesh_host_task(void *param)
     nimble_port_freertos_deinit();
 }
 
-void app_main(void)
+void app_main()
 {
     /* Initialize NVS — it is used to store PHY calibration data */
     esp_err_t ret = nvs_flash_init();

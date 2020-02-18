@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include "esp_types.h"
 #include "esp_attr.h"
-#include "esp_intr.h"
+#include "esp_intr_alloc.h"
 #include "esp_log.h"
 #include "malloc.h"
 #include "freertos/FreeRTOS.h"
@@ -23,13 +23,12 @@
 #include "freertos/xtensa_api.h"
 #include "freertos/task.h"
 #include "freertos/ringbuf.h"
-#include "soc/dport_reg.h"
-#include "soc/i2c_struct.h"
-#include "soc/i2c_reg.h"
+#include "soc/i2c_periph.h"
 #include "driver/i2c.h"
 #include "driver/gpio.h"
 #include "driver/periph_ctrl.h"
 #include "esp_pm.h"
+#include "soc/soc_memory_layout.h"
 
 static const char* I2C_TAG = "i2c";
 #define I2C_CHECK(a, str, ret)  if(!(a)) {                                             \
@@ -92,8 +91,10 @@ typedef struct {
     uint8_t ack_val;   /*!< ack value to send */
     uint8_t* data;     /*!< data address */
     uint8_t byte_cmd;  /*!< to save cmd for one byte command mode */
-    i2c_opmode_t op_code; /*!< haredware cmd type */
-}i2c_cmd_t;
+    i2c_opmode_t op_code; /*!< hardware cmd type */
+} i2c_cmd_t;
+
+typedef typeof(I2C[0]->command[0]) i2c_hw_cmd_t;
 
 typedef struct i2c_cmd_link{
     i2c_cmd_t cmd;              /*!< command in current cmd link */
@@ -1183,12 +1184,17 @@ static void IRAM_ATTR i2c_master_cmd_begin_static(i2c_port_t i2c_num)
     }
     while (p_i2c->cmd_link.head) {
         i2c_cmd_t *cmd = &p_i2c->cmd_link.head->cmd;
-        I2C[i2c_num]->command[p_i2c->cmd_idx].val = 0;
-        I2C[i2c_num]->command[p_i2c->cmd_idx].ack_en = cmd->ack_en;
-        I2C[i2c_num]->command[p_i2c->cmd_idx].ack_exp = cmd->ack_exp;
-        I2C[i2c_num]->command[p_i2c->cmd_idx].ack_val = cmd->ack_val;
-        I2C[i2c_num]->command[p_i2c->cmd_idx].byte_num = cmd->byte_num;
-        I2C[i2c_num]->command[p_i2c->cmd_idx].op_code = cmd->op_code;
+        i2c_hw_cmd_t * const p_cur_hw_cmd = &I2C[i2c_num]->command[p_i2c->cmd_idx];
+        i2c_hw_cmd_t hw_cmd = {
+            .ack_en = cmd->ack_en,
+            .ack_exp = cmd->ack_exp,
+            .ack_val = cmd->ack_val,
+            .byte_num = cmd->byte_num,
+            .op_code = cmd->op_code
+        };
+        const i2c_hw_cmd_t hw_end_cmd = {
+            .op_code = I2C_CMD_END
+        };
         if (cmd->op_code == I2C_CMD_WRITE) {
             uint32_t wr_filled = 0;
             //TODO: to reduce interrupt number
@@ -1205,10 +1211,9 @@ static void IRAM_ATTR i2c_master_cmd_begin_static(i2c_port_t i2c_num)
                 cmd->byte_num--;
                 wr_filled ++;
             }
-            //Workaround for register field operation.
-            I2C[i2c_num]->command[p_i2c->cmd_idx].byte_num = wr_filled;
-            I2C[i2c_num]->command[p_i2c->cmd_idx + 1].val = 0;
-            I2C[i2c_num]->command[p_i2c->cmd_idx + 1].op_code = I2C_CMD_END;
+            hw_cmd.byte_num = wr_filled;
+            *p_cur_hw_cmd = hw_cmd;
+            *(p_cur_hw_cmd + 1) = hw_end_cmd;
             p_i2c->tx_fifo_remain = I2C_FIFO_LEN;
             p_i2c->cmd_idx = 0;
             if (cmd->byte_num > 0) {
@@ -1221,13 +1226,14 @@ static void IRAM_ATTR i2c_master_cmd_begin_static(i2c_port_t i2c_num)
             //TODO: to reduce interrupt number
             p_i2c->rx_cnt = cmd->byte_num > p_i2c->rx_fifo_remain ? p_i2c->rx_fifo_remain : cmd->byte_num;
             cmd->byte_num -= p_i2c->rx_cnt;
-            I2C[i2c_num]->command[p_i2c->cmd_idx].byte_num = p_i2c->rx_cnt;
-            I2C[i2c_num]->command[p_i2c->cmd_idx].ack_val = cmd->ack_val;
-            I2C[i2c_num]->command[p_i2c->cmd_idx + 1].val = 0;
-            I2C[i2c_num]->command[p_i2c->cmd_idx + 1].op_code = I2C_CMD_END;
+            hw_cmd.byte_num = p_i2c->rx_cnt;
+            hw_cmd.ack_val = cmd->ack_val;
+            *p_cur_hw_cmd = hw_cmd;
+            *(p_cur_hw_cmd + 1) = hw_end_cmd;
             p_i2c->status = I2C_STATUS_READ;
             break;
         } else {
+            *p_cur_hw_cmd = hw_cmd;
         }
         p_i2c->cmd_idx++;
         p_i2c->cmd_link.head = p_i2c->cmd_link.head->next;

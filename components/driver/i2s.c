@@ -19,13 +19,10 @@
 #include "freertos/queue.h"
 #include "freertos/xtensa_api.h"
 
-#include "soc/dport_reg.h"
-#include "soc/rtc_cntl_reg.h"
-#include "soc/rtc_io_reg.h"
-#include "soc/sens_reg.h"
+#include "soc/rtc_periph.h"
 #include "soc/rtc.h"
-#include "soc/efuse_reg.h"
-#include "rom/lldesc.h"
+#include "soc/efuse_periph.h"
+#include "esp32/rom/lldesc.h"
 
 #include "driver/gpio.h"
 #include "driver/i2s.h"
@@ -33,7 +30,7 @@
 #include "driver/dac.h"
 #include "adc1_i2s_private.h"
 
-#include "esp_intr.h"
+#include "esp_intr_alloc.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_pm.h"
@@ -99,7 +96,8 @@ typedef struct {
 } i2s_obj_t;
 
 static i2s_obj_t *p_i2s_obj[I2S_NUM_MAX] = {0};
-static i2s_dev_t* I2S[I2S_NUM_MAX] = {&I2S0, &I2S1};
+/* DRAM_ATTR is required to avoid I2S array placed in flash, due to accessed from ISR */
+static DRAM_ATTR i2s_dev_t* I2S[I2S_NUM_MAX] = {&I2S0, &I2S1};
 static portMUX_TYPE i2s_spinlock[I2S_NUM_MAX] = {portMUX_INITIALIZER_UNLOCKED, portMUX_INITIALIZER_UNLOCKED};
 static int _i2s_adc_unit = -1;
 static int _i2s_adc_channel = -1;
@@ -941,7 +939,7 @@ static esp_err_t i2s_param_config(i2s_port_t i2s_num, const i2s_config_t *i2s_co
     I2S[i2s_num]->conf.rx_start = 0;
 
     if (i2s_config->mode & I2S_MODE_TX) {
-        I2S[i2s_num]->conf.tx_msb_right = 1;
+        I2S[i2s_num]->conf.tx_msb_right = 0;
         I2S[i2s_num]->conf.tx_right_first = 0;
 
         I2S[i2s_num]->conf.tx_slave_mod = 0; // Master
@@ -953,7 +951,7 @@ static esp_err_t i2s_param_config(i2s_port_t i2s_num, const i2s_config_t *i2s_co
     }
 
     if (i2s_config->mode & I2S_MODE_RX) {
-        I2S[i2s_num]->conf.rx_msb_right = 1;
+        I2S[i2s_num]->conf.rx_msb_right = 0;
         I2S[i2s_num]->conf.rx_right_first = 0;
         I2S[i2s_num]->conf.rx_slave_mod = 0; // Master
         I2S[i2s_num]->fifo_conf.rx_fifo_mod_force_en = 1;
@@ -1183,18 +1181,6 @@ esp_err_t i2s_driver_uninstall(i2s_port_t i2s_num)
     return ESP_OK;
 }
 
-int i2s_write_bytes(i2s_port_t i2s_num, const void *src, size_t size, TickType_t ticks_to_wait)
-{
-    size_t bytes_written = 0;
-    int res = 0;
-    res = i2s_write(i2s_num, src, size, &bytes_written, ticks_to_wait);
-    if (res != ESP_OK) {
-        return ESP_FAIL;
-    } else {
-        return bytes_written;
-    }
-}
-
 esp_err_t i2s_write(i2s_port_t i2s_num, const void *src, size_t size, size_t *bytes_written, TickType_t ticks_to_wait)
 {
     char *data_ptr, *src_byte;
@@ -1320,18 +1306,6 @@ esp_err_t i2s_write_expand(i2s_port_t i2s_num, const void *src, size_t size, siz
     return ESP_OK;
 }
 
-int i2s_read_bytes(i2s_port_t i2s_num, void *dest, size_t size, TickType_t ticks_to_wait)
-{
-    size_t bytes_read = 0;
-    int res = 0;
-    res = i2s_read(i2s_num, dest, size, &bytes_read, ticks_to_wait);
-    if (res != ESP_OK) {
-        return ESP_FAIL;
-    } else {
-        return bytes_read;
-    }
-}
-
 esp_err_t i2s_read(i2s_port_t i2s_num, void *dest, size_t size, size_t *bytes_read, TickType_t ticks_to_wait)
 {
     char *data_ptr, *dest_byte;
@@ -1369,30 +1343,4 @@ esp_err_t i2s_read(i2s_port_t i2s_num, void *dest, size_t size, size_t *bytes_re
 #endif
     xSemaphoreGive(p_i2s_obj[i2s_num]->rx->mux);
     return ESP_OK;
-}
-
-int i2s_push_sample(i2s_port_t i2s_num, const void *sample, TickType_t ticks_to_wait)
-{
-    size_t bytes_push = 0;
-    int res = 0;
-    I2S_CHECK((i2s_num < I2S_NUM_MAX), "i2s_num error", ESP_FAIL);
-    res = i2s_write(i2s_num, sample, p_i2s_obj[i2s_num]->bytes_per_sample, &bytes_push, ticks_to_wait);
-    if (res != ESP_OK) {
-        return ESP_FAIL;
-    } else {
-        return bytes_push;
-    }
-}
-
-int i2s_pop_sample(i2s_port_t i2s_num, void *sample, TickType_t ticks_to_wait)
-{
-    size_t bytes_pop = 0;
-    int res = 0;
-    I2S_CHECK((i2s_num < I2S_NUM_MAX), "i2s_num error", ESP_FAIL);
-    res = i2s_read(i2s_num, sample, p_i2s_obj[i2s_num]->bytes_per_sample, &bytes_pop, ticks_to_wait);
-    if (res != ESP_OK) {
-        return ESP_FAIL;
-    } else {
-        return bytes_pop;
-    }
 }

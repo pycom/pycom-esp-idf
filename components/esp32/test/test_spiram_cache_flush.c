@@ -4,27 +4,24 @@ This code tests the interaction between PSRAM and SPI flash routines.
 
 #include <esp_types.h>
 #include <stdio.h>
-#include "rom/ets_sys.h"
-
+#include "esp32/rom/ets_sys.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
 #include "freertos/xtensa_api.h"
 #include "unity.h"
-#include "soc/dport_reg.h"
-#include "soc/io_mux_reg.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "rom/ets_sys.h"
+#include "esp32/rom/ets_sys.h"
 #include "esp_heap_caps.h"
 #include "esp_spi_flash.h"
 #include "esp_partition.h"
 #include "test_utils.h"
 
-#if CONFIG_SPIRAM_SUPPORT
+#if CONFIG_ESP32_SPIRAM_SUPPORT
 
 #if CONFIG_SPIRAM_USE_CAPS_ALLOC || CONFIG_SPIRAM_USE_MALLOC
 #define USE_CAPS_ALLOC 1
@@ -162,7 +159,7 @@ IRAM_ATTR TEST_CASE("Spiram memcmp weirdness at 80MHz", "[spiram]") {
     assert(mem1);
     assert(mem2);
     for (int i=0; i<0x10000; i++) mem1[i]=i^0xAAAAAAAA;
-    
+
     for (int cycle=1; cycle<100; cycle++) {
         memcpy(mem2, mem1, 0x10000);
         if (memcmp(mem1, mem2, 0x10000)!=0) {
@@ -182,4 +179,4 @@ IRAM_ATTR TEST_CASE("Spiram memcmp weirdness at 80MHz", "[spiram]") {
 #endif
 }
 
-#endif // CONFIG_SPIRAM_SUPPORT
+#endif // CONFIG_ESP32_SPIRAM_SUPPORT

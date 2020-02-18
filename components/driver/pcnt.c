@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "esp_log.h"
-#include "esp_intr_alloc.h"
 #include "driver/pcnt.h"
 #include "driver/periph_ctrl.h"
 
@@ -301,15 +300,16 @@ esp_err_t pcnt_isr_register(void (*fun)(void*), void * arg, int intr_alloc_flags
 // pcnt interrupt service
 static void IRAM_ATTR pcnt_intr_service(void* arg)
 {
-    uint32_t intr_status = PCNT.int_st.val;
-    for (int unit = 0; unit < PCNT_UNIT_MAX; unit++) {
-        if (intr_status & (BIT(unit))) {
-            if (pcnt_isr_func[unit].fn != NULL) {
-                (pcnt_isr_func[unit].fn)(pcnt_isr_func[unit].args);
-            }
-            PCNT.int_clr.val = BIT(unit);
+    const uint32_t intr_status = PCNT.int_st.val;
+    uint32_t status = intr_status;
+    while (status) {
+        int unit = __builtin_ffs(status) - 1;
+        status &= ~(1 << unit);
+        if (pcnt_isr_func[unit].fn != NULL) {
+            (pcnt_isr_func[unit].fn)(pcnt_isr_func[unit].args);
         }
     }
+    PCNT.int_clr.val = intr_status;
 }
 
 esp_err_t pcnt_isr_handler_add(pcnt_unit_t unit, void(*isr_handler)(void *), void *args)

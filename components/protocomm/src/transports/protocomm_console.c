@@ -77,7 +77,7 @@ static void protocomm_console_task(void *arg)
     uart_event_t event;
 
     ESP_LOGD(TAG, "Initializing UART on port %d", uart_num);
-    uart_driver_install(uart_num, 256, 0, 8, &uart_queue, 0, NULL);
+    uart_driver_install(uart_num, 256, 0, 8, &uart_queue, 0);
     /* Initialize the console */
     esp_console_config_t console_config = {
             .max_cmdline_args = 8,
@@ -145,7 +145,7 @@ static int common_cmd_handler(int argc, char** argv)
 
     if (cur_session_id != session_id) {
         if (pc_console->sec && pc_console->sec->new_transport_session) {
-            ret = pc_console->sec->new_transport_session(cur_session_id);
+            ret = pc_console->sec->new_transport_session(pc_console->sec_inst, cur_session_id);
             if (ret == ESP_OK) {
                 session_id = cur_session_id;
             }

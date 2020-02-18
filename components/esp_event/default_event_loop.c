@@ -56,6 +56,20 @@ esp_err_t esp_event_post(esp_event_base_t event_base, int32_t event_id,
 }
 
 
+#if CONFIG_ESP_EVENT_POST_FROM_ISR
+esp_err_t esp_event_isr_post(esp_event_base_t event_base, int32_t event_id,
+        void* event_data, size_t event_data_size, BaseType_t* task_unblocked)
+{
+    if (s_default_loop == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    return esp_event_isr_post_to(s_default_loop, event_base, event_id,
+            event_data, event_data_size, task_unblocked);
+}
+#endif
+
+
 esp_err_t esp_event_loop_create_default()
 {
     if (s_default_loop) {
@@ -63,7 +77,7 @@ esp_err_t esp_event_loop_create_default()
     }
 
     esp_event_loop_args_t loop_args = {
-        .queue_size = CONFIG_SYSTEM_EVENT_QUEUE_SIZE,
+        .queue_size = CONFIG_ESP_SYSTEM_EVENT_QUEUE_SIZE,
         .task_name = "sys_evt",
         .task_stack_size = ESP_TASKD_EVENT_STACK,
         .task_priority = ESP_TASKD_EVENT_PRIO,
@@ -87,7 +101,7 @@ esp_err_t esp_event_loop_delete_default()
     }
 
     esp_err_t err;
-    
+
     err = esp_event_loop_delete(s_default_loop);
 
     if (err != ESP_OK) {
@@ -100,3 +114,7 @@ esp_err_t esp_event_loop_delete_default()
 }
 
 
+/* Include the code to forward legacy system_event_t events to the this default
+ * event loop.
+ */
+#include "event_send_compat.inc"

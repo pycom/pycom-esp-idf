@@ -42,7 +42,7 @@ menu "Example Configuration"
 
     config EXAMPLE_USE_SC
         bool
-        depends on NIMBLE_SM_SC
+        depends on BT_NIMBLE_SM_SC
         default n
         prompt "Use Secure Connection feature"
         help

@@ -16,15 +16,16 @@
 
 #include "soc/soc.h"
 #include "soc/rtc.h"
-#include "soc/rtc_cntl_reg.h"
+#include "soc/rtc_periph.h"
 #include "soc/dport_reg.h"
-#include "soc/efuse_reg.h"
-#include "soc/gpio_reg.h"
+#include "soc/efuse_periph.h"
+#include "soc/gpio_periph.h"
 
 
 void rtc_init(rtc_config_t cfg)
 {
-    CLEAR_PERI_REG_MASK(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PVTMON_PU);
+    CLEAR_PERI_REG_MASK(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PVTMON_PU | RTC_CNTL_TXRF_I2C_PU |
+            RTC_CNTL_RFRX_PBUS_PU | RTC_CNTL_CKGEN_I2C_PU | RTC_CNTL_PLL_I2C_PU);
 
     REG_SET_FIELD(RTC_CNTL_TIMER1_REG, RTC_CNTL_PLL_BUF_WAIT, cfg.pll_wait);
     REG_SET_FIELD(RTC_CNTL_TIMER1_REG, RTC_CNTL_XTL_BUF_WAIT, cfg.xtal_wait);

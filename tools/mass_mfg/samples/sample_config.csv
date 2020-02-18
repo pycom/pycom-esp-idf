@@ -1,4 +1,3 @@
-# Sample config file
 dummyNamespace,namespace,
 dummyU8Key,data,u8
 dummyI8Key,data,i8

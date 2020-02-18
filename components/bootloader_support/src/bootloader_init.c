@@ -19,25 +19,26 @@
 #include "esp_attr.h"
 #include "esp_log.h"
 
-#include "rom/cache.h"
-#include "rom/efuse.h"
-#include "rom/ets_sys.h"
-#include "rom/spi_flash.h"
-#include "rom/crc.h"
-#include "rom/rtc.h"
-#include "rom/uart.h"
-#include "rom/gpio.h"
-#include "rom/secure_boot.h"
+#include "esp32/rom/cache.h"
+#include "esp32/rom/efuse.h"
+#include "esp32/rom/ets_sys.h"
+#include "esp32/rom/spi_flash.h"
+#include "esp32/rom/crc.h"
+#include "esp32/rom/rtc.h"
+#include "esp32/rom/uart.h"
+#include "esp32/rom/gpio.h"
+#include "esp32/rom/secure_boot.h"
 
 #include "soc/soc.h"
 #include "soc/cpu.h"
 #include "soc/rtc.h"
 #include "soc/dport_reg.h"
-#include "soc/efuse_reg.h"
-#include "soc/rtc_cntl_reg.h"
-#include "soc/timer_group_reg.h"
 #include "soc/gpio_periph.h"
+#include "soc/efuse_periph.h"
+#include "soc/rtc_periph.h"
+#include "soc/timer_periph.h"
 #include "soc/rtc_wdt.h"
+#include "soc/spi_periph.h"
 
 #include "sdkconfig.h"
 #include "esp_image_format.h"
@@ -181,7 +182,7 @@ static esp_err_t bootloader_main()
     ESP_LOGI(TAG, "Enabling RNG early entropy source...");
     bootloader_random_enable();
 
-#if CONFIG_FLASHMODE_QIO || CONFIG_FLASHMODE_QOUT
+#if CONFIG_ESPTOOLPY_FLASHMODE_QIO || CONFIG_ESPTOOLPY_FLASHMODE_QOUT
     bootloader_enable_qio_mode();
 #endif
 
@@ -307,11 +308,11 @@ static void IRAM_ATTR bootloader_init_flash_configure(const esp_image_header_t* 
 
 static void uart_console_configure(void)
 {
-#if CONFIG_CONSOLE_UART_NONE
+#if CONFIG_ESP_CONSOLE_UART_NONE
     ets_install_putc1(NULL);
     ets_install_putc2(NULL);
-#else // CONFIG_CONSOLE_UART_NONE
-    const int uart_num = CONFIG_CONSOLE_UART_NUM;
+#else // CONFIG_ESP_CONSOLE_UART_NONE
+    const int uart_num = CONFIG_ESP_CONSOLE_UART_NUM;
 
     uartAttach();
     ets_install_uart_printf();
@@ -319,10 +320,10 @@ static void uart_console_configure(void)
     // Wait for UART FIFO to be empty.
     uart_tx_wait_idle(0);
 
-#if CONFIG_CONSOLE_UART_CUSTOM
+#if CONFIG_ESP_CONSOLE_UART_CUSTOM
     // Some constants to make the following code less upper-case
-    const int uart_tx_gpio = CONFIG_CONSOLE_UART_TX_GPIO;
-    const int uart_rx_gpio = CONFIG_CONSOLE_UART_RX_GPIO;
+    const int uart_tx_gpio = CONFIG_ESP_CONSOLE_UART_TX_GPIO;
+    const int uart_rx_gpio = CONFIG_ESP_CONSOLE_UART_RX_GPIO;
     // Switch to the new UART (this just changes UART number used for
     // ets_printf in ROM code).
     uart_tx_switch(uart_num);
@@ -349,13 +350,13 @@ static void uart_console_configure(void)
         DPORT_SET_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, uart_reset[uart_num]);
         DPORT_CLEAR_PERI_REG_MASK(DPORT_PERIP_RST_EN_REG, uart_reset[uart_num]);
     }
-#endif // CONFIG_CONSOLE_UART_CUSTOM
+#endif // CONFIG_ESP_CONSOLE_UART_CUSTOM
 
     // Set configured UART console baud rate
-    const int uart_baud = CONFIG_CONSOLE_UART_BAUDRATE;
+    const int uart_baud = CONFIG_ESP_CONSOLE_UART_BAUDRATE;
     uart_div_modify(uart_num, (rtc_clk_apb_freq_get() << 4) / uart_baud);
 
-#endif // CONFIG_CONSOLE_UART_NONE
+#endif // CONFIG_ESP_CONSOLE_UART_NONE
 }
 
 static void wdt_reset_cpu0_info_enable(void)

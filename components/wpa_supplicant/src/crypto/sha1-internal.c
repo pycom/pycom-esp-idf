@@ -12,13 +12,13 @@
  * See README and COPYING for more details.
  */
 
-#include "crypto/includes.h"
+#include "utils/includes.h"
 
-#include "crypto/common.h"
-#include "crypto/sha1.h"
-#include "crypto/sha1_i.h"
-#include "crypto/md5.h"
-#include "crypto/crypto.h"
+#include "utils/common.h"
+#include "sha1.h"
+#include "sha1_i.h"
+#include "md5.h"
+#include "crypto.h"
 
 typedef struct SHA1Context SHA1_CTX;
 

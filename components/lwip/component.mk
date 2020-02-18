@@ -8,8 +8,7 @@ COMPONENT_ADD_INCLUDEDIRS := \
 	include/apps/sntp \
 	lwip/src/include \
 	port/esp32/include \
-	port/esp32/include/arch \
-	include_compat
+	port/esp32/include/arch
 
 COMPONENT_SRCDIRS := \
 	apps/dhcpserver \
@@ -26,7 +25,7 @@ COMPONENT_SRCDIRS := \
 	port/esp32/netif \
 	port/esp32/debug
 
-ifdef CONFIG_PPP_SUPPORT
+ifdef CONFIG_LWIP_PPP_SUPPORT
     COMPONENT_SRCDIRS += lwip/src/netif/ppp lwip/src/netif/ppp/polarssl
 endif
 
@@ -36,5 +35,7 @@ ifeq ($(GCC_NOT_5_2_0), 1)
 lwip/src/netif/ppp/ppp.o: CFLAGS += -Wno-uninitialized
 lwip/src/netif/ppp/pppos.o: CFLAGS += -Wno-implicit-fallthrough
 endif
+
+lwip/src/core/tcp.o: CFLAGS += -Wno-type-limits
 
 COMPONENT_ADD_LDFRAGMENTS += linker.lf

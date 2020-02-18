@@ -25,7 +25,7 @@ It will enable coverage info for all source files of your component. If you need
 `gcov_example.o: CFLAGS += --coverage`
 Replace `gcov_example.o` with path to your file.
 
-  For CMake-based build system, use `component_compile_options(--coverage)` or: `  set_source_files_properties(gcov_example.c PROPERTIES COMPILE_FLAGS --coverage`
+  For CMake-based build system, use `target_compile_options(${COMPONENT_LIB} PRIVATE --coverage)` or: `  set_source_files_properties(gcov_example.c PROPERTIES COMPILE_FLAGS --coverage`
 
 
 ### Hard-coded Dump Call
@@ -109,7 +109,7 @@ There are several ways to process collected data. Two of the most common are:
 Add the following lines to you project's `Makefile` after the line including `project.mk`:
 
 ```
-GCOV := $(call dequote,$(CONFIG_TOOLPREFIX))gcov
+GCOV := $(call dequote,$(CONFIG_SDK_TOOLPREFIX))gcov
 REPORT_DIR := $(BUILD_DIR_BASE)/coverage_report
 
 lcov-report:
@@ -127,12 +127,22 @@ cov-data-clean:
 .PHONY: lcov-report cov-data-clean
 ```
 
+For CMake-based build system, add the following lines to you project's `CMakeLists.txt` after the line including `project.cmake`:
+
+```
+include($ENV{IDF_PATH}/tools/cmake/gcov.cmake)
+idf_create_coverage_report(${CMAKE_CURRENT_BINARY_DIR}/coverage_report)
+idf_clean_coverage_report(${CMAKE_CURRENT_BINARY_DIR}/coverage_report)
+```
+
 Those lines add two build targets:
 * `lcov-report` - generates html coverage report in `$(BUILD_DIR_BASE)/coverage_report/html` directory.
 * `cov-data-clean` - removes all coverage data files and reports.
 
 To generate report type the following command:
 `make lcov-report`
+
+  For CMake-based build system, type `cmake --build build/ --target lcov-report`
 
 The sample output of the command is below:
 

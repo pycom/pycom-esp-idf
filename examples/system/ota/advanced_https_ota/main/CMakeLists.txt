@@ -1,8 +1,4 @@
-set(COMPONENT_SRCS "advanced_https_ota_example.c")
-set(COMPONENT_ADD_INCLUDEDIRS ".")
-
-
-# Embed the server root certificate into the final binary
-set(COMPONENT_EMBED_TXTFILES ${IDF_PROJECT_PATH}/server_certs/ca_cert.pem)
-
-register_component()
+idf_component_register(SRCS "advanced_https_ota_example.c" 
+                    INCLUDE_DIRS "."
+                    # Embed the server root certificate into the final binary
+                    EMBED_TXTFILES ${project_dir}/server_certs/ca_cert.pem)

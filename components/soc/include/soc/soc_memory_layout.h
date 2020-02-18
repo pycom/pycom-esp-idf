@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
 #include <stdlib.h>
 #include <stdint.h>
@@ -48,7 +49,7 @@
 
 #define SOC_MEM_BT_EM_PER_SYNC_SIZE         0x870
 
-#define SOC_MEM_BT_EM_BREDR_REAL_END        (SOC_MEM_BT_EM_BREDR_NO_SYNC_END + CONFIG_BTDM_CONTROLLER_BR_EDR_MAX_SYNC_CONN_EFF * SOC_MEM_BT_EM_PER_SYNC_SIZE)
+#define SOC_MEM_BT_EM_BREDR_REAL_END        (SOC_MEM_BT_EM_BREDR_NO_SYNC_END + CONFIG_BTDM_CTRL_BR_EDR_MAX_SYNC_CONN_EFF * SOC_MEM_BT_EM_PER_SYNC_SIZE)
 
 #endif //CONFIG_BT_ENABLED
 
@@ -154,6 +155,10 @@ inline static bool IRAM_ATTR esp_ptr_executable(const void *p)
     intptr_t ip = (intptr_t) p;
     return (ip >= SOC_IROM_LOW && ip < SOC_IROM_HIGH)
         || (ip >= SOC_IRAM_LOW && ip < SOC_IRAM_HIGH)
+        || (ip >= SOC_IROM_MASK_LOW && ip < SOC_IROM_MASK_HIGH)
+#if defined(SOC_CACHE_APP_LOW) && defined(CONFIG_FREERTOS_UNICORE)
+        || (ip >= SOC_CACHE_APP_LOW && ip < SOC_CACHE_APP_HIGH)
+#endif
         || (ip >= SOC_RTC_IRAM_LOW && ip < SOC_RTC_IRAM_HIGH);
 }
 
@@ -161,7 +166,7 @@ inline static bool IRAM_ATTR esp_ptr_byte_accessible(const void *p)
 {
     bool r;
     r = ((intptr_t)p >= SOC_BYTE_ACCESSIBLE_LOW && (intptr_t)p < SOC_BYTE_ACCESSIBLE_HIGH);
-#if CONFIG_SPIRAM_SUPPORT
+#if CONFIG_ESP32_SPIRAM_SUPPORT
     r |= ((intptr_t)p >= SOC_EXTRAM_DATA_LOW && (intptr_t)p < SOC_EXTRAM_DATA_HIGH);
 #endif
     return r;
@@ -201,4 +206,11 @@ inline static bool IRAM_ATTR esp_ptr_in_diram_dram(const void *p) {
 
 inline static bool IRAM_ATTR esp_ptr_in_diram_iram(const void *p) {
     return ((intptr_t)p >= SOC_DIRAM_IRAM_LOW && (intptr_t)p < SOC_DIRAM_IRAM_HIGH);
+}
+
+
+inline static bool IRAM_ATTR esp_stack_ptr_is_sane(uint32_t sp)
+{
+    //Check if stack ptr is in between SOC_DRAM_LOW and SOC_DRAM_HIGH, and 16 byte aligned.
+    return !(sp < SOC_DRAM_LOW + 0x10 || sp > SOC_DRAM_HIGH - 0x10 || ((sp & 0xF) != 0));
 }

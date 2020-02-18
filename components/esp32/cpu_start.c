@@ -18,19 +18,18 @@
 #include "esp_attr.h"
 #include "esp_err.h"
 
-#include "rom/ets_sys.h"
-#include "rom/uart.h"
-#include "rom/rtc.h"
-#include "rom/cache.h"
+#include "esp32/rom/ets_sys.h"
+#include "esp32/rom/uart.h"
+#include "esp32/rom/rtc.h"
+#include "esp32/rom/cache.h"
 
 #include "soc/cpu.h"
 #include "soc/rtc.h"
 #include "soc/dport_reg.h"
-#include "soc/io_mux_reg.h"
-#include "soc/rtc_cntl_reg.h"
-#include "soc/timer_group_reg.h"
+#include "soc/gpio_periph.h"
+#include "soc/timer_periph.h"
 #include "soc/rtc_wdt.h"
-#include "soc/efuse_reg.h"
+#include "soc/efuse_periph.h"
 
 #include "driver/rtc_io.h"
 
@@ -44,35 +43,34 @@
 #include "sdkconfig.h"
 #include "esp_system.h"
 #include "esp_spi_flash.h"
+#include "esp_flash_internal.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_spi_flash.h"
 #include "esp_ipc.h"
-#include "esp_crosscore_int.h"
-#include "esp_dport_access.h"
+#include "esp_private/crosscore_int.h"
 #include "esp_log.h"
 #include "esp_vfs_dev.h"
 #include "esp_newlib.h"
-#include "esp_brownout.h"
+#include "esp32/brownout.h"
 #include "esp_int_wdt.h"
 #include "esp_task.h"
 #include "esp_task_wdt.h"
 #include "esp_phy_init.h"
-#include "esp_cache_err_int.h"
+#include "esp32/cache_err_int.h"
 #include "esp_coexist_internal.h"
-#include "esp_panic.h"
 #include "esp_core_dump.h"
 #include "esp_app_trace.h"
-#include "esp_dbg_stubs.h"
-#include "esp_efuse.h"
-#include "esp_spiram.h"
+#include "esp_private/dbg_stubs.h"
+#include "esp_flash_encrypt.h"
+#include "esp32/spiram.h"
 #include "esp_clk_internal.h"
 #include "esp_timer.h"
 #include "esp_pm.h"
-#include "esp_flash_encrypt.h"
-#include "pm_impl.h"
+#include "esp_private/pm_impl.h"
 #include "trax.h"
 #include "esp_ota_ops.h"
+#include "esp_efuse.h"
 #include "bootloader_flash_config.h"
 
 #define STRINGIFY(s) STRINGIFY2(s)
@@ -187,7 +185,7 @@ void IRAM_ATTR call_start_cpu0()
 #ifndef CONFIG_APP_EXCLUDE_PROJECT_VER_VAR
         ESP_EARLY_LOGI(TAG, "App version:      %s", app_desc->version);
 #endif
-#ifdef CONFIG_APP_SECURE_VERSION
+#ifdef CONFIG_BOOTLOADER_APP_SECURE_VERSION
         ESP_EARLY_LOGI(TAG, "Secure version:   %d", app_desc->secure_version);
 #endif
 #ifdef CONFIG_APP_COMPILE_TIME_DATE
@@ -206,6 +204,11 @@ void IRAM_ATTR call_start_cpu0()
         abort();
     }
     ESP_EARLY_LOGI(TAG, "Starting app cpu, entry point is %p", call_start_cpu1);
+
+#ifdef CONFIG_SECURE_FLASH_ENC_ENABLED
+    esp_flash_encryption_init_checks();
+#endif
+
     //Flush and enable icache for APP CPU
     Cache_Flush(1);
     Cache_Read_Enable(1);
@@ -275,13 +278,13 @@ void IRAM_ATTR call_start_cpu1()
     cpu_configure_region_protection();
     cpu_init_memctl();
 
-#if CONFIG_CONSOLE_UART_NONE
+#if CONFIG_ESP_CONSOLE_UART_NONE
     ets_install_putc1(NULL);
     ets_install_putc2(NULL);
-#else // CONFIG_CONSOLE_UART_NONE
+#else // CONFIG_ESP_CONSOLE_UART_NONE
     uartAttach();
     ets_install_uart_printf();
-    uart_tx_switch(CONFIG_CONSOLE_UART_NUM);
+    uart_tx_switch(CONFIG_ESP_CONSOLE_UART_NUM);
 #endif
 
     wdt_reset_cpu1_info_enable();
@@ -333,33 +336,28 @@ void start_cpu0_default(void)
     esp_perip_clk_init();
     intr_matrix_clear();
 
-#ifndef CONFIG_CONSOLE_UART_NONE
+#ifndef CONFIG_ESP_CONSOLE_UART_NONE
 #ifdef CONFIG_PM_ENABLE
     const int uart_clk_freq = REF_CLK_FREQ;
     /* When DFS is enabled, use REFTICK as UART clock source */
-    CLEAR_PERI_REG_MASK(UART_CONF0_REG(CONFIG_CONSOLE_UART_NUM), UART_TICK_REF_ALWAYS_ON);
+    CLEAR_PERI_REG_MASK(UART_CONF0_REG(CONFIG_ESP_CONSOLE_UART_NUM), UART_TICK_REF_ALWAYS_ON);
 #else
     const int uart_clk_freq = APB_CLK_FREQ;
 #endif // CONFIG_PM_DFS_ENABLE
-    uart_div_modify(CONFIG_CONSOLE_UART_NUM, (uart_clk_freq << 4) / CONFIG_CONSOLE_UART_BAUDRATE);
-#endif // CONFIG_CONSOLE_UART_NONE
+    uart_div_modify(CONFIG_ESP_CONSOLE_UART_NUM, (uart_clk_freq << 4) / CONFIG_ESP_CONSOLE_UART_BAUDRATE);
+#endif // CONFIG_ESP_CONSOLE_UART_NONE
 
-#if CONFIG_BROWNOUT_DET
+#if CONFIG_ESP32_BROWNOUT_DET
     esp_brownout_init();
 #endif
-#if CONFIG_DISABLE_BASIC_ROM_CONSOLE
+#if CONFIG_ESP32_DISABLE_BASIC_ROM_CONSOLE
     esp_efuse_disable_basic_rom_console();
-#endif
-#ifdef CONFIG_FLASH_ENCRYPTION_DISABLE_PLAINTEXT
-    if (esp_flash_encryption_enabled()) {
-        esp_flash_write_protect_crypt_cnt();
-    }
 #endif
     rtc_gpio_force_hold_dis_all();
     esp_vfs_dev_uart_register();
     esp_reent_init(_GLOBAL_REENT);
-#ifndef CONFIG_CONSOLE_UART_NONE
-    const char* default_uart_dev = "/dev/uart/" STRINGIFY(CONFIG_CONSOLE_UART_NUM);
+#ifndef CONFIG_ESP_CONSOLE_UART_NONE
+    const char* default_uart_dev = "/dev/uart/" STRINGIFY(CONFIG_ESP_CONSOLE_UART_NUM);
     _GLOBAL_REENT->_stdin  = fopen(default_uart_dev, "r");
     _GLOBAL_REENT->_stdout = fopen(default_uart_dev, "w");
     _GLOBAL_REENT->_stderr = fopen(default_uart_dev, "w");
@@ -384,7 +382,7 @@ void start_cpu0_default(void)
     assert(err == ESP_OK && "Failed to init pthread module!");
 
     do_global_ctors();
-#if CONFIG_INT_WDT
+#if CONFIG_ESP_INT_WDT
     esp_int_wdt_init();
     //Initialize the interrupt watch dog for CPU0.
     esp_int_wdt_cpu_init();
@@ -397,6 +395,10 @@ void start_cpu0_default(void)
     spi_flash_init();
     /* init default OS-aware flash access critical section */
     spi_flash_guard_set(&g_flash_guard_default_ops);
+
+    esp_flash_app_init();
+    esp_err_t flash_ret = esp_flash_init_default_chip();
+    assert(flash_ret == ESP_OK);
 
 #ifdef CONFIG_PM_ENABLE
     esp_pm_impl_init();
@@ -419,7 +421,7 @@ void start_cpu0_default(void)
     }
 #endif
 
-#if CONFIG_SW_COEXIST_ENABLE
+#if CONFIG_ESP32_WIFI_SW_COEXIST_ENABLE
     esp_coex_adapter_register(&g_coex_adapter_funcs);
     coex_pre_init();
 #endif
@@ -461,7 +463,7 @@ void start_cpu1_default(void)
     esp_err_t err = esp_apptrace_init();
     assert(err == ESP_OK && "Failed to init apptrace module on APP CPU!");
 #endif
-#if CONFIG_INT_WDT
+#if CONFIG_ESP_INT_WDT
     //Initialize the interrupt watch dog for CPU1.
     esp_int_wdt_cpu_init();
 #endif
@@ -477,16 +479,16 @@ void start_cpu1_default(void)
 }
 #endif //!CONFIG_FREERTOS_UNICORE
 
-#ifdef CONFIG_CXX_EXCEPTIONS
+#ifdef CONFIG_COMPILER_CXX_EXCEPTIONS
 size_t __cxx_eh_arena_size_get()
 {
-    return CONFIG_CXX_EXCEPTIONS_EMG_POOL_SIZE;
+    return CONFIG_COMPILER_CXX_EXCEPTIONS_EMG_POOL_SIZE;
 }
 #endif
 
 static void do_global_ctors(void)
 {
-#ifdef CONFIG_CXX_EXCEPTIONS
+#ifdef CONFIG_COMPILER_CXX_EXCEPTIONS
     static struct object ob;
     __register_frame_info( __eh_frame, &ob );
 #endif
@@ -518,21 +520,21 @@ static void main_task(void* args)
 #endif
 
     //Initialize task wdt if configured to do so
-#ifdef CONFIG_TASK_WDT_PANIC
-    ESP_ERROR_CHECK(esp_task_wdt_init(CONFIG_TASK_WDT_TIMEOUT_S, true));
-#elif CONFIG_TASK_WDT
-    ESP_ERROR_CHECK(esp_task_wdt_init(CONFIG_TASK_WDT_TIMEOUT_S, false));
+#ifdef CONFIG_ESP_TASK_WDT_PANIC
+    ESP_ERROR_CHECK(esp_task_wdt_init(CONFIG_ESP_TASK_WDT_TIMEOUT_S, true));
+#elif CONFIG_ESP_TASK_WDT
+    ESP_ERROR_CHECK(esp_task_wdt_init(CONFIG_ESP_TASK_WDT_TIMEOUT_S, false));
 #endif
 
     //Add IDLE 0 to task wdt
-#ifdef CONFIG_TASK_WDT_CHECK_IDLE_TASK_CPU0
+#ifdef CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0
     TaskHandle_t idle_0 = xTaskGetIdleTaskHandleForCPU(0);
     if(idle_0 != NULL){
         ESP_ERROR_CHECK(esp_task_wdt_add(idle_0));
     }
 #endif
     //Add IDLE 1 to task wdt
-#ifdef CONFIG_TASK_WDT_CHECK_IDLE_TASK_CPU1
+#ifdef CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1
     TaskHandle_t idle_1 = xTaskGetIdleTaskHandleForCPU(1);
     if(idle_1 != NULL){
         ESP_ERROR_CHECK(esp_task_wdt_add(idle_1));
@@ -543,7 +545,7 @@ static void main_task(void* args)
 #ifndef CONFIG_BOOTLOADER_WDT_DISABLE_IN_USER_CODE
     rtc_wdt_disable();
 #endif
-#ifdef CONFIG_EFUSE_SECURE_VERSION_EMULATE
+#ifdef CONFIG_BOOTLOADER_EFUSE_SECURE_VERSION_EMULATE
     const esp_partition_t *efuse_partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_EFUSE_EM, NULL);
     if (efuse_partition) {
         esp_efuse_init(efuse_partition->address, efuse_partition->size);

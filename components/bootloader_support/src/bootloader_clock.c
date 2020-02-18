@@ -11,13 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include "rom/uart.h"
-#include "rom/rtc.h"
+#include "esp32/rom/uart.h"
+#include "esp32/rom/rtc.h"
 #include "soc/soc.h"
 #include "soc/rtc.h"
 #include "soc/dport_reg.h"
-#include "soc/efuse_reg.h"
-#include "soc/rtc_cntl_reg.h"
+#include "soc/efuse_periph.h"
 
 void bootloader_clock_configure()
 {
@@ -53,9 +52,18 @@ void bootloader_clock_configure()
      * part of the start up time by enabling 32k XTAL early.
      * App startup code will wait until the oscillator has started up.
      */
-#ifdef CONFIG_ESP32_RTC_CLOCK_SOURCE_EXTERNAL_CRYSTAL
+#ifdef CONFIG_ESP32_RTC_CLK_SRC_EXT_CRYS
     if (!rtc_clk_32k_enabled()) {
         rtc_clk_32k_bootstrap(CONFIG_ESP32_RTC_XTAL_BOOTSTRAP_CYCLES);
     }
 #endif
 }
+
+#ifdef BOOTLOADER_BUILD
+
+int esp_clk_apb_freq(void)
+{
+    return rtc_clk_apb_freq_get();
+}
+
+#endif // BOOTLOADER_BUILD

@@ -1,19 +1,18 @@
 #include <stdio.h>
 #include "unity.h"
-#include "rom/ets_sys.h"
-#include "rom/uart.h"
+#include "esp32/rom/ets_sys.h"
+#include "esp32/rom/uart.h"
 #include "soc/rtc.h"
-#include "soc/rtc_cntl_reg.h"
-#include "soc/rtc_io_reg.h"
-#include "soc/sens_reg.h"
-#include "soc/io_mux_reg.h"
+#include "soc/rtc_periph.h"
+#include "soc/sens_periph.h"
+#include "soc/gpio_periph.h"
 #include "driver/rtc_io.h"
 #include "test_utils.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "../esp_clk_internal.h"
-#include "esp_clk.h"
+#include "esp32/clk.h"
 
 
 
@@ -97,7 +96,7 @@ TEST_CASE("Output 8M XTAL clock to GPIO25", "[rtc_clk][ignore]")
 
 static void test_clock_switching(void (*switch_func)(const rtc_cpu_freq_config_t* config))
 {
-    uart_tx_wait_idle(CONFIG_CONSOLE_UART_NUM);
+    uart_tx_wait_idle(CONFIG_ESP_CONSOLE_UART_NUM);
 
     const int test_duration_sec = 10;
     ref_clock_init();
@@ -164,7 +163,7 @@ static void start_freq(rtc_slow_freq_t required_src_freq, uint32_t start_delay_m
     uint32_t end_time;
     rtc_slow_freq_t selected_src_freq;
     stop_rtc_external_quartz();
-#ifdef CONFIG_ESP32_RTC_CLOCK_SOURCE_EXTERNAL_CRYSTAL
+#ifdef CONFIG_ESP32_RTC_CLK_SRC_EXT_CRYS
     uint32_t bootstrap_cycles = CONFIG_ESP32_RTC_XTAL_BOOTSTRAP_CYCLES;
     printf("Test is started. Kconfig settings:\n External 32K crystal is selected,\n Oscillation cycles = %d,\n Calibration cycles = %d.\n",
             bootstrap_cycles,
@@ -225,7 +224,7 @@ TEST_CASE("Test starting external RTC quartz", "[rtc_clk][test_env=UT_T1_32kXTAL
     uint32_t start_time;
     uint32_t end_time;
     stop_rtc_external_quartz();
-#ifdef CONFIG_ESP32_RTC_CLOCK_SOURCE_EXTERNAL_CRYSTAL
+#ifdef CONFIG_ESP32_RTC_CLK_SRC_EXT_CRYS
     uint32_t bootstrap_cycles = CONFIG_ESP32_RTC_XTAL_BOOTSTRAP_CYCLES;
     printf("Test is started. Kconfig settings:\n External 32K crystal is selected,\n Oscillation cycles = %d,\n Calibration cycles = %d.\n",
             bootstrap_cycles,

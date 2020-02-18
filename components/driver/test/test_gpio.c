@@ -4,7 +4,7 @@
  */
 #include <stdio.h>
 #include <string.h>
-#include "rom/uart.h"
+#include "esp32/rom/uart.h"
 #include "esp_system.h"
 #include "esp_sleep.h"
 #include "unity.h"
@@ -687,7 +687,7 @@ static void gpio_isr_handler(void* arg)
  * First on the core 0:
  *     1. Configure the GPIO18 and GPIO19 input_output mode.
  *     2. Enable GPIO18 dual edge triggered interrupt, enable GPIO19 falling edge triggered interrupt.
- *     3. Trigger GPIO18 interrupt, then disable the GPIO8 interrupt, and then trigger GPIO18 again(This time will not respond to the interrupt).
+ *     3. Trigger GPIO18 interrupt, than disable the GPIO8 interrupt, and than trigger GPIO18 again(This time will not respond to the interrupt).
  *     4. Trigger GPIO19 interrupt.
  * If the bug is not fixed, you will see, in the step 4, the interrupt of GPIO18 will also respond.
  */

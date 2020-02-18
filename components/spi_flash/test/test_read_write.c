@@ -23,10 +23,9 @@
 #include <unity.h>
 #include <test_utils.h>
 #include <esp_spi_flash.h>
-#include <rom/spi_flash.h>
+#include <esp32/rom/spi_flash.h>
 #include "../cache_utils.h"
-#include "soc/timer_group_struct.h"
-#include "soc/timer_group_reg.h"
+#include "soc/timer_periph.h"
 #include "esp_heap_caps.h"
 
 #define MIN_BLOCK_SIZE  12
@@ -81,7 +80,7 @@ static void IRAM_ATTR test_read(int src_off, int dst_off, int len)
     spi_flash_disable_interrupts_caches_and_other_cpu();
     esp_rom_spiflash_result_t rc = esp_rom_spiflash_write(start, src_buf, sizeof(src_buf));
     spi_flash_enable_interrupts_caches_and_other_cpu();
-    TEST_ASSERT_EQUAL_INT(rc, ESP_ROM_SPIFLASH_RESULT_OK);
+    TEST_ASSERT_EQUAL_HEX(rc, ESP_ROM_SPIFLASH_RESULT_OK);
     memset(dst_buf, 0x55, sizeof(dst_buf));
     memset(dst_gold, 0x55, sizeof(dst_gold));
     fill(dst_gold + dst_off, src_off, len);
@@ -89,7 +88,7 @@ static void IRAM_ATTR test_read(int src_off, int dst_off, int len)
     TEST_ASSERT_EQUAL_INT(cmp_or_dump(dst_buf, dst_gold, sizeof(dst_buf)), 0);
 }
 
-TEST_CASE("Test spi_flash_read", "[spi_flash]")
+TEST_CASE("Test spi_flash_read", "[spi_flash][esp_flash]")
 {
     setup_tests();
 #if CONFIG_SPI_FLASH_MINIMAL_TEST
@@ -160,14 +159,16 @@ static void IRAM_ATTR test_write(int dst_off, int src_off, int len)
         fill(dst_gold + dst_off, src_off, len);
     }
     ESP_ERROR_CHECK(spi_flash_write(start + dst_off, src_buf + src_off, len));
+
     spi_flash_disable_interrupts_caches_and_other_cpu();
     esp_rom_spiflash_result_t rc = esp_rom_spiflash_read(start, dst_buf, sizeof(dst_buf));
     spi_flash_enable_interrupts_caches_and_other_cpu();
-    TEST_ASSERT_EQUAL_INT(rc, ESP_ROM_SPIFLASH_RESULT_OK);
+    TEST_ASSERT_EQUAL_HEX(rc, ESP_ROM_SPIFLASH_RESULT_OK);
+
     TEST_ASSERT_EQUAL_INT(cmp_or_dump(dst_buf, dst_gold, sizeof(dst_buf)), 0);
 }
 
-TEST_CASE("Test spi_flash_write", "[spi_flash]")
+TEST_CASE("Test spi_flash_write", "[spi_flash][esp_flash]")
 {
     setup_tests();
 #if CONFIG_SPI_FLASH_MINIMAL_TEST
@@ -220,7 +221,7 @@ TEST_CASE("Test spi_flash_write", "[spi_flash]")
     ESP_ERROR_CHECK(spi_flash_write(start, (char *) 0x40080000, 16));
 }
 
-#ifdef CONFIG_SPIRAM_SUPPORT
+#ifdef CONFIG_ESP32_SPIRAM_SUPPORT
 
 TEST_CASE("spi_flash_read can read into buffer in external RAM", "[spi_flash]")
 {

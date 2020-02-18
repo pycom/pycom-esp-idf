@@ -12,11 +12,11 @@
  * See README and COPYING for more details.
  */
 
-#include "crypto/includes.h"
-#include "crypto/common.h"
-#include "crypto/sha1.h"
-#include "crypto/md5.h"
-#include "crypto/crypto.h"
+#include "utils/includes.h"
+#include "utils/common.h"
+#include "sha1.h"
+#include "md5.h"
+#include "crypto.h"
 
 static int 
 pbkdf2_sha1_f(const char *passphrase, const char *ssid,

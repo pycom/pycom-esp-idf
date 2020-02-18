@@ -20,13 +20,12 @@
 #include "test_utils.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "soc/mcpwm_reg.h"
-#include "soc/mcpwm_struct.h"
+#include "soc/mcpwm_periph.h"
 #include "freertos/queue.h"
 #include "esp_attr.h"
 #include "esp_log.h"
 #include "soc/rtc.h"
-#include "rom/ets_sys.h"
+#include "esp32/rom/ets_sys.h"
 
 #define GPIO_PWMA_OUT  4
 #define GPIO_PWMB_OUT  13

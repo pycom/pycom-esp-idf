@@ -25,13 +25,13 @@
 #include <sdkconfig.h>
 #include "esp_attr.h"
 #include "esp_err.h"
-#include "esp_intr.h"
-#include "rom/ets_sys.h"
-#include "rom/uart.h"
+#include "esp_intr_alloc.h"
+#include "esp32/rom/ets_sys.h"
+#include "esp32/rom/uart.h"
 
 #include "soc/cpu.h"
 #include "soc/dport_reg.h"
-#include "soc/spi_reg.h"
+#include "soc/spi_periph.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -255,8 +255,8 @@ uint32_t IRAM_ATTR esp_dport_access_reg_read(uint32_t reg)
     uint32_t apb;
     unsigned int intLvl;
     __asm__ __volatile__ (\
-                  "movi %[APB], "XTSTR(0x3ff40078)"\n"\
                   "rsil %[LVL], "XTSTR(CONFIG_ESP32_DPORT_DIS_INTERRUPT_LVL)"\n"\
+                  "movi %[APB], "XTSTR(0x3ff40078)"\n"\
                   "l32i %[APB], %[APB], 0\n"\
                   "l32i %[REG], %[REG], 0\n"\
                   "wsr  %[LVL], "XTSTR(PS)"\n"\

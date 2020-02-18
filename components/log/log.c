@@ -56,7 +56,7 @@
 
 #include "esp_log.h"
 
-#include "rom/queue.h"
+#include "sys/queue.h"
 #include "soc/soc_memory_layout.h"
 
 //print number of bytes per line for esp_log_buffer_char and esp_log_buffer_hex
@@ -174,8 +174,10 @@ void esp_log_level_set(const char* tag, esp_log_level_t level)
 
 void clear_log_level_list()
 {
-    while( !SLIST_EMPTY(&s_log_tags)) {
+    uncached_tag_entry_t *it;
+    while((it = SLIST_FIRST(&s_log_tags)) != NULL) {
         SLIST_REMOVE_HEAD(&s_log_tags, entries );
+        free(it);
     }
     s_log_cache_entry_count = 0;
     s_log_cache_max_generation = 0;

@@ -2,9 +2,10 @@
 #include "esp_system.h"
 #include "esp_task_wdt.h"
 #include "esp_attr.h"
-#include "soc/rtc_cntl_reg.h"
+#include "soc/rtc_periph.h"
 #include "driver/timer.h"
-#include "rom/rtc.h"
+#include "esp32/rom/rtc.h"
+#include "esp_sleep.h"
 
 #define RTC_BSS_ATTR __attribute__((section(".rtc.bss")))
 
@@ -140,12 +141,14 @@ TEST_CASE_MULTIPLE_STAGES("reset reason ESP_RST_SW after restart from APP CPU", 
 
 static void do_int_wdt()
 {
+    setup_values();
     portENTER_CRITICAL_NESTED();
     while(1);
 }
 
 static void do_int_wdt_hw()
 {
+    setup_values();
     XTOS_SET_INTLEVEL(XCHAL_NMILEVEL);
     while(1);
 }
@@ -153,6 +156,7 @@ static void do_int_wdt_hw()
 static void check_reset_reason_int_wdt()
 {
     TEST_ASSERT_EQUAL(ESP_RST_INT_WDT, esp_reset_reason());
+    TEST_ASSERT_EQUAL_HEX32(CHECK_VALUE, s_rtc_noinit_val);
 }
 
 TEST_CASE_MULTIPLE_STAGES("reset reason ESP_RST_INT_WDT after interrupt watchdog (panic)",
@@ -193,6 +197,7 @@ TEST_CASE_MULTIPLE_STAGES("reset reason ESP_RST_TASK_WDT after task watchdog",
 
 static void do_rtc_wdt()
 {
+    setup_values();
     WRITE_PERI_REG(RTC_CNTL_WDTWPROTECT_REG, RTC_CNTL_WDT_WKEY_VALUE);
     REG_SET_FIELD(RTC_CNTL_WDTCONFIG0_REG, RTC_CNTL_WDT_SYS_RESET_LENGTH, 7);
     REG_SET_FIELD(RTC_CNTL_WDTCONFIG0_REG, RTC_CNTL_WDT_STG0, RTC_WDT_STG_SEL_RESET_SYSTEM);
@@ -204,6 +209,7 @@ static void do_rtc_wdt()
 static void check_reset_reason_any_wdt()
 {
     TEST_ASSERT_EQUAL(ESP_RST_WDT, esp_reset_reason());
+    TEST_ASSERT_EQUAL_HEX32(CHECK_VALUE, s_rtc_noinit_val);
 }
 
 TEST_CASE_MULTIPLE_STAGES("reset reason ESP_RST_WDT after RTC watchdog",
@@ -275,7 +281,7 @@ static void timer_group_test_first_stage(void)
     timer_start(TIMER_GROUP_0, TIMER_0);
     //Waiting for timer_group to generate an interrupt
     while( !TIMERG0.int_raw.t0 && loop_cnt++ < 100) {
-        vTaskDelay(200);    
+        vTaskDelay(200);
     }
     //TIMERG0.int_raw.t0 == 1 means an interruption has occurred
     TEST_ASSERT_EQUAL(1, TIMERG0.int_raw.t0);

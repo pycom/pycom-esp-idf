@@ -5,10 +5,11 @@
 #include <esp_types.h>
 #include <stdio.h>
 #include "string.h"
+#include "sdkconfig.h"
 
-#include "rom/spi_flash.h"
-#include "rom/rtc.h"
-#include "rom/ets_sys.h"
+#include "esp32/rom/spi_flash.h"
+#include "esp32/rom/rtc.h"
+#include "esp32/rom/ets_sys.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -28,8 +29,8 @@
 #include "nvs_flash.h"
 
 #include "driver/gpio.h"
+#include "esp_sleep.h"
 
-#include "sdkconfig.h"
 
 RTC_DATA_ATTR static int boot_count = 0;
 static const char *TAG = "ota_test";
@@ -239,7 +240,7 @@ static void reset_output_pin(uint32_t num_pin)
 
 static void mark_app_valid(void)
 {
-#ifdef CONFIG_APP_ROLLBACK_ENABLE
+#ifdef CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
     TEST_ESP_OK(esp_ota_mark_app_valid_cancel_rollback());
 #endif
 }
@@ -386,7 +387,7 @@ static void test_flow4(void)
     boot_count++;
     ESP_LOGI(TAG, "boot count %d", boot_count);
     const esp_partition_t *cur_app = get_running_firmware();
-    nvs_handle handle = 0;
+    nvs_handle_t handle = 0;
     int boot_count_nvs = 0;
     switch (boot_count) {
         case 2:
@@ -518,7 +519,7 @@ static void test_rollback1(void)
             TEST_ESP_ERR(ESP_ERR_NOT_SUPPORTED, esp_ota_get_state_partition(cur_app, &ota_state));
             update_partition = app_update();
             TEST_ESP_OK(esp_ota_get_state_partition(update_partition, &ota_state));
-#ifndef CONFIG_APP_ROLLBACK_ENABLE
+#ifndef CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_UNDEFINED, ota_state);
 #else
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_NEW, ota_state);
@@ -530,7 +531,7 @@ static void test_rollback1(void)
             TEST_ASSERT_EQUAL(ESP_PARTITION_SUBTYPE_APP_OTA_0, cur_app->subtype);
             TEST_ASSERT_NULL(esp_ota_get_last_invalid_partition());
             TEST_ESP_OK(esp_ota_get_state_partition(cur_app, &ota_state));
-#ifndef CONFIG_APP_ROLLBACK_ENABLE
+#ifndef CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_UNDEFINED, ota_state);
 #else
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_PENDING_VERIFY, ota_state);
@@ -597,7 +598,7 @@ static void test_rollback2(void)
             TEST_ESP_ERR(ESP_ERR_NOT_SUPPORTED, esp_ota_get_state_partition(cur_app, &ota_state));
             update_partition = app_update();
             TEST_ESP_OK(esp_ota_get_state_partition(update_partition, &ota_state));
-#ifndef CONFIG_APP_ROLLBACK_ENABLE
+#ifndef CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_UNDEFINED, ota_state);
 #else
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_NEW, ota_state);
@@ -609,7 +610,7 @@ static void test_rollback2(void)
             TEST_ASSERT_EQUAL(ESP_PARTITION_SUBTYPE_APP_OTA_0, cur_app->subtype);
             TEST_ASSERT_NULL(esp_ota_get_last_invalid_partition());
             TEST_ESP_OK(esp_ota_get_state_partition(cur_app, &ota_state));
-#ifndef CONFIG_APP_ROLLBACK_ENABLE
+#ifndef CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_UNDEFINED, ota_state);
 #else
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_PENDING_VERIFY, ota_state);
@@ -620,7 +621,7 @@ static void test_rollback2(void)
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_VALID, ota_state);
             update_partition = app_update();
             TEST_ESP_OK(esp_ota_get_state_partition(update_partition, &ota_state));
-#ifndef CONFIG_APP_ROLLBACK_ENABLE
+#ifndef CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_UNDEFINED, ota_state);
 #else
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_NEW, ota_state);
@@ -632,7 +633,7 @@ static void test_rollback2(void)
             TEST_ASSERT_EQUAL(ESP_PARTITION_SUBTYPE_APP_OTA_1, cur_app->subtype);
             TEST_ASSERT_NULL(esp_ota_get_last_invalid_partition());
             TEST_ESP_OK(esp_ota_get_state_partition(cur_app, &ota_state));
-#ifndef CONFIG_APP_ROLLBACK_ENABLE
+#ifndef CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
             TEST_ASSERT_EQUAL(ESP_OTA_IMG_UNDEFINED, ota_state);
             TEST_ESP_OK(esp_ota_mark_app_invalid_rollback_and_reboot());
 #else
@@ -665,7 +666,7 @@ static void test_rollback2_1(void)
     TEST_ESP_OK(esp_ota_get_state_partition(cur_app, &ota_state));
     TEST_ASSERT_EQUAL(ESP_OTA_IMG_VALID, ota_state);
     TEST_ESP_OK(esp_ota_get_state_partition(invalid_partition, &ota_state));
-#ifndef CONFIG_APP_ROLLBACK_ENABLE
+#ifndef CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
     TEST_ASSERT_EQUAL(ESP_OTA_IMG_INVALID, ota_state);
 #else
     TEST_ASSERT_EQUAL(ESP_OTA_IMG_ABORTED, ota_state);

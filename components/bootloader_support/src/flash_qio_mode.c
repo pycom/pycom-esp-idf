@@ -16,10 +16,10 @@
 #include "flash_qio_mode.h"
 #include "esp_log.h"
 #include "esp_err.h"
-#include "rom/spi_flash.h"
-#include "rom/efuse.h"
-#include "soc/spi_struct.h"
-#include "soc/efuse_reg.h"
+#include "esp32/rom/spi_flash.h"
+#include "esp32/rom/efuse.h"
+#include "soc/spi_periph.h"
+#include "soc/efuse_periph.h"
 #include "sdkconfig.h"
 
 /* SPI flash controller */
@@ -210,7 +210,7 @@ static esp_err_t enable_qio_mode(read_status_fn_t read_status_fn,
     ESP_LOGD(TAG, "Enabling QIO mode...");
 
     esp_rom_spiflash_read_mode_t mode;
-#if CONFIG_FLASHMODE_QOUT
+#if CONFIG_ESPTOOLPY_FLASHMODE_QOUT
     mode = ESP_ROM_SPIFLASH_QOUT_MODE;
 #else
     mode = ESP_ROM_SPIFLASH_QIO_MODE;

@@ -7,7 +7,10 @@
 #include "freertos/FreeRTOS.h"
 #include "esp_event_loop.h"
 #include "freertos/task.h"
+#include "freertos/portmacro.h"
 #include "esp_log.h"
+#include "driver/periph_ctrl.h"
+#include "driver/timer.h"
 
 #include "esp_event.h"
 #include "esp_event_private.h"
@@ -38,7 +41,7 @@ static const char* TAG = "test_event";
 
 #define TEST_TEARDOWN() \
         test_teardown(); \
-        vTaskDelay(pdMS_TO_TICKS(CONFIG_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER)); \
+        vTaskDelay(pdMS_TO_TICKS(CONFIG_ESP_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER)); \
         TEST_ASSERT_EQUAL(free_mem_before, heap_caps_get_free_size(MALLOC_CAP_DEFAULT));
 
 typedef struct {
@@ -114,7 +117,7 @@ static BaseType_t test_event_get_core()
 static esp_event_loop_args_t test_event_get_default_loop_args()
 {
     esp_event_loop_args_t loop_config = {
-        .queue_size = CONFIG_SYSTEM_EVENT_QUEUE_SIZE,
+        .queue_size = CONFIG_ESP_SYSTEM_EVENT_QUEUE_SIZE,
         .task_name = "loop",
         .task_priority = s_test_priority,
         .task_stack_size = 2048,
@@ -271,6 +274,48 @@ static void test_teardown()
     TEST_ASSERT_EQUAL(ESP_OK, esp_event_loop_delete_default());
 }
 
+#define TIMER_DIVIDER         16  //  Hardware timer clock divider
+#define TIMER_SCALE           (TIMER_BASE_CLK / TIMER_DIVIDER)  // convert counter value to seconds
+#define TIMER_INTERVAL0_SEC   (2.0) // sample test interval for the first timer
+
+#if CONFIG_ESP_EVENT_POST_FROM_ISR
+static void test_handler_post_from_isr(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
+{
+    SemaphoreHandle_t *sem = (SemaphoreHandle_t*) event_handler_arg;
+    // Event data is just the address value (maybe have been truncated due to casting).
+    int *data = (int*) event_data;
+    TEST_ASSERT_EQUAL(*data, (int) (*sem));
+    xSemaphoreGive(*sem);
+}
+#endif
+
+#if CONFIG_ESP_EVENT_POST_FROM_ISR
+void IRAM_ATTR test_event_on_timer_alarm(void* para)
+{
+    /* Retrieve the interrupt status and the counter value
+       from the timer that reported the interrupt */
+    TIMERG0.hw_timer[TIMER_0].update = 1;
+    uint64_t timer_counter_value =
+        ((uint64_t) TIMERG0.hw_timer[TIMER_0].cnt_high) << 32
+        | TIMERG0.hw_timer[TIMER_0].cnt_low;
+
+    TIMERG0.int_clr_timers.t0 = 1;
+    timer_counter_value += (uint64_t) (TIMER_INTERVAL0_SEC * TIMER_SCALE);
+    TIMERG0.hw_timer[TIMER_0].alarm_high = (uint32_t) (timer_counter_value >> 32);
+    TIMERG0.hw_timer[TIMER_0].alarm_low = (uint32_t) timer_counter_value;
+
+    int data = (int) para;
+    // Posting events with data more than 4 bytes should fail.
+    TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, esp_event_isr_post(s_test_base1, TEST_EVENT_BASE1_EV1, &data, 5, NULL));
+    // This should succeedd, as data is int-sized. The handler for the event checks that the passed event data
+    // is correct.
+    BaseType_t task_unblocked;
+    TEST_ASSERT_EQUAL(ESP_OK, esp_event_isr_post(s_test_base1, TEST_EVENT_BASE1_EV1, &data, sizeof(data), &task_unblocked));
+    if (task_unblocked == pdTRUE) {
+        portYIELD_FROM_ISR();
+    }
+}
+#endif //CONFIG_ESP_EVENT_POST_FROM_ISR
 
 TEST_CASE("can create and delete event loops", "[event]")
 {
@@ -813,17 +858,17 @@ static void performance_test(bool dedicated_task)
 
     TEST_TEARDOWN();
 
-#ifdef CONFIG_EVENT_LOOP_PROFILING
+#ifdef CONFIG_ESP_EVENT_LOOP_PROFILING
     ESP_LOGI(TAG, "events dispatched/second with profiling enabled: %d", average);
     // Enabling profiling will slow down event dispatch, so the set threshold
     // is not valid when it is enabled.
 #else
-#ifndef CONFIG_SPIRAM_SUPPORT
+#ifndef CONFIG_ESP32_SPIRAM_SUPPORT
     TEST_PERFORMANCE_GREATER_THAN(EVENT_DISPATCH, "%d", average);
 #else
     TEST_PERFORMANCE_GREATER_THAN(EVENT_DISPATCH_PSRAM, "%d", average);
-#endif // CONFIG_SPIRAM_SUPPORT
-#endif // CONFIG_EVENT_LOOP_PROFILING
+#endif // CONFIG_ESP32_SPIRAM_SUPPORT
+#endif // CONFIG_ESP_EVENT_LOOP_PROFILING
 }
 
 TEST_CASE("performance test - dedicated task", "[event]")
@@ -875,11 +920,11 @@ TEST_CASE("can post to loop from handler - dedicated task", "[event]")
     }
 
     TEST_ASSERT_EQUAL(ESP_ERR_TIMEOUT, esp_event_post_to(loop_w_task, s_test_base1, TEST_EVENT_BASE1_EV2, NULL, 0,
-                         pdMS_TO_TICKS(CONFIG_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER)));
+                         pdMS_TO_TICKS(CONFIG_ESP_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER)));
 
     xSemaphoreGive(arg.mutex);
 
-    vTaskDelay(pdMS_TO_TICKS(CONFIG_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER));
+    vTaskDelay(pdMS_TO_TICKS(CONFIG_ESP_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER));
 
     TEST_ASSERT_EQUAL(ESP_OK, esp_event_loop_delete(loop_w_task));
 
@@ -927,15 +972,15 @@ TEST_CASE("can post to loop from handler - no dedicated task", "[event]")
 
     TEST_ASSERT_EQUAL(ESP_OK, esp_event_post_to(loop_wo_task, s_test_base1, TEST_EVENT_BASE1_EV1, &loop_wo_task, sizeof(&loop_wo_task), portMAX_DELAY));
 
-    vTaskDelay(pdMS_TO_TICKS(CONFIG_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER));
+    vTaskDelay(pdMS_TO_TICKS(CONFIG_ESP_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER));
 
     // For loop without tasks, posting is more restrictive. Posting should wait until execution of handler finishes
     TEST_ASSERT_EQUAL(ESP_ERR_TIMEOUT, esp_event_post_to(loop_wo_task, s_test_base1, TEST_EVENT_BASE1_EV2, NULL, 0,
-                         pdMS_TO_TICKS(CONFIG_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER)));
+                         pdMS_TO_TICKS(CONFIG_ESP_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER)));
 
     xSemaphoreGive(arg.mutex);
 
-    vTaskDelay(pdMS_TO_TICKS(CONFIG_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER));
+    vTaskDelay(pdMS_TO_TICKS(CONFIG_ESP_INT_WDT_TIMEOUT_MS * TEST_CONFIG_WAIT_MULTIPLIER));
 
     vTaskDelete(mtask);
 
@@ -1111,7 +1156,76 @@ TEST_CASE("events are dispatched in the order they are registered", "[event]")
     TEST_TEARDOWN();
 }
 
-#ifdef CONFIG_EVENT_LOOP_PROFILING
+#if CONFIG_ESP_EVENT_POST_FROM_ISR
+TEST_CASE("can properly prepare event data posted to loop", "[event]")
+{
+    TEST_SETUP();
+
+    esp_event_loop_handle_t loop;
+    esp_event_loop_args_t loop_args = test_event_get_default_loop_args();
+
+    loop_args.task_name = NULL;
+    TEST_ASSERT_EQUAL(ESP_OK, esp_event_loop_create(&loop_args, &loop));
+
+    esp_event_post_instance_t post;
+    esp_event_loop_instance_t* loop_def = (esp_event_loop_instance_t*) loop;
+
+    TEST_ASSERT_EQUAL(ESP_OK, esp_event_post_to(loop, s_test_base1, TEST_EVENT_BASE1_EV1, NULL, 0, portMAX_DELAY));
+    TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(loop_def->queue, &post, portMAX_DELAY));
+    TEST_ASSERT_EQUAL(false, post.data_set);
+    TEST_ASSERT_EQUAL(false, post.data_allocated);
+    TEST_ASSERT_EQUAL(NULL, post.data.ptr);
+
+    int sample = 0;
+    TEST_ASSERT_EQUAL(ESP_OK, esp_event_isr_post_to(loop, s_test_base1, TEST_EVENT_BASE1_EV1, &sample, sizeof(sample), NULL));
+    TEST_ASSERT_EQUAL(pdTRUE, xQueueReceive(loop_def->queue, &post, portMAX_DELAY));
+    TEST_ASSERT_EQUAL(true, post.data_set);
+    TEST_ASSERT_EQUAL(false, post.data_allocated);
+    TEST_ASSERT_EQUAL(false, post.data.val);
+
+    TEST_ASSERT_EQUAL(ESP_OK, esp_event_loop_delete(loop));
+
+    TEST_TEARDOWN();
+}
+
+TEST_CASE("can post events from interrupt handler", "[event]")
+{
+    SemaphoreHandle_t sem = xSemaphoreCreateBinary();
+
+    /* Select and initialize basic parameters of the timer */
+    timer_config_t config;
+    config.divider = TIMER_DIVIDER;
+    config.counter_dir = TIMER_COUNT_UP;
+    config.counter_en = TIMER_PAUSE;
+    config.alarm_en = TIMER_ALARM_EN;
+    config.intr_type = TIMER_INTR_LEVEL;
+    config.auto_reload = false;
+    timer_init(TIMER_GROUP_0, TIMER_0, &config);
+
+    /* Timer's counter will initially start from value below.
+       Also, if auto_reload is set, this value will be automatically reload on alarm */
+    timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0x00000000ULL);
+
+    /* Configure the alarm value and the interrupt on alarm. */
+    timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, TIMER_INTERVAL0_SEC * TIMER_SCALE);
+    timer_enable_intr(TIMER_GROUP_0, TIMER_0);
+    timer_isr_register(TIMER_GROUP_0, TIMER_0, test_event_on_timer_alarm,
+        (void *) sem, ESP_INTR_FLAG_IRAM, NULL);
+
+    timer_start(TIMER_GROUP_0, TIMER_0);
+
+    TEST_SETUP();
+
+    TEST_ASSERT_EQUAL(ESP_OK, esp_event_handler_register(s_test_base1, TEST_EVENT_BASE1_EV1,
+                                                        test_handler_post_from_isr, &sem));
+
+    xSemaphoreTake(sem, portMAX_DELAY);
+
+    TEST_TEARDOWN();
+}
+#endif
+
+#ifdef CONFIG_ESP_EVENT_LOOP_PROFILING
 TEST_CASE("can dump event loop profile", "[event]")
 {
     /* this test aims to verify that dumping event loop statistics succeed */

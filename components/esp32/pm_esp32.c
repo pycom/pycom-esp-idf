@@ -21,8 +21,8 @@
 #include "esp_err.h"
 #include "esp_pm.h"
 #include "esp_log.h"
-#include "esp_crosscore_int.h"
-#include "esp_clk.h"
+#include "esp32/clk.h"
+#include "esp_private/crosscore_int.h"
 
 #include "soc/rtc.h"
 
@@ -31,10 +31,11 @@
 #include "freertos/xtensa_timer.h"
 #include "xtensa/core-macros.h"
 
-#include "pm_impl.h"
-#include "pm_trace.h"
-#include "esp_timer_impl.h"
+#include "esp_private/pm_impl.h"
+#include "esp_private/pm_trace.h"
+#include "esp_private/esp_timer_impl.h"
 #include "esp32/pm.h"
+#include "esp_sleep.h"
 
 /* CCOMPARE update timeout, in CPU cycles. Any value above ~600 cycles will work
  * for the purpose of detecting a deadlock.
@@ -180,15 +181,6 @@ esp_err_t esp_pm_configure(const void* vconfig)
 
     int min_freq_mhz = config->min_freq_mhz;
     int max_freq_mhz = config->max_freq_mhz;
-
-    if (min_freq_mhz == 0 && max_freq_mhz == 0) {
-        /* For compatibility, handle deprecated fields, min_cpu_freq and max_cpu_freq. */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        min_freq_mhz = rtc_clk_cpu_freq_value(config->min_cpu_freq) / MHZ;
-        max_freq_mhz = rtc_clk_cpu_freq_value(config->max_cpu_freq) / MHZ;
-#pragma GCC diagnostic pop
-    }
 
     if (min_freq_mhz > max_freq_mhz) {
         return ESP_ERR_INVALID_ARG;

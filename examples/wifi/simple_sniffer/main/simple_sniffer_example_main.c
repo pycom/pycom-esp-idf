@@ -13,7 +13,7 @@
 #include "argtable3/argtable3.h"
 #include "tcpip_adapter.h"
 #include "esp_console.h"
-#include "esp_event_loop.h"
+#include "esp_event.h"
 #include "esp_vfs_dev.h"
 #include "esp_vfs_fat.h"
 #include "esp_wifi.h"
@@ -27,14 +27,14 @@
 #include "cmd_decl.h"
 #include "sdkconfig.h"
 
-#if CONFIG_STORE_HISTORY
+#if CONFIG_SNIFFER_STORE_HISTORY
 #define HISTORY_MOUNT_POINT "/data"
 #define HISTORY_FILE_PATH HISTORY_MOUNT_POINT "/history.txt"
 #endif
 
 static const char *TAG = "example";
 
-#if CONFIG_STORE_HISTORY
+#if CONFIG_SNIFFER_STORE_HISTORY
 /* Initialize filesystem for command history store */
 static void initialize_filesystem()
 {
@@ -65,7 +65,7 @@ static void initialize_nvs()
 static void initialize_wifi()
 {
     tcpip_adapter_init();
-    ESP_ERROR_CHECK(esp_event_loop_init(NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
@@ -84,11 +84,11 @@ static void initialize_console()
     esp_vfs_dev_uart_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
 
     /* Install UART driver for interrupt-driven reads and writes */
-    ESP_ERROR_CHECK(uart_driver_install(CONFIG_CONSOLE_UART_NUM,
+    ESP_ERROR_CHECK(uart_driver_install(CONFIG_ESP_CONSOLE_UART_NUM,
                                         256, 0, 0, NULL, 0));
 
     /* Tell VFS to use UART driver */
-    esp_vfs_dev_uart_use_driver(CONFIG_CONSOLE_UART_NUM);
+    esp_vfs_dev_uart_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
 
     /* Initialize the console */
     esp_console_config_t console_config = {
@@ -113,7 +113,7 @@ static void initialize_console()
     /* Set command history size */
     linenoiseHistorySetMaxLen(100);
 
-#if CONFIG_STORE_HISTORY
+#if CONFIG_SNIFFER_STORE_HISTORY
     /* Load command history from filesystem */
     linenoiseHistoryLoad(HISTORY_FILE_PATH);
 #endif
@@ -223,7 +223,7 @@ void app_main(void)
 {
     initialize_nvs();
 
-#if CONFIG_STORE_HISTORY
+#if CONFIG_SNIFFER_STORE_HISTORY
     initialize_filesystem();
 #endif
 
@@ -286,7 +286,7 @@ void app_main(void)
         /* Add the command to the history */
         linenoiseHistoryAdd(line);
 
-#if CONFIG_STORE_HISTORY
+#if CONFIG_SNIFFER_STORE_HISTORY
         /* Save command history to filesystem */
         linenoiseHistorySave(HISTORY_FILE_PATH);
 #endif

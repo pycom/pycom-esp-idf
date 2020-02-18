@@ -2,7 +2,7 @@
 #include <xtensa/corebits.h>
 #include <xtensa/config/system.h>
 #include "freertos/xtensa_context.h"
-
+#include "esp_private/panic_reason.h"
 #include "sdkconfig.h"
 #include "soc/soc.h"
 #include "soc/dport_reg.h"
@@ -28,9 +28,7 @@ xt_highint5:
     bnez    a0, .read_apb_reg
 
 // Short interrupt
-    esync
-    rsr a0, CCOUNT
-    addi a0, a0, 27
+    movi a0, 0
     wsr a0, CCOMPARE2
     esync
 

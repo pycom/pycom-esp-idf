@@ -7,10 +7,12 @@ API Guides
 
    General Notes <general-notes>
    Build System <build-system>
-   Build System (CMake) <build-system-cmake>
+   Build System (Legacy GNU Make) <build-system-legacy>
    Error Handling <error-handling>
    Fatal Errors <fatal-errors>
+   Event Handling <event-handling>
    Deep Sleep Wake Stubs <deep-sleep-stub>
+   ESP-BLE-MESH <esp-ble-mesh/ble-mesh-index>
    ESP32 Core Dump <core_dump>
    Flash Encryption <../security/flash-encryption>
    FreeRTOS SMP Changes <freertos-smp>
@@ -21,9 +23,9 @@ API Guides
    Partition Tables <partition-tables>
    Secure Boot <../security/secure-boot>
    ULP Coprocessor <ulp>
-   ULP Coprocessor (CMake) <ulp-cmake>
+   ULP Coprocessor (Legacy GNU Make) <ulp-legacy>
    Unit Testing <unit-tests>
-   Unit Testing (CMake) <unit-tests-cmake>
+   Unit Testing (Legacy GNU Make) <unit-tests-legacy>
    Application Level Tracing <app_trace>
    Console Component <console>
    ROM debug console <romconsole>
@@ -33,3 +35,4 @@ API Guides
    BluFi <blufi>
    External SPI-connected RAM <external-ram>
    Linker Script Generation <linker-script-generation>
+   Tools <tools/index>

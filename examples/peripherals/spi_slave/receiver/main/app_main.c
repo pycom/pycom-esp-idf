@@ -26,11 +26,12 @@
 #include "esp_event.h"
 #include "esp_event_loop.h"
 #include "nvs_flash.h"
-#include "soc/rtc_cntl_reg.h"
-#include "rom/cache.h"
+#include "soc/rtc_periph.h"
+#include "esp32/rom/cache.h"
 #include "driver/spi_slave.h"
 #include "esp_log.h"
 #include "esp_spi_flash.h"
+#include "driver/gpio.h"
 
 
 
@@ -38,7 +39,7 @@
 /*
 SPI receiver (slave) example.
 
-This example is supposed to work together with the SPI sender. It uses the standard SPI pins (MISO, MOSI, SCLK, CS) to 
+This example is supposed to work together with the SPI sender. It uses the standard SPI pins (MISO, MOSI, SCLK, CS) to
 transmit data over in a full-duplex fashion, that is, while the master puts data on the MOSI pin, the slave puts its own
 data on the MISO pin.
 
@@ -108,8 +109,8 @@ void app_main()
     ret=spi_slave_initialize(HSPI_HOST, &buscfg, &slvcfg, 1);
     assert(ret==ESP_OK);
 
-    char sendbuf[129]="";
-    char recvbuf[129]="";
+    WORD_ALIGNED_ATTR char sendbuf[129]="";
+    WORD_ALIGNED_ATTR char recvbuf[129]="";
     memset(recvbuf, 0, 33);
     spi_slave_transaction_t t;
     memset(&t, 0, sizeof(t));

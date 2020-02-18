@@ -20,7 +20,6 @@
 #include "driver/sdmmc_host.h"
 #include "driver/sdspi_host.h"
 #include "driver/sdmmc_defs.h"
-#include "soc/gpio_reg.h"
 #include "sdmmc_cmd.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
@@ -29,7 +28,7 @@
 #include <unistd.h>
 
 // Can't test eMMC (slot 0) and PSRAM together
-#ifndef CONFIG_SPIRAM_SUPPORT
+#ifndef CONFIG_ESP32_SPIRAM_SUPPORT
 #define WITH_EMMC_TEST
 #endif
 

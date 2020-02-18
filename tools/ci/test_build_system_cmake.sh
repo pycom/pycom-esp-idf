@@ -58,14 +58,16 @@ function run_tests()
     BOOTLOADER_BINS="bootloader/bootloader.elf bootloader/bootloader.bin"
     APP_BINS="app-template.elf app-template.bin"
     PARTITION_BIN="partition_table/partition-table.bin"
-    IDF_COMPONENT_PREFIX="idf_component"
+    PHY_INIT_BIN="phy_init_data.bin"
+    BUILD_ARTIFACTS="project_description.json flasher_args.json config/kconfig_menus.json config/sdkconfig.json"
+    IDF_COMPONENT_PREFIX="__idf"
 
     print_status "Initial clean build"
     # if build fails here, everything fails
     idf.py build || exit $?
 
     # check all the expected build artifacts from the clean build
-    assert_built ${APP_BINS} ${BOOTLOADER_BINS} ${PARTITION_BIN}
+    assert_built ${APP_BINS} ${BOOTLOADER_BINS} ${PARTITION_BIN} ${BUILD_ARTIFACTS}
 
     print_status "Updating component source file rebuilds component"
     # touch a file & do a build
@@ -169,12 +171,12 @@ function run_tests()
     idf.py build
     take_build_snapshot
     sleep 1  # ninja may ignore if the timestamp delta is too low
-    cp ${IDF_PATH}/components/esp32/ld/esp32.rom.ld .
-    echo "/* (Build test comment) */" >> ${IDF_PATH}/components/esp32/ld/esp32.rom.ld
-    tail ${IDF_PATH}/components/esp32/ld/esp32.rom.ld
+    cp ${IDF_PATH}/components/esp_rom/esp32/ld/esp32.rom.ld .
+    echo "/* (Build test comment) */" >> ${IDF_PATH}/components/esp_rom/esp32/ld/esp32.rom.ld
+    tail ${IDF_PATH}/components/esp_rom/esp32/ld/esp32.rom.ld
     idf.py build || failure "Failed to rebuild with modified linker script"
     assert_rebuilt ${APP_BINS} ${BOOTLOADER_BINS}
-    mv esp32.rom.ld ${IDF_PATH}/components/esp32/ld/
+    mv esp32.rom.ld ${IDF_PATH}/components/esp_rom/esp32/ld/
 
     print_status "Updating app-only ld file should only re-link app"
     take_build_snapshot
@@ -275,6 +277,7 @@ function run_tests()
     # Next two tests will use this fake 'esp31b' target
     export fake_target=esp31b
     mkdir -p components/$fake_target
+    mkdir -p ${IDF_PATH}/components/xtensa/$fake_target/include
     touch components/$fake_target/CMakeLists.txt
     cp ${IDF_PATH}/tools/cmake/toolchain-esp32.cmake components/$fake_target/toolchain-$fake_target.cmake
     sed -i.bak '/cmake_minimum_required/ a\
@@ -295,6 +298,13 @@ function run_tests()
     idf.py -DIDF_TARGET=$fake_target reconfigure || failure "Failed to set target via idf.py"
     grep "CONFIG_IDF_TARGET=\"${fake_target}\"" sdkconfig || failure "Project not configured correctly using idf.py -D"
     grep "IDF_TARGET:STRING=${fake_target}" build/CMakeCache.txt || failure "IDF_TARGET not set in CMakeCache.txt using idf.py -D"
+
+    print_status "Can set target using -D as subcommand parameter for idf.py"
+    clean_build_dir
+    rm sdkconfig
+    idf.py reconfigure -DIDF_TARGET=$fake_target || failure "Failed to set target via idf.py subcommand -D parameter"
+    grep "CONFIG_IDF_TARGET=\"${fake_target}\"" sdkconfig || failure "Project not configured correctly using idf.py reconfigure -D"
+    grep "IDF_TARGET:STRING=${fake_target}" build/CMakeCache.txt || failure "IDF_TARGET not set in CMakeCache.txt using idf.py reconfigure -D"
 
     # Clean up modifications for the fake target
     mv CMakeLists.txt.bak CMakeLists.txt
@@ -340,15 +350,50 @@ function run_tests()
     rm sdkconfig;
     rm sdkconfig.defaults;
 
+    print_status "can build with phy_init_data"
+    idf.py clean > /dev/null;
+    idf.py fullclean > /dev/null;
+    rm -f sdkconfig.defaults;
+    rm -f sdkconfig;
+    echo "CONFIG_ESP32_PHY_INIT_DATA_IN_PARTITION=y" >> sdkconfig.defaults;
+    idf.py reconfigure > /dev/null;
+    idf.py build || failure "Failed to build with PHY_INIT_DATA"
+    assert_built ${APP_BINS} ${BOOTLOADER_BINS} ${PARTITION_BIN} ${PHY_INIT_BIN}
+    rm sdkconfig;
+    rm sdkconfig.defaults;
+
+    print_status "can build with ethernet component disabled"
+    idf.py clean > /dev/null;
+    idf.py fullclean > /dev/null;
+    rm -f sdkconfig.defaults;
+    rm -f sdkconfig;
+    echo "CONFIG_ETH_USE_SPI_ETHERNET=" >> sdkconfig.defaults;
+    echo "CONFIG_ETH_USE_ESP32_EMAC=" >> sdkconfig.defaults;
+    idf.py reconfigure > /dev/null;
+    idf.py build || failure "Failed to build with ethernet component disabled"
+    assert_built ${APP_BINS} ${BOOTLOADER_BINS} ${PARTITION_BIN}
+    rm sdkconfig;
+    rm sdkconfig.defaults;
+
     print_status "Building a project with CMake library imported and PSRAM workaround, all files compile with workaround"
+    # Test for libraries compiled within ESP-IDF
     rm -rf build
-    echo "CONFIG_SPIRAM_SUPPORT=y" >> sdkconfig.defaults
+    echo "CONFIG_ESP32_SPIRAM_SUPPORT=y" >> sdkconfig.defaults
     echo "CONFIG_SPIRAM_CACHE_WORKAROUND=y" >> sdkconfig.defaults
     # note: we do 'reconfigure' here, as we just need to run cmake
-    idf.py -C $IDF_PATH/examples/build_system/cmake/import_lib -B `pwd`/build reconfigure -D SDKCONFIG_DEFAULTS="`pwd`/sdkconfig.defaults"
+    idf.py -C $IDF_PATH/examples/build_system/cmake/import_lib -B `pwd`/build -D SDKCONFIG_DEFAULTS="`pwd`/sdkconfig.defaults" reconfigure
     grep -q '"command"' build/compile_commands.json || failure "compile_commands.json missing or has no no 'commands' in it"
     (grep '"command"' build/compile_commands.json | grep -v mfix-esp32-psram-cache-issue) && failure "All commands in compile_commands.json should use PSRAM cache workaround"
-    rm sdkconfig.defaults
+    rm -r sdkconfig.defaults build
+    # Test for external libraries in custom CMake projects with ESP-IDF components linked
+    mkdir build && touch build/sdkconfig
+    echo "CONFIG_ESP32_SPIRAM_SUPPORT=y" >> build/sdkconfig
+    echo "CONFIG_SPIRAM_CACHE_WORKAROUND=y" >> build/sdkconfig
+    # note: we just need to run cmake
+    (cd build && cmake $IDF_PATH/examples/build_system/cmake/idf_as_lib -DCMAKE_TOOLCHAIN_FILE=$IDF_PATH/tools/cmake/toolchain-esp32.cmake -DTARGET=esp32)
+    grep -q '"command"' build/compile_commands.json || failure "compile_commands.json missing or has no no 'commands' in it"
+    (grep '"command"' build/compile_commands.json | grep -v mfix-esp32-psram-cache-issue) && failure "All commands in compile_commands.json should use PSRAM cache workaround"
+    rm -r build
 
     print_status "Make sure a full build never runs '/usr/bin/env python' or similar"
     OLDPATH="$PATH"
@@ -365,6 +410,69 @@ EOF
     export PATH="$OLDPATH"
     rm ./python
 
+    print_status "Handling deprecated Kconfig options"
+    idf.py clean > /dev/null;
+    rm -f sdkconfig.defaults;
+    rm -f sdkconfig;
+    echo "" > ${IDF_PATH}/sdkconfig.rename;
+    idf.py build > /dev/null;
+    echo "CONFIG_TEST_OLD_OPTION=y" >> sdkconfig;
+    echo "CONFIG_TEST_OLD_OPTION CONFIG_TEST_NEW_OPTION" >> ${IDF_PATH}/sdkconfig.rename;
+    echo -e "\n\
+menu \"test\"\n\
+    config TEST_NEW_OPTION\n\
+        bool \"test\"\n\
+        default \"n\"\n\
+        help\n\
+            TEST_NEW_OPTION description\n\
+endmenu\n" >> ${IDF_PATH}/Kconfig;
+    idf.py build > /dev/null;
+    grep "CONFIG_TEST_OLD_OPTION=y" sdkconfig || failure "CONFIG_TEST_OLD_OPTION should be in sdkconfig for backward compatibility"
+    grep "CONFIG_TEST_NEW_OPTION=y" sdkconfig || failure "CONFIG_TEST_NEW_OPTION should be now in sdkconfig"
+    grep "#define CONFIG_TEST_NEW_OPTION 1" build/config/sdkconfig.h || failure "sdkconfig.h should contain the new macro"
+    grep "#define CONFIG_TEST_OLD_OPTION CONFIG_TEST_NEW_OPTION" build/config/sdkconfig.h || failure "sdkconfig.h should contain the compatibility macro"
+    grep "set(CONFIG_TEST_OLD_OPTION \"y\")" build/config/sdkconfig.cmake || failure "CONFIG_TEST_OLD_OPTION should be in auto.conf for backward compatibility"
+    grep "set(CONFIG_TEST_NEW_OPTION \"y\")" build/config/sdkconfig.cmake || failure "CONFIG_TEST_NEW_OPTION should be now in auto.conf"
+    rm -f sdkconfig sdkconfig.defaults
+    pushd ${IDF_PATH}
+    git checkout -- sdkconfig.rename Kconfig
+    popd
+
+    print_status "Handling deprecated Kconfig options in sdkconfig.defaults"
+    idf.py clean;
+    rm -f sdkconfig;
+    echo "CONFIG_TEST_OLD_OPTION=7" > sdkconfig.defaults;
+    echo "CONFIG_TEST_OLD_OPTION CONFIG_TEST_NEW_OPTION" > ${IDF_PATH}/sdkconfig.rename;
+    echo -e "\n\
+menu \"test\"\n\
+    config TEST_NEW_OPTION\n\
+        int \"TEST_NEW_OPTION\"\n\
+        range 0 10\n\
+        default 5\n\
+        help\n\
+            TEST_NEW_OPTION description\n\
+endmenu\n" >> ${IDF_PATH}/Kconfig;
+    idf.py build > /dev/null;
+    grep "CONFIG_TEST_OLD_OPTION=7" sdkconfig || failure "CONFIG_TEST_OLD_OPTION=7 should be in sdkconfig for backward compatibility"
+    grep "CONFIG_TEST_NEW_OPTION=7" sdkconfig || failure "CONFIG_TEST_NEW_OPTION=7 should be in sdkconfig"
+    rm -f sdkconfig.defaults;
+    pushd ${IDF_PATH}
+    git checkout -- sdkconfig.rename Kconfig
+    popd
+
+    print_status "Confserver can be invoked by idf.py"
+    echo '{"version": 1}' | idf.py confserver || failure "Couldn't load confserver"
+
+    print_status "Check ccache is used to build"
+    touch ccache && chmod +x ccache  # make sure that ccache is present for this test
+    (export PATH=$PWD:$PATH && idf.py --ccache reconfigure | grep "ccache will be used") || failure "ccache should be used when --cache is specified"
+    idf.py fullclean
+    (export PATH=$PWD:$PATH && idf.py reconfigure| grep -c "ccache will be used" | grep -wq 0) \
+        || failure "ccache should not be used even when present if --ccache is not specified"
+    (export PATH=$PWD:$PATH && idf.py --no-ccache reconfigure| grep -c "ccache will be used" | grep -wq 0) \
+        || failure "--no-ccache causes no issue for backward compatibility"
+    rm -f ccache
+
     print_status "Custom bootloader overrides original"
     clean_build_dir
     (mkdir components && cd components && cp -r $IDF_PATH/components/bootloader .)
@@ -372,13 +480,6 @@ EOF
     grep "$PWD/components/bootloader/subproject/main/bootloader_start.c" build/bootloader/compile_commands.json \
         || failure "Custom bootloader source files should be built instead of the original's"
     rm -rf components
-    
-    print_status "Check ccache is used to build when present"
-    touch ccache && chmod +x ccache  # make sure that ccache is present for this test
-    (export PATH=$PWD:$PATH && idf.py reconfigure | grep "ccache will be used for faster builds") || failure "ccache should be used when present"
-    (export PATH=$PWD:$PATH && idf.py reconfigure --no-ccache | grep -c "ccache will be used for faster builds" | grep -wq 0) \
-        || failure "ccache should not be used even when present if --no-ccache is specified"
-    rm -f ccache
 
     print_status "Empty directory not treated as a component"
     clean_build_dir
@@ -389,7 +490,7 @@ EOF
     print_status "If a component directory is added to COMPONENT_DIRS, its subdirectories are not added"
     clean_build_dir
     mkdir -p main/test
-    echo "register_component()" > main/test/CMakeLists.txt
+    echo "idf_component_register()" > main/test/CMakeLists.txt
     idf.py reconfigure
     ! grep "$PWD/main/test" $PWD/build/project_description.json || failure "COMPONENT_DIRS has added component subdirectory to the build"
     grep "$PWD/main" $PWD/build/project_description.json || failure "COMPONENT_DIRS parent component directory should be included in the build"
@@ -397,23 +498,69 @@ EOF
 
     print_status "If a component directory is added to COMPONENT_DIRS, its sibling directories are not added"
     clean_build_dir
-    mkdir -p mycomponents/mycomponent 
-    echo "register_component()" > mycomponents/mycomponent/CMakeLists.txt
+    mkdir -p mycomponents/mycomponent
+    echo "idf_component_register()" > mycomponents/mycomponent/CMakeLists.txt
     # first test by adding single component directory to EXTRA_COMPONENT_DIRS
     mkdir -p mycomponents/esp32
-    echo "register_component()" > mycomponents/esp32/CMakeLists.txt
-    idf.py reconfigure -DEXTRA_COMPONENT_DIRS=$PWD/mycomponents/mycomponent 
+    echo "idf_component_register()" > mycomponents/esp32/CMakeLists.txt
+    idf.py -DEXTRA_COMPONENT_DIRS=$PWD/mycomponents/mycomponent reconfigure
     ! grep "$PWD/mycomponents/esp32" $PWD/build/project_description.json || failure "EXTRA_COMPONENT_DIRS has added a sibling directory"
     grep "$PWD/mycomponents/mycomponent" $PWD/build/project_description.json || failure "EXTRA_COMPONENT_DIRS valid sibling directory should be in the build"
     rm -rf mycomponents/esp32
     # now the same thing, but add a components directory
     mkdir -p esp32
-    echo "register_component()" > esp32/CMakeLists.txt
-    idf.py reconfigure -DEXTRA_COMPONENT_DIRS=$PWD/mycomponents 
+    echo "idf_component_register()" > esp32/CMakeLists.txt
+    idf.py -DEXTRA_COMPONENT_DIRS=$PWD/mycomponents reconfigure
     ! grep "$PWD/esp32" $PWD/build/project_description.json || failure "EXTRA_COMPONENT_DIRS has added a sibling directory"
     grep "$PWD/mycomponents/mycomponent" $PWD/build/project_description.json || failure "EXTRA_COMPONENT_DIRS valid sibling directory should be in the build"
     rm -rf esp32
     rm -rf mycomponents
+
+    # idf.py global and subcommand parameters
+    print_status "Cannot set -D twice: for command and subcommand of idf.py (with different values)"
+    idf.py -DAAA=BBB build -DAAA=BBB -DCCC=EEE
+    if [ $? -eq 0 ]; then
+        failure "It shouldn't be allowed to set -D twice (globally and for subcommand) with different set of options"
+    fi
+
+    print_status "Can set -D twice: globally and for subcommand, only if values are the same"
+    idf.py -DAAA=BBB -DCCC=EEE build -DAAA=BBB -DCCC=EEE || failure "It should be allowed to set -D twice (globally and for subcommand) if values are the same"
+
+    # idf.py subcommand options, (using monitor with as example)
+    print_status "Can set options to subcommands: print_filter for monitor"
+    mv ${IDF_PATH}/tools/idf_monitor.py ${IDF_PATH}/tools/idf_monitor.py.tmp
+    echo "import sys;print(sys.argv[1:])" > ${IDF_PATH}/tools/idf_monitor.py
+    idf.py build || "Failed to build project"
+    idf.py monitor --print-filter="*:I" -p tty.fake | grep "'--print_filter', '\*:I'" || failure "It should process options for subcommands (and pass print-filter to idf_monitor.py)"
+    mv ${IDF_PATH}/tools/idf_monitor.py.tmp ${IDF_PATH}/tools/idf_monitor.py
+
+    print_status "Fail on build time works"
+    clean_build_dir
+    cp CMakeLists.txt CMakeLists.txt.bak
+    printf "\nif(NOT EXISTS \"\${CMAKE_CURRENT_LIST_DIR}/hello.txt\") \nfail_at_build_time(test_file \"hello.txt does not exists\") \nendif()" >> CMakeLists.txt
+    ! idf.py build || failure "Build should fail if requirements are not satisfied"
+    touch hello.txt
+    idf.py build || failure "Build succeeds once requirements are satisfied"
+    rm -rf hello.txt CMakeLists.txt
+    mv CMakeLists.txt.bak CMakeLists.txt
+    rm -rf CMakeLists.txt.bak
+
+    print_status "Component properties are set"
+    clean_build_dir
+    cp CMakeLists.txt CMakeLists.txt.bak
+    printf "\nidf_component_get_property(srcs main SRCS)\nmessage(STATUS SRCS:\${srcs})" >> CMakeLists.txt
+    (idf.py reconfigure | grep "SRCS:$(realpath main/main.c)") || failure "Component properties should be set"
+    rm -rf CMakeLists.txt
+    mv CMakeLists.txt.bak CMakeLists.txt
+    rm -rf CMakeLists.txt.bak
+
+    print_status "Supports git worktree"
+    clean_build_dir
+    git branch test_build_system
+    git worktree add ../esp-idf-template-test test_build_system
+    diff <(idf.py reconfigure | grep "Project version") <(cd ../esp-idf-template-test && idf.py reconfigure | grep "Project version") \
+        || failure "Version on worktree should have been properly resolved"
+    git worktree remove ../esp-idf-template-test
 
     print_status "All tests completed"
     if [ -n "${FAILURES}" ]; then

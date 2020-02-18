@@ -17,18 +17,17 @@
 #include "esp_system.h"
 #include "esp_attr.h"
 #include "esp_wifi.h"
-#include "esp_wifi_internal.h"
+#include "esp_private/wifi.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
-#include "rom/efuse.h"
-#include "rom/cache.h"
-#include "rom/uart.h"
+#include "esp32/rom/efuse.h"
+#include "esp32/rom/cache.h"
+#include "esp32/rom/uart.h"
 #include "soc/dport_reg.h"
-#include "soc/gpio_reg.h"
-#include "soc/efuse_reg.h"
-#include "soc/rtc_cntl_reg.h"
-#include "soc/timer_group_reg.h"
-#include "soc/timer_group_struct.h"
+#include "soc/gpio_periph.h"
+#include "soc/efuse_periph.h"
+#include "soc/rtc_periph.h"
+#include "soc/timer_periph.h"
 #include "soc/cpu.h"
 #include "soc/rtc.h"
 #include "soc/rtc_wdt.h"
@@ -36,7 +35,7 @@
 #include "freertos/task.h"
 #include "freertos/xtensa_api.h"
 #include "esp_heap_caps.h"
-#include "esp_system_internal.h"
+#include "esp_private/system_internal.h"
 #include "esp_efuse.h"
 #include "esp_efuse_table.h"
 
@@ -46,10 +45,6 @@ static uint8_t base_mac_addr[6] = { 0 };
 
 #define SHUTDOWN_HANDLERS_NO 2
 static shutdown_handler_t shutdown_handlers[SHUTDOWN_HANDLERS_NO];
-
-void system_init()
-{
-}
 
 esp_err_t esp_base_mac_addr_set(uint8_t *mac)
 {
@@ -121,9 +116,6 @@ esp_err_t esp_efuse_mac_get_default(uint8_t* mac)
     }
     return ESP_OK;
 }
-
-esp_err_t system_efuse_read_mac(uint8_t *mac) __attribute__((alias("esp_efuse_mac_get_default")));
-esp_err_t esp_efuse_read_mac(uint8_t *mac) __attribute__((alias("esp_efuse_mac_get_default")));
 
 esp_err_t esp_derive_local_mac(uint8_t* local_mac, const uint8_t* universal_mac)
 {
@@ -211,14 +203,26 @@ esp_err_t esp_read_mac(uint8_t* mac, esp_mac_type_t type)
 
 esp_err_t esp_register_shutdown_handler(shutdown_handler_t handler)
 {
-     int i;
-     for (i = 0; i < SHUTDOWN_HANDLERS_NO; i++) {
-	  if (shutdown_handlers[i] == NULL) {
-	       shutdown_handlers[i] = handler;
-	       return ESP_OK;
-	  }
-     }
-     return ESP_FAIL;
+    for (int i = 0; i < SHUTDOWN_HANDLERS_NO; i++) {
+        if (shutdown_handlers[i] == handler) {
+            return ESP_ERR_INVALID_STATE;
+        } else if (shutdown_handlers[i] == NULL) {
+            shutdown_handlers[i] = handler;
+            return ESP_OK;
+        }
+    }
+    return ESP_ERR_NO_MEM;
+}
+
+esp_err_t esp_unregister_shutdown_handler(shutdown_handler_t handler)
+{
+    for (int i = 0; i < SHUTDOWN_HANDLERS_NO; i++) {
+        if (shutdown_handlers[i] == handler) {
+            shutdown_handlers[i] = NULL;
+            return ESP_OK;
+        }
+    }
+    return ESP_ERR_INVALID_STATE;
 }
 
 void esp_restart_noos() __attribute__ ((noreturn));
@@ -331,8 +335,6 @@ void IRAM_ATTR esp_restart_noos()
     }
 }
 
-void system_restart(void) __attribute__((alias("esp_restart")));
-
 uint32_t esp_get_free_heap_size( void )
 {
     return heap_caps_get_free_size( MALLOC_CAP_DEFAULT );
@@ -341,13 +343,6 @@ uint32_t esp_get_free_heap_size( void )
 uint32_t esp_get_minimum_free_heap_size( void )
 {
     return heap_caps_get_minimum_free_size( MALLOC_CAP_DEFAULT );
-}
-
-uint32_t system_get_free_heap_size(void) __attribute__((alias("esp_get_free_heap_size")));
-
-const char* system_get_sdk_version(void)
-{
-    return "master";
 }
 
 const char* esp_get_idf_version(void)
@@ -378,12 +373,4 @@ void esp_chip_info(esp_chip_info_t* out_info)
         package == EFUSE_RD_CHIP_VER_PKG_ESP32PICOD4) {
         out_info->features |= CHIP_FEATURE_EMB_FLASH;
     }
-}
-IRAM_ATTR uint32_t esp_get_revision(void)
-{
-    uint32_t reg = REG_READ(EFUSE_BLK0_RDATA3_REG);
-    if ((reg & EFUSE_RD_CHIP_VER_REV1_M) != 0) {
-        return 1;
-    }
-    return 0;
 }

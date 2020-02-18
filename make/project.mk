@@ -126,7 +126,7 @@ export PROJECT_PATH
 endif
 
 # A list of the "common" makefiles, to use as a target dependency
-COMMON_MAKEFILES := $(abspath $(IDF_PATH)/make/project.mk $(IDF_PATH)/make/common.mk $(IDF_PATH)/make/component_wrapper.mk $(firstword $(MAKEFILE_LIST)))
+COMMON_MAKEFILES := $(abspath $(IDF_PATH)/make/project.mk $(IDF_PATH)/make/common.mk $(IDF_PATH)/make/version.mk $(IDF_PATH)/make/component_wrapper.mk $(firstword $(MAKEFILE_LIST)))
 export COMMON_MAKEFILES
 
 # The directory where we put all objects/libraries/binaries. The project Makefile can
@@ -144,7 +144,7 @@ EXTRA_COMPONENT_DIRS ?=
 COMPONENT_DIRS := $(PROJECT_PATH)/components $(EXTRA_COMPONENT_DIRS) $(IDF_PATH)/components $(PROJECT_PATH)/main
 endif
 # Make sure that every directory in the list is an absolute path without trailing slash.
-# This is necessary to split COMPONENT_DIRS into SINGLE_COMPONENT_DIRS and MULTI_COMPONENT_DIRS below. 
+# This is necessary to split COMPONENT_DIRS into SINGLE_COMPONENT_DIRS and MULTI_COMPONENT_DIRS below.
 COMPONENT_DIRS := $(foreach cd,$(COMPONENT_DIRS),$(abspath $(cd)))
 export COMPONENT_DIRS
 
@@ -153,11 +153,11 @@ $(warning SRCDIRS variable is deprecated. These paths can be added to EXTRA_COMP
 COMPONENT_DIRS += $(abspath $(SRCDIRS))
 endif
 
-# List of component directories, i.e. directories which contain a component.mk file 
+# List of component directories, i.e. directories which contain a component.mk file
 SINGLE_COMPONENT_DIRS := $(abspath $(dir $(dir $(foreach cd,$(COMPONENT_DIRS),\
                              $(wildcard $(cd)/component.mk)))))
 
-# List of components directories, i.e. directories which may contain components 
+# List of components directories, i.e. directories which may contain components
 MULTI_COMPONENT_DIRS := $(filter-out $(SINGLE_COMPONENT_DIRS),$(COMPONENT_DIRS))
 
 # The project Makefile can define a list of components, but if it does not do this
@@ -219,6 +219,66 @@ endif
 TEST_COMPONENT_PATHS := $(foreach comp,$(TEST_COMPONENTS_LIST),$(firstword $(foreach dir,$(COMPONENT_DIRS),$(wildcard $(dir)/$(comp)/test))))
 TEST_COMPONENT_NAMES := $(foreach comp,$(TEST_COMPONENT_PATHS),$(lastword $(subst /, ,$(dir $(comp))))_test)
 
+# Set default values that were not previously defined
+CC ?= gcc
+LD ?= ld
+AR ?= ar
+OBJCOPY ?= objcopy
+OBJDUMP ?= objdump
+SIZE ?= size
+
+# Set host compiler and binutils
+HOSTCC := $(CC)
+HOSTLD := $(LD)
+HOSTAR := $(AR)
+HOSTOBJCOPY := $(OBJCOPY)
+HOSTSIZE := $(SIZE)
+export HOSTCC HOSTLD HOSTAR HOSTOBJCOPY SIZE
+
+# Set variables common to both project & component (includes config)
+include $(IDF_PATH)/make/common.mk
+
+# Notify users when some of the required python packages are not installed
+.PHONY: check_python_dependencies
+check_python_dependencies:
+ifndef IS_BOOTLOADER_BUILD
+	$(PYTHON) $(IDF_PATH)/tools/check_python_dependencies.py
+endif
+
+# include the config generation targets (dependency: COMPONENT_PATHS)
+#
+# (bootloader build doesn't need this, config is exported from top-level)
+ifndef IS_BOOTLOADER_BUILD
+include $(IDF_PATH)/make/project_config.mk
+endif
+
+#####################################################################
+# If SDKCONFIG_MAKEFILE hasn't been generated yet (detected if no
+# CONFIG_IDF_TARGET), stop the Makefile pass now to allow config to
+# be created. make will build SDKCONFIG_MAKEFILE and restart,
+# reevaluating everything from the top.
+#
+# This is important so config is present when the
+# component_project_vars.mk files are generated.
+#
+# (After both files exist, if SDKCONFIG_MAKEFILE is updated then the
+# normal dependency relationship will trigger a regeneration of
+# component_project_vars.mk)
+#
+#####################################################################
+ifndef CONFIG_IDF_TARGET
+ifdef IS_BOOTLOADER_BUILD  # we expect config to always have been expanded by top level project
+$(error "Internal error: config has not been passed correctly to bootloader subproject")
+endif
+ifdef MAKE_RESTARTS
+$(warning "Config was not evaluated after the first pass of 'make'")
+endif
+else  # CONFIG_IDF_TARGET
+#####################################################################
+# Config is valid, can include rest of the Project Makefile
+#####################################################################
+
+
 # Initialise project-wide variables which can be added to by
 # each component.
 #
@@ -250,9 +310,6 @@ COMPONENT_INCLUDES += $(abspath $(BUILD_DIR_BASE)/include/)
 
 export COMPONENT_INCLUDES
 
-# Set variables common to both project & component
-include $(IDF_PATH)/make/common.mk
-
 all:
 ifdef CONFIG_SECURE_BOOT_ENABLED
 	@echo "(Secure boot enabled, so bootloader not flashed automatically. See 'make bootloader' output)"
@@ -272,7 +329,7 @@ endif
 ifeq ("$(wildcard ${IDF_PATH}/version.txt)","")
 IDF_VER_T := $(shell cd ${IDF_PATH} && git describe --always --tags --dirty)
 else
-IDF_VER_T := `cat ${IDF_PATH}/version.txt`
+IDF_VER_T := $(shell cat ${IDF_PATH}/version.txt)
 endif
 IDF_VER := $(shell echo "$(IDF_VER_T)"  | cut -c 1-31)
 
@@ -318,7 +375,7 @@ COMMON_WARNING_FLAGS = -Wall -Werror=all \
 	-Wextra \
 	-Wno-unused-parameter -Wno-sign-compare
 
-ifdef CONFIG_DISABLE_GCC8_WARNINGS
+ifdef CONFIG_COMPILER_DISABLE_GCC8_WARNINGS
 COMMON_WARNING_FLAGS += -Wno-parentheses \
 	-Wno-sizeof-pointer-memaccess \
 	-Wno-clobbered \
@@ -334,12 +391,13 @@ COMMON_WARNING_FLAGS += -Wno-parentheses \
 	-Wno-int-in-bool-context
 endif
 
-ifdef CONFIG_WARN_WRITE_STRINGS
+ifdef CONFIG_COMPILER_WARN_WRITE_STRINGS
 COMMON_WARNING_FLAGS += -Wwrite-strings
-endif #CONFIG_WARN_WRITE_STRINGS
+endif #CONFIG_COMPILER_WARN_WRITE_STRINGS
 
 # Flags which control code generation and dependency generation, both for C and C++
 COMMON_FLAGS = \
+	-Wno-frame-address \
 	-ffunction-sections -fdata-sections \
 	-fstrict-volatile-bitfields \
 	-mlongcalls \
@@ -347,27 +405,30 @@ COMMON_FLAGS = \
 
 ifndef IS_BOOTLOADER_BUILD
 # stack protection (only one option can be selected in menuconfig)
-ifdef CONFIG_STACK_CHECK_NORM
+ifdef CONFIG_COMPILER_STACK_CHECK_MODE_NORM
 COMMON_FLAGS += -fstack-protector
 endif
-ifdef CONFIG_STACK_CHECK_STRONG
+ifdef CONFIG_COMPILER_STACK_CHECK_MODE_STRONG
 COMMON_FLAGS += -fstack-protector-strong
 endif
-ifdef CONFIG_STACK_CHECK_ALL
+ifdef CONFIG_COMPILER_STACK_CHECK_MODE_ALL
 COMMON_FLAGS += -fstack-protector-all
 endif
 endif
 
 # Optimization flags are set based on menuconfig choice
-ifdef CONFIG_OPTIMIZATION_LEVEL_RELEASE
-OPTIMIZATION_FLAGS = -Os
+ifdef CONFIG_COMPILER_OPTIMIZATION_LEVEL_RELEASE
+OPTIMIZATION_FLAGS = -Os -freorder-blocks
 else
 OPTIMIZATION_FLAGS = -Og
 endif
 
-ifdef CONFIG_OPTIMIZATION_ASSERTIONS_DISABLED
+ifdef CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_DISABLE
 CPPFLAGS += -DNDEBUG
 endif
+
+# IDF uses some GNU extension from libc
+CPPFLAGS += -D_GNU_SOURCE
 
 # Enable generation of debugging symbols
 # (we generate even in Release mode, as this has no impact on final binary size.)
@@ -391,48 +452,38 @@ CXXFLAGS ?=
 EXTRA_CXXFLAGS ?=
 CXXFLAGS := $(strip \
 	-std=gnu++11 \
-	-fno-rtti \
 	$(OPTIMIZATION_FLAGS) $(DEBUG_FLAGS) \
 	$(COMMON_FLAGS) \
 	$(COMMON_WARNING_FLAGS) \
 	$(CXXFLAGS) \
 	$(EXTRA_CXXFLAGS))
 
-ifdef CONFIG_CXX_EXCEPTIONS
+ifdef CONFIG_COMPILER_CXX_EXCEPTIONS
 CXXFLAGS += -fexceptions
 else
 CXXFLAGS += -fno-exceptions
+endif
+
+ifdef CONFIG_COMPILER_CXX_RTTI
+CXXFLAGS += -frtti
+else
+CXXFLAGS += -fno-rtti
+LDFLAGS += -fno-rtti
 endif
 
 ARFLAGS := cru
 
 export CFLAGS CPPFLAGS CXXFLAGS ARFLAGS
 
-# Set default values that were not previously defined
-CC ?= gcc
-LD ?= ld
-AR ?= ar
-OBJCOPY ?= objcopy
-OBJDUMP ?= objdump
-SIZE ?= size
-
-# Set host compiler and binutils
-HOSTCC := $(CC)
-HOSTLD := $(LD)
-HOSTAR := $(AR)
-HOSTOBJCOPY := $(OBJCOPY)
-HOSTSIZE := $(SIZE)
-export HOSTCC HOSTLD HOSTAR HOSTOBJCOPY SIZE
-
 # Set target compiler. Defaults to whatever the user has
 # configured as prefix + ye olde gcc commands
-CC := $(call dequote,$(CONFIG_TOOLPREFIX))gcc
-CXX := $(call dequote,$(CONFIG_TOOLPREFIX))c++
-LD := $(call dequote,$(CONFIG_TOOLPREFIX))ld
-AR := $(call dequote,$(CONFIG_TOOLPREFIX))ar
-OBJCOPY := $(call dequote,$(CONFIG_TOOLPREFIX))objcopy
-OBJDUMP := $(call dequote,$(CONFIG_TOOLPREFIX))objdump
-SIZE := $(call dequote,$(CONFIG_TOOLPREFIX))size
+CC := $(call dequote,$(CONFIG_SDK_TOOLPREFIX))gcc
+CXX := $(call dequote,$(CONFIG_SDK_TOOLPREFIX))c++
+LD := $(call dequote,$(CONFIG_SDK_TOOLPREFIX))ld
+AR := $(call dequote,$(CONFIG_SDK_TOOLPREFIX))ar
+OBJCOPY := $(call dequote,$(CONFIG_SDK_TOOLPREFIX))objcopy
+OBJDUMP := $(call dequote,$(CONFIG_SDK_TOOLPREFIX))objdump
+SIZE := $(call dequote,$(CONFIG_SDK_TOOLPREFIX))size
 export CC CXX LD AR OBJCOPY OBJDUMP SIZE
 
 COMPILER_VERSION_STR := $(shell $(CC) -dumpversion)
@@ -449,13 +500,6 @@ APP_ELF:=$(BUILD_DIR_BASE)/$(PROJECT_NAME).elf
 APP_MAP:=$(APP_ELF:.elf=.map)
 APP_BIN:=$(APP_ELF:.elf=.bin)
 
-# once we know component paths, we can include the config generation targets
-#
-# (bootloader build doesn't need this, config is exported from top-level)
-ifndef IS_BOOTLOADER_BUILD
-include $(IDF_PATH)/make/project_config.mk
-endif
-
 # include linker script generation utils makefile
 include $(IDF_PATH)/make/ldgen.mk
 
@@ -464,7 +508,9 @@ $(eval $(call ldgen_create_commands))
 # Include any Makefile.projbuild file letting components add
 # configuration at the project level
 define includeProjBuildMakefile
-$(if $(V),$$(info including $(1)/Makefile.projbuild...))
+ifeq ("$(V)","1")
+$$(info including $(1)/Makefile.projbuild...)
+endif
 COMPONENT_PATH := $(1)
 include $(1)/Makefile.projbuild
 endef
@@ -491,14 +537,6 @@ ifeq ("$(CONFIG_SECURE_BOOT_ENABLED)$(CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES)"
 else
 	@echo "App built. Default flash app command is:"
 	@echo $(ESPTOOLPY_WRITE_FLASH) $(APP_OFFSET) $(APP_BIN)
-endif
-
-.PHONY: check_python_dependencies
-
-# Notify users when some of the required python packages are not installed
-check_python_dependencies:
-ifndef IS_BOOTLOADER_BUILD
-	$(PYTHON) $(IDF_PATH)/tools/check_python_dependencies.py
 endif
 
 all_binaries: $(APP_BIN)
@@ -582,7 +620,16 @@ clean: app-clean bootloader-clean config-clean ldgen-clean
 # or out of date, and exit if so. Components can add paths to this variable.
 #
 # This only works for components inside IDF_PATH
+#
+# For internal use:
+# IDF_SKIP_CHECK_SUBMODULES may be set in the environment to skip the submodule check.
+# This can be used e.g. in CI when submodules are checked out by different means.
+IDF_SKIP_CHECK_SUBMODULES ?= 0
+
 check-submodules:
+ifeq ($(IDF_SKIP_CHECK_SUBMODULES),1)
+	@echo "skip submodule check on internal CI"
+else
 # Check if .gitmodules exists, otherwise skip submodule check, assuming flattened structure
 ifneq ("$(wildcard ${IDF_PATH}/.gitmodules)","")
 
@@ -610,7 +657,7 @@ endef
 # so the argument is suitable for use with 'git submodule' commands
 $(foreach submodule,$(subst $(IDF_PATH)/,,$(filter $(IDF_PATH)/%,$(COMPONENT_SUBMODULES))),$(eval $(call GenerateSubmoduleCheckTarget,$(submodule))))
 endif # End check for .gitmodules existence
-
+endif # End check for IDF_SKIP_CHECK_SUBMODULES
 
 # PHONY target to list components in the build and their paths
 list-components:
@@ -635,7 +682,7 @@ print_flash_cmd: partition_table_get_info blank_ota_data
 # The output normally looks as follows
 #     xtensa-esp32-elf-gcc (crosstool-NG crosstool-ng-1.22.0-80-g6c4433a) 5.2.0
 # The part in brackets is extracted into TOOLCHAIN_COMMIT_DESC variable
-ifdef CONFIG_TOOLPREFIX
+ifdef CONFIG_SDK_TOOLPREFIX
 ifndef MAKE_RESTARTS
 
 TOOLCHAIN_HEADER := $(shell $(CC) --version | head -1)
@@ -674,4 +721,8 @@ $(info WARNING: Failed to find Xtensa toolchain, may need to alter PATH or set o
 endif # TOOLCHAIN_COMMIT_DESC
 
 endif #MAKE_RESTARTS
-endif #CONFIG_TOOLPREFIX
+endif #CONFIG_SDK_TOOLPREFIX
+
+#####################################################################
+endif #CONFIG_IDF_TARGET
+

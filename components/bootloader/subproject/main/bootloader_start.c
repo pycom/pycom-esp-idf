@@ -16,15 +16,15 @@
 #include <stdbool.h>
 
 #include "esp_log.h"
-#include "rom/gpio.h"
-#include "rom/spi_flash.h"
+#include "esp32/rom/gpio.h"
+#include "esp32/rom/spi_flash.h"
 #include "bootloader_config.h"
 #include "bootloader_init.h"
 #include "bootloader_utility.h"
 #include "bootloader_common.h"
 #include "sdkconfig.h"
 #include "esp_image_format.h"
-#include "rom/rtc.h"
+#include "esp32/rom/rtc.h"
 
 static const char* TAG = "boot";
 
@@ -113,3 +113,9 @@ static int selected_boot_partition(const bootloader_state_t *bs)
     }
     return boot_index;
 }
+
+// Return global reent struct if any newlib functions are linked to bootloader
+struct _reent* __getreent() {
+    return _GLOBAL_REENT;
+}
+

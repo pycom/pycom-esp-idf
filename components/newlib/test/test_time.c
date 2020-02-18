@@ -4,13 +4,12 @@
 #include "driver/adc.h"
 #include <time.h>
 #include <sys/time.h>
-#include "soc/rtc_cntl_reg.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "sdkconfig.h"
 #include "soc/rtc.h"
-#include "esp_clk.h"
+#include "esp32/clk.h"
 #include "esp_system.h"
 #include "test_utils.h"
 
@@ -339,7 +338,7 @@ void test_posix_timers_clock (void)
     printf("WITH_RTC    ");
 #endif
 
-#ifdef CONFIG_ESP32_RTC_CLOCK_SOURCE_EXTERNAL_CRYSTAL
+#ifdef CONFIG_ESP32_RTC_CLK_SRC_EXT_CRYS
     printf("External (crystal) Frequency = %d Hz\n", rtc_clk_slow_freq_get_hz());
 #else
     printf("Internal Frequency = %d Hz\n", rtc_clk_slow_freq_get_hz());

@@ -27,17 +27,14 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <sys/param.h>
-#include "rom/bigint.h"
-#include "soc/hwcrypto_reg.h"
+#include "esp32/rom/bigint.h"
+#include "soc/hwcrypto_periph.h"
 #include "esp_system.h"
 #include "esp_log.h"
-#include "esp_intr.h"
 #include "esp_intr_alloc.h"
 #include "esp_attr.h"
 
 #include <mbedtls/bignum.h>
-
-#include "soc/dport_reg.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"

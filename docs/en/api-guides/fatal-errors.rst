@@ -1,5 +1,6 @@
 Fatal Errors
 ============
+:link_to_translation:`zh_CN:[中文]`
 
 Overview
 --------
@@ -11,7 +12,7 @@ In certain situations, execution of the program can not be continued in a well d
 - System level checks and safeguards:
 
   - :doc:`Interrupt watchdog <../api-reference/system/wdts>` timeout
-  - :doc:`Task watchdog <../api-reference/system/wdts>` timeout (only fatal if :ref:`CONFIG_TASK_WDT_PANIC` is set)
+  - :doc:`Task watchdog <../api-reference/system/wdts>` timeout (only fatal if :ref:`CONFIG_ESP_TASK_WDT_PANIC` is set)
   - Cache access error
   - Brownout detection event
   - Stack overflow
@@ -64,27 +65,30 @@ Behavior of panic handler is affected by two other configuration options.
 The following diagram illustrates panic handler behavior:
 
 .. blockdiag::
-    :caption: Panic Handler Flowchart
+    :scale: 100%
+    :caption: Panic Handler Flowchart (click to enlarge)
     :align: center
     
     blockdiag panic-handler {
         orientation = portrait;
         edge_layout = flowchart;
         default_group_color = white;
+        node_width = 160;
+        node_height = 60;
 
         cpu_exception [label = "CPU Exception", shape=roundedbox];
         sys_check [label = "Cache error,\nInterrupt WDT,\nabort()", shape=roundedbox];
-        check_ocd [label = "JTAG debugger\nconnected?", shape=diamond, width=160, height=80];
+        check_ocd [label = "JTAG debugger\nconnected?", shape=diamond, height=80];
         print_error_cause [label = "Print error/\nexception cause"];
         use_jtag [label = "Send signal to\nJTAG debugger", shape=roundedbox];
         dump_registers [label = "Print registers\nand backtrace"];
-        check_coredump [label = "Core dump\nenabled?", shape=flowchart.condition];
+        check_coredump [label = "Core dump\nenabled?", shape=diamond, height=80];
         do_coredump [label = "Core dump\nto UART or Flash"];
-        check_gdbstub [label = "GDB Stub\nenabled?", shape=flowchart.condition];
+        check_gdbstub [label = "GDB Stub\nenabled?", shape=diamond, height=80];
         do_gdbstub [label = "Start GDB Stub", shape=roundedbox];
         halt [label = "Halt", shape=roundedbox];
         reboot [label = "Reboot", shape=roundedbox];
-        check_halt [label = "Halt?", shape=flowchart.condition];
+        check_halt [label = "Halt?", shape=diamond, height=80];
 
         group {cpu_exception, sys_check};
 
@@ -126,7 +130,7 @@ In some cases, such as interrupt watchdog timeout, panic handler may print addit
 
 Backtrace line contains PC:SP pairs, where PC is the Program Counter and SP is Stack Pointer, for each stack frame of the current task. If a fatal error happens inside an ISR, the backtrace may include PC:SP pairs both from the task which was interrupted, and from the ISR.
 
-If :doc:`IDF Monitor <../get-started/idf-monitor>` is used, Program Counter values will be converted to code locations (function name, file name, and line number), and the output will be annotated with additional lines::
+If :doc:`IDF Monitor <tools/idf-monitor>` is used, Program Counter values will be converted to code locations (function name, file name, and line number), and the output will be annotated with additional lines::
 
     Core 0 register dump:
     PC      : 0x400e14ed  PS      : 0x00060030  A0      : 0x800d0805  A1      : 0x3ffb5030  
@@ -152,7 +156,7 @@ GDB Stub
 
 If ``CONFIG_ESP32_PANIC_GDBSTUB`` option is enabled, panic handler will not reset the chip when fatal error happens. Instead, it will start GDB remote protocol server, commonly referred to as GDB Stub. When this happens, GDB instance running on the host computer can be instructed to connect to the ESP32 UART port.
 
-If :doc:`IDF Monitor <../get-started/idf-monitor>` is used, GDB is started automatically when GDB Stub prompt is detected on the UART. The output would look like this::
+If :doc:`IDF Monitor <tools/idf-monitor>` is used, GDB is started automatically when GDB Stub prompt is detected on the UART. The output would look like this::
 
     Entering gdb stub now.
     $T0b#e6GNU gdb (crosstool-NG crosstool-ng-1.22.0-80-gff1f415) 7.10
@@ -257,7 +261,7 @@ Other Fatal Errors
 Brownout
 ^^^^^^^^
 
-ESP32 has a built-in brownout detector, which is enabled by default. Brownout detector can trigger system reset if supply voltage goes below safe level. Brownout detector can be configured using :ref:`CONFIG_BROWNOUT_DET` and :ref:`CONFIG_BROWNOUT_DET_LVL_SEL` options.
+ESP32 has a built-in brownout detector, which is enabled by default. Brownout detector can trigger system reset if supply voltage goes below safe level. Brownout detector can be configured using :ref:`CONFIG_ESP32_BROWNOUT_DET` and :ref:`CONFIG_ESP32_BROWNOUT_DET_LVL_SEL` options.
 When brownout detector triggers, the following message is printed::
 
     Brownout detector was triggered
@@ -280,7 +284,7 @@ Consult :doc:`Heap Memory Debugging <../api-reference/system/heap_debug>` docume
 Stack Smashing
 ^^^^^^^^^^^^^^
 
-Stack smashing protection (based on GCC ``-fstack-protector*`` flags) can be enabled in ESP-IDF using :ref:`CONFIG_STACK_CHECK_MODE` option. If stack smashing is detected, message similar to the following will be printed::
+Stack smashing protection (based on GCC ``-fstack-protector*`` flags) can be enabled in ESP-IDF using :ref:`CONFIG_COMPILER_STACK_CHECK_MODE` option. If stack smashing is detected, message similar to the following will be printed::
 
     Stack smashing protect failure!
 

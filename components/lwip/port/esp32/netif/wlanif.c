@@ -52,6 +52,18 @@
 
 #include "tcpip_adapter.h"
 
+/**
+ * @brief Free resources allocated in L2 layer
+ *
+ * This function translates the free_tx_buf to the prototype used on 2.1.2-esp branch
+ *
+ * @param buf memory alloc in L2 layer
+ * @note this function is also the callback when invoke pbuf_free
+ */
+static void wlanif_free_rx_buf_l2(struct netif *netif, void *buf)
+{
+    esp_wifi_internal_free_rx_buffer(buf);
+}
 
 /**
  * In this function, the hardware should be initialized.
@@ -82,7 +94,7 @@ low_level_init(struct netif *netif)
 #endif
 
 #if !ESP_L2_TO_L3_COPY
-  netif->l2_buffer_free_notify = esp_wifi_internal_free_rx_buffer;
+  netif->l2_buffer_free_notify = wlanif_free_rx_buf_l2;
 #endif
 }
 
@@ -154,7 +166,6 @@ wlanif_input(struct netif *netif, void *buffer, u16_t len, void* eb)
 #if (ESP_L2_TO_L3_COPY == 1)
   p = pbuf_alloc(PBUF_RAW, len, PBUF_RAM);
   if (p == NULL) {
-    ESP_STATS_DROP_INC(esp.wlanif_input_pbuf_fail);
     esp_wifi_internal_free_rx_buffer(eb);
     return;
   }
@@ -164,7 +175,6 @@ wlanif_input(struct netif *netif, void *buffer, u16_t len, void* eb)
 #else
   p = pbuf_alloc(PBUF_RAW, len, PBUF_REF);
   if (p == NULL){
-    ESP_STATS_DROP_INC(esp.wlanif_input_pbuf_fail);
     esp_wifi_internal_free_rx_buffer(eb);
     return;
   }
@@ -202,7 +212,7 @@ wlanif_init(struct netif *netif)
   /* Initialize interface hostname */
 
 #if ESP_LWIP
-  netif->hostname = "espressif";
+  netif->hostname = CONFIG_LWIP_LOCAL_HOSTNAME;
 #else
   netif->hostname = "lwip";
 #endif

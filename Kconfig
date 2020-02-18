@@ -4,6 +4,12 @@
 #
 mainmenu "Espressif IoT Development Framework Configuration"
 
+    # Hidden option to support checking for this specific target in C code and Kconfig files
+    config IDF_TARGET_ESP32
+        bool
+        default "y" if IDF_TARGET="esp32"
+        default "n"
+
     config IDF_CMAKE
         bool
         option env="IDF_CMAKE"
@@ -29,14 +35,14 @@ mainmenu "Espressif IoT Development Framework Configuration"
         default 0xFFFF
 
     menu "SDK tool configuration"
-        config TOOLPREFIX
+        config SDK_TOOLPREFIX
             string "Compiler toolchain path/prefix"
             default "xtensa-esp32-elf-"
             help
                 The prefix/path that is used to call the toolchain. The default setting assumes
                 a crosstool-ng gcc setup that is in your PATH.
 
-        config PYTHON
+        config SDK_PYTHON
             string "Python 2 interpreter"
             depends on !IDF_CMAKE
             default "python"
@@ -44,11 +50,11 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 The executable name/path that is used to run python. On some systems Python 2.x
                 may need to be invoked as python2.
 
-                (Note: This option is used with the GNU Make build system only, not idf.py
-                or CMake-based builds.)
+                (Note: This option is used with the legacy GNU Make build system only.)
 
-        config MAKE_WARN_UNDEFINED_VARIABLES
+        config SDK_MAKE_WARN_UNDEFINED_VARIABLES
             bool "'make' warns on undefined variables"
+            depends on !IDF_CMAKE
             default "y"
             help
                 Adds --warn-undefined-variables to MAKEFLAGS. This causes make to
@@ -58,15 +64,17 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 or otherwise missing, but it can be unwanted if you have Makefiles which
                 depend on undefined variables expanding to an empty string.
 
+                (Note: this option is used with the legacy GNU Make build system only.)
+
     endmenu  # SDK tool configuration
 
     source "$COMPONENT_KCONFIGS_PROJBUILD"
 
     menu "Compiler options"
 
-        choice OPTIMIZATION_COMPILER
+        choice COMPILER_OPTIMIZATION
             prompt "Optimization Level"
-            default OPTIMIZATION_LEVEL_DEBUG
+            default COMPILER_OPTIMIZATION_LEVEL_DEBUG
             help
                 This option sets compiler optimization level (gcc -O argument).
 
@@ -80,15 +88,15 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 in project makefile, before including $(IDF_PATH)/make/project.mk. Note that
                 custom optimization levels may be unsupported.
 
-            config OPTIMIZATION_LEVEL_DEBUG
+            config COMPILER_OPTIMIZATION_LEVEL_DEBUG
                 bool "Debug (-Og)"
-            config OPTIMIZATION_LEVEL_RELEASE
+            config COMPILER_OPTIMIZATION_LEVEL_RELEASE
                 bool "Release (-Os)"
         endchoice
 
-        choice OPTIMIZATION_ASSERTION_LEVEL
+        choice COMPILER_OPTIMIZATION_ASSERTION_LEVEL
             prompt "Assertion level"
-            default OPTIMIZATION_ASSERTIONS_ENABLED
+            default COMPILER_OPTIMIZATION_ASSERTIONS_ENABLE
             help
                 Assertions can be:
 
@@ -100,20 +108,20 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 - Disabled entirely (not recommended for most configurations.) -DNDEBUG is added
                   to CPPFLAGS in this case.
 
-            config OPTIMIZATION_ASSERTIONS_ENABLED
+            config COMPILER_OPTIMIZATION_ASSERTIONS_ENABLE
                 prompt "Enabled"
                 bool
                 help
                     Enable assertions. Assertion content and line number will be printed on failure.
 
-            config OPTIMIZATION_ASSERTIONS_SILENT
+            config COMPILER_OPTIMIZATION_ASSERTIONS_SILENT
                 prompt "Silent (saves code size)"
                 bool
                 help
                     Enable silent assertions. Failed assertions will abort(), user needs to
                     use the aborting address to find the line number with the failed assertion.
 
-            config OPTIMIZATION_ASSERTIONS_DISABLED
+            config COMPILER_OPTIMIZATION_ASSERTIONS_DISABLE
                 prompt "Disabled (sets -DNDEBUG)"
                 bool
                 help
@@ -121,7 +129,7 @@ mainmenu "Espressif IoT Development Framework Configuration"
 
         endchoice # assertions
 
-        menuconfig CXX_EXCEPTIONS
+        menuconfig COMPILER_CXX_EXCEPTIONS
             bool "Enable C++ exceptions"
             default n
             help
@@ -133,17 +141,26 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 Enabling this option currently adds an additional ~500 bytes of heap overhead
                 when an exception is thrown in user code for the first time.
 
-        config CXX_EXCEPTIONS_EMG_POOL_SIZE
+        config COMPILER_CXX_EXCEPTIONS_EMG_POOL_SIZE
             int "Emergency Pool Size"
             default 0
-            depends on CXX_EXCEPTIONS
+            depends on COMPILER_CXX_EXCEPTIONS
             help
                 Size (in bytes) of the emergency memory pool for C++ exceptions. This pool will be used to allocate
                 memory for thrown exceptions when there is not enough memory on the heap.
 
-        choice STACK_CHECK_MODE
+        config COMPILER_CXX_RTTI
+            # Invisible option, until the toolchain with RTTI support is released.
+            # Use prompt "Enable C++ run-time type info (RTTI)" when updating.
+            bool
+            help
+                Enabling this option compiles all C++ files with RTTI support enabled.
+                This increases binary size (typically by tens of kB) but allows using
+                dynamic_cast conversion and typeid operator.
+
+        choice COMPILER_STACK_CHECK_MODE
             prompt "Stack smashing protection mode"
-            default STACK_CHECK_NONE
+            default COMPILER_STACK_CHECK_MODE_NONE
             help
                 Stack smashing protection mode. Emit extra code to check for buffer overflows, such as stack
                 smashing attacks. This is done by adding a guard variable to functions with vulnerable objects.
@@ -166,23 +183,23 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 - coverage: NORMAL < STRONG < OVERALL
 
 
-            config STACK_CHECK_NONE
+            config COMPILER_STACK_CHECK_MODE_NONE
                 bool "None"
-            config STACK_CHECK_NORM
+            config COMPILER_STACK_CHECK_MODE_NORM
                 bool "Normal"
-            config STACK_CHECK_STRONG
+            config COMPILER_STACK_CHECK_MODE_STRONG
                 bool "Strong"
-            config STACK_CHECK_ALL
+            config COMPILER_STACK_CHECK_MODE_ALL
                 bool "Overall"
         endchoice
 
-        config STACK_CHECK
+        config COMPILER_STACK_CHECK
             bool
-            default !STACK_CHECK_NONE
+            default !COMPILER_STACK_CHECK_MODE_NONE
             help
                 Stack smashing protection.
 
-        config WARN_WRITE_STRINGS
+        config COMPILER_WARN_WRITE_STRINGS
             bool "Enable -Wwrite-strings warning flag"
             default "n"
             help
@@ -196,7 +213,7 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 For C++, this warns about the deprecated conversion from string
                 literals to ``char *``.
 
-        config DISABLE_GCC8_WARNINGS
+        config COMPILER_DISABLE_GCC8_WARNINGS
             bool "Disable new warnings introduced in GCC 6 - 8"
             default "n"
             help
@@ -209,3 +226,22 @@ mainmenu "Espressif IoT Development Framework Configuration"
     menu "Component config"
         source "$COMPONENT_KCONFIGS"
     endmenu
+
+    menu "Compatibility options"
+        config LEGACY_INCLUDE_COMMON_HEADERS
+            bool "Include headers accross components as before IDF v4.0"
+            default n
+            help
+                Soc, esp32, and driver components, the most common
+                components. Some header of these components are included
+                implicitly by headers of other components before IDF v4.0.
+                It's not required for high-level components, but still
+                included through long header chain everywhere.
+
+                This is harmful to the modularity. So it's changed in IDF
+                v4.0.
+
+                You can still include these headers in a legacy way until it
+                is totally deprecated by enable this option.
+
+    endmenu #Compatibility options

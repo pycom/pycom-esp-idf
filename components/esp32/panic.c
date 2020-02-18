@@ -15,32 +15,33 @@
 
 #include <xtensa/config/core.h>
 
-#include "rom/rtc.h"
-#include "rom/uart.h"
+#include "esp32/rom/rtc.h"
+#include "esp32/rom/uart.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/xtensa_api.h"
 
-#include "soc/uart_reg.h"
-#include "soc/io_mux_reg.h"
+#include "soc/uart_periph.h"
+#include "soc/gpio_periph.h"
 #include "soc/dport_reg.h"
-#include "soc/rtc_cntl_reg.h"
-#include "soc/timer_group_struct.h"
-#include "soc/timer_group_reg.h"
+#include "soc/rtc_periph.h"
+#include "soc/timer_periph.h"
 #include "soc/cpu.h"
 #include "soc/rtc.h"
 #include "soc/rtc_wdt.h"
+#include "soc/soc_memory_layout.h"
 
-#include "esp_gdbstub.h"
-#include "esp_panic.h"
+#include "esp_private/gdbstub.h"
+#include "esp_debug_helpers.h"
+#include "esp_private/panic_reason.h"
 #include "esp_attr.h"
 #include "esp_err.h"
 #include "esp_core_dump.h"
 #include "esp_spi_flash.h"
-#include "esp_cache_err_int.h"
+#include "esp32/cache_err_int.h"
 #include "esp_app_trace.h"
-#include "esp_system_internal.h"
+#include "esp_private/system_internal.h"
 #include "sdkconfig.h"
 #include "esp_ota_ops.h"
 #if CONFIG_SYSVIEW_ENABLE
@@ -66,8 +67,8 @@
 //printf may be broken, so we fix our own printing fns...
 static void panicPutChar(char c)
 {
-    while (((READ_PERI_REG(UART_STATUS_REG(CONFIG_CONSOLE_UART_NUM)) >> UART_TXFIFO_CNT_S)&UART_TXFIFO_CNT) >= 126) ;
-    WRITE_PERI_REG(UART_FIFO_REG(CONFIG_CONSOLE_UART_NUM), c);
+    while (((READ_PERI_REG(UART_STATUS_REG(CONFIG_ESP_CONSOLE_UART_NUM)) >> UART_TXFIFO_CNT_S)&UART_TXFIFO_CNT) >= 126) ;
+    WRITE_PERI_REG(UART_FIFO_REG(CONFIG_ESP_CONSOLE_UART_NUM), c);
 }
 
 static void panicPutStr(const char *c)
@@ -143,9 +144,9 @@ static __attribute__((noreturn)) inline void invoke_abort()
     abort_called = true;
 #if CONFIG_ESP32_APPTRACE_ENABLE
 #if CONFIG_SYSVIEW_ENABLE
-    SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_TRAX_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
+    SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #else
-    esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_TRAX_THRESH,
+    esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH,
                               APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #endif
 #endif
@@ -314,9 +315,9 @@ void panicHandler(XtExcFrame *frame)
         }
 #if CONFIG_ESP32_APPTRACE_ENABLE
 #if CONFIG_SYSVIEW_ENABLE
-        SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_TRAX_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
+        SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #else
-        esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_TRAX_THRESH,
+        esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH,
                                   APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #endif
 #endif
@@ -347,9 +348,9 @@ void xt_unhandled_exception(XtExcFrame *frame)
             panicPutStr(". Setting bp and returning..\r\n");
 #if CONFIG_ESP32_APPTRACE_ENABLE
 #if CONFIG_SYSVIEW_ENABLE
-            SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_TRAX_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
+            SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #else
-            esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_TRAX_THRESH,
+            esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH,
                                       APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #endif
 #endif
@@ -382,7 +383,7 @@ static void illegal_instruction_helper(XtExcFrame *frame)
     panicPutStr("Memory dump at 0x");
     panicPutHex(epc);
     panicPutStr(": ");
-    
+
     panicPutHex(*pepc);
     panicPutStr(" ");
     panicPutHex(*(pepc + 1));
@@ -428,12 +429,13 @@ static inline void disableAllWdts()
     TIMERG1.wdt_wprotect = 0;
 }
 
+#if CONFIG_ESP32_PANIC_PRINT_REBOOT || CONFIG_ESP32_PANIC_SILENT_REBOOT
 static void esp_panic_dig_reset() __attribute__((noreturn));
 
 static void esp_panic_dig_reset()
 {
     // make sure all the panic handler output is sent from UART FIFO
-    uart_tx_wait_idle(CONFIG_CONSOLE_UART_NUM);
+    uart_tx_wait_idle(CONFIG_ESP_CONSOLE_UART_NUM);
     // switch to XTAL (otherwise we will keep running from the PLL)
     rtc_clk_cpu_freq_set_xtal();
     // reset the digital part
@@ -443,36 +445,40 @@ static void esp_panic_dig_reset()
         ;
     }
 }
+#endif
 
 static void putEntry(uint32_t pc, uint32_t sp)
 {
-    if (pc & 0x80000000) {
-        pc = (pc & 0x3fffffff) | 0x40000000;
-    }
     panicPutStr(" 0x");
     panicPutHex(pc);
     panicPutStr(":0x");
     panicPutHex(sp);
 }
 
-static void doBacktrace(XtExcFrame *frame)
+static void doBacktrace(XtExcFrame *exc_frame, int depth)
 {
-    uint32_t i = 0, pc = frame->pc, sp = frame->a1;
+    //Initialize stk_frame with first frame of stack
+    esp_backtrace_frame_t stk_frame = {.pc = exc_frame->pc, .sp = exc_frame->a1, .next_pc = exc_frame->a0};
     panicPutStr("\r\nBacktrace:");
-    /* Do not check sanity on first entry, PC could be smashed. */
-    putEntry(pc, sp);
-    pc = frame->a0;
-    while (i++ < 100) {
-        uint32_t psp = sp;
-        if (!esp_stack_ptr_is_sane(sp) || i++ > 100) {
-            break;
+    putEntry(esp_cpu_process_stack_pc(stk_frame.pc), stk_frame.sp);
+
+    //Check if first frame is valid
+    bool corrupted = (esp_stack_ptr_is_sane(stk_frame.sp) &&
+                      esp_ptr_executable((void*)esp_cpu_process_stack_pc(stk_frame.pc))) ?
+                      false : true;
+    uint32_t i = ((depth <= 0) ? INT32_MAX : depth) - 1;    //Account for stack frame that's already printed
+    while (i-- > 0 && stk_frame.next_pc != 0 && !corrupted) {
+        if (!esp_backtrace_get_next_frame(&stk_frame)) {    //Get next stack frame
+            corrupted = true;
         }
-        sp = *((uint32_t *) (sp - 0x10 + 4));
-        putEntry(pc - 3, sp); // stack frame addresses are return addresses, so subtract 3 to get the CALL address
-        pc = *((uint32_t *) (psp - 0x10));
-        if (pc < 0x40000000) {
-            break;
-        }
+        putEntry(esp_cpu_process_stack_pc(stk_frame.pc), stk_frame.sp);
+    }
+
+    //Print backtrace termination marker
+    if (corrupted) {
+        panicPutStr(" |<-CORRUPTED");
+    } else if (stk_frame.next_pc != 0) {    //Backtrace continues
+        panicPutStr(" |<-CONTINUES");
     }
     panicPutStr("\r\n");
 }
@@ -549,7 +555,7 @@ static void commonErrorHandler_dump(XtExcFrame *frame, int core_id)
     panicPutStr("\r\n");
 
     /* With windowed ABI backtracing is easy, let's do it. */
-    doBacktrace(frame);
+    doBacktrace(frame, 100);
 
     panicPutStr("\r\n");
 }
@@ -589,9 +595,9 @@ static __attribute__((noreturn)) void commonErrorHandler(XtExcFrame *frame)
 #if CONFIG_ESP32_APPTRACE_ENABLE
     disableAllWdts();
 #if CONFIG_SYSVIEW_ENABLE
-    SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_TRAX_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
+    SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #else
-    esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_TRAX_THRESH,
+    esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH,
                               APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #endif
     reconfigureAllWdts();
@@ -623,7 +629,7 @@ static __attribute__((noreturn)) void commonErrorHandler(XtExcFrame *frame)
     rtc_wdt_disable();
 #if CONFIG_ESP32_PANIC_PRINT_REBOOT || CONFIG_ESP32_PANIC_SILENT_REBOOT
     panicPutStr("Rebooting...\r\n");
-    if (frame->exccause != PANIC_RSN_CACHEERR) {
+    if (esp_cache_err_get_cpuid() == -1) {
         esp_restart_noos();
     } else {
         // The only way to clear invalid cache access interrupt is to reset the digital part

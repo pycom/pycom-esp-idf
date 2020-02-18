@@ -57,6 +57,7 @@ function run_tests()
 
     BOOTLOADER_BINS="bootloader/bootloader.elf bootloader/bootloader.bin"
     APP_BINS="app-template.elf app-template.bin"
+    PHY_INIT_BIN="phy_init_data.bin"
 
     print_status "Initial clean build"
     # if make fails here, everything fails
@@ -153,7 +154,7 @@ function run_tests()
     print_status "Touching rom ld file should re-link app and bootloader"
     make
     take_build_snapshot
-    touch ${IDF_PATH}/components/esp32/ld/esp32.rom.ld
+    touch ${IDF_PATH}/components/esp_rom/esp32/ld/esp32.rom.ld
     make
     assert_rebuilt ${APP_BINS} ${BOOTLOADER_BINS}
 
@@ -251,7 +252,7 @@ function run_tests()
 	make
     assert_rebuilt ${APP_BINS}
     assert_not_rebuilt ${BOOTLOADER_BINS} esp32/libesp32.a
-    
+
     print_status "Re-building does not change app.bin"
     take_build_snapshot
     make
@@ -263,7 +264,7 @@ function run_tests()
     version="App \"app-template\" version: "
     version+=$(git describe --always --tags --dirty)
     grep "${version}" log.log || failure "Project version should have a hash commit"
-    
+
     print_status "Build fails if partitions don't fit in flash"
     sed -i.bak "s/CONFIG_ESPTOOLPY_FLASHSIZE.\+//" sdkconfig  # remove all flashsize config
     echo "CONFIG_ESPTOOLPY_FLASHSIZE_1MB=y" >> sdkconfig     # introduce undersize flash
@@ -281,6 +282,18 @@ function run_tests()
     grep "CONFIG_PARTITION_TABLE_OFFSET=0x10000" sdkconfig || failure "The define from sdkconfig.defaults should be into sdkconfig"
     grep "CONFIG_PARTITION_TABLE_TWO_OTA=y" sdkconfig || failure "The define from sdkconfig should be into sdkconfig"
     rm sdkconfig sdkconfig.defaults
+    make defconfig
+
+    print_status "can build with phy_init_data"
+    make clean > /dev/null
+    rm -f sdkconfig.defaults
+    rm -f sdkconfig
+    echo "CONFIG_ESP32_PHY_INIT_DATA_IN_PARTITION=y" >> sdkconfig.defaults
+    make defconfig > /dev/null
+    make || failure "Failed to build with PHY_INIT_DATA"
+    assert_built ${APP_BINS} ${BOOTLOADER_BINS} ${PHY_INIT_BIN}
+    rm sdkconfig
+    rm sdkconfig.defaults
     make defconfig
 
     print_status "Empty directory not treated as a component"
@@ -309,6 +322,56 @@ function run_tests()
     make EXTRA_COMPONENT_DIRS=$PWD/mycomponents || failure "EXTRA_COMPONENT_DIRS has added a sibling directory"
     rm -rf esp32
     rm -rf mycomponents
+
+    print_status "Handling deprecated Kconfig options"
+    make clean > /dev/null;
+    rm -f sdkconfig.defaults;
+    rm -f sdkconfig;
+    echo "" > ${IDF_PATH}/sdkconfig.rename;
+    make defconfig > /dev/null;
+    echo "CONFIG_TEST_OLD_OPTION=y" >> sdkconfig;
+    echo "CONFIG_TEST_OLD_OPTION CONFIG_TEST_NEW_OPTION" >> ${IDF_PATH}/sdkconfig.rename;
+    echo -e "\n\
+menu \"test\"\n\
+    config TEST_NEW_OPTION\n\
+        bool \"test\"\n\
+        default \"n\"\n\
+        help\n\
+            TEST_NEW_OPTION description\n\
+endmenu\n" >> ${IDF_PATH}/Kconfig;
+    make defconfig > /dev/null;
+    grep "CONFIG_TEST_OLD_OPTION=y" sdkconfig || failure "CONFIG_TEST_OLD_OPTION should be in sdkconfig for backward compatibility"
+    grep "CONFIG_TEST_NEW_OPTION=y" sdkconfig || failure "CONFIG_TEST_NEW_OPTION should be now in sdkconfig"
+    grep "#define CONFIG_TEST_NEW_OPTION 1" build/include/sdkconfig.h || failure "sdkconfig.h should contain the new macro"
+    grep "#define CONFIG_TEST_OLD_OPTION CONFIG_TEST_NEW_OPTION" build/include/sdkconfig.h || failure "sdkconfig.h should contain the compatibility macro"
+    grep "CONFIG_TEST_OLD_OPTION=y" build/include/config/auto.conf || failure "CONFIG_TEST_OLD_OPTION should be in auto.conf for backward compatibility"
+    grep "CONFIG_TEST_NEW_OPTION=y" build/include/config/auto.conf || failure "CONFIG_TEST_NEW_OPTION should be now in auto.conf"
+    rm -f sdkconfig sdkconfig.defaults
+    pushd ${IDF_PATH}
+    git checkout -- sdkconfig.rename Kconfig
+    popd
+
+    print_status "Handling deprecated Kconfig options in sdkconfig.defaults"
+    make clean;
+    rm -f sdkconfig;
+    echo "CONFIG_TEST_OLD_OPTION=7" > sdkconfig.defaults;
+    echo "CONFIG_TEST_OLD_OPTION CONFIG_TEST_NEW_OPTION" > ${IDF_PATH}/sdkconfig.rename;
+    echo -e "\n\
+menu \"test\"\n\
+    config TEST_NEW_OPTION\n\
+        int \"TEST_NEW_OPTION\"\n\
+        range 0 10\n\
+        default 5\n\
+        help\n\
+            TEST_NEW_OPTION description\n\
+endmenu\n" >> ${IDF_PATH}/Kconfig;
+    make defconfig > /dev/null;
+    grep "CONFIG_TEST_OLD_OPTION=7" sdkconfig || failure "CONFIG_TEST_OLD_OPTION=7 should be in sdkconfig for backward compatibility"
+    grep "CONFIG_TEST_NEW_OPTION=7" sdkconfig || failure "CONFIG_TEST_NEW_OPTION=7 should be in sdkconfig"
+    rm -f sdkconfig.defaults;
+    pushd ${IDF_PATH}
+    git checkout -- sdkconfig.rename Kconfig
+    popd
 
     print_status "All tests completed"
     if [ -n "${FAILURES}" ]; then
