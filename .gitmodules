@@ -1,26 +1,10 @@
-[submodule "components/esp32/lib"]
-	path = components/esp32/lib
-	url = https://github.com/espressif/esp32-wifi-lib.git
-
 [submodule "components/esptool_py/esptool"]
 	path = components/esptool_py/esptool
 	url = https://github.com/espressif/esptool.git
 
-[submodule "components/bt/lib"]
-	path = components/bt/lib
-	url = https://github.com/espressif/esp32-bt-lib.git
-
-[submodule "components/micro-ecc/micro-ecc"]
-	path = components/micro-ecc/micro-ecc
-	url = https://github.com/kmackay/micro-ecc.git
-
 [submodule "components/coap/libcoap"]
 	path = components/coap/libcoap
 	url = https://github.com/obgm/libcoap.git
-
-[submodule "components/aws_iot/aws-iot-device-sdk-embedded-C"]
-	path = components/aws_iot/aws-iot-device-sdk-embedded-C
-	url = https://github.com/espressif/aws-iot-device-sdk-embedded-C.git
 
 [submodule "components/nghttp/nghttp2"]
 	path = components/nghttp/nghttp2
@@ -58,9 +42,6 @@
 	path = components/protobuf-c/protobuf-c
 	url = https://github.com/protobuf-c/protobuf-c
 
-[submodule "components/nimble/nimble"]
-	path = components/nimble/nimble
-	url = https://github.com/espressif/esp-nimble.git
 [submodule "components/unity/unity"]
 	path = components/unity/unity
 	url = https://github.com/ThrowTheSwitch/Unity
@@ -70,3 +51,15 @@
 [submodule "components/lwip/lwip"]
 	path = components/lwip/lwip
 	url = https://github.com/espressif/esp-lwip.git
+[submodule "components/bootloader/subproject/components/micro-ecc/micro-ecc"]
+	path = components/bootloader/subproject/components/micro-ecc/micro-ecc
+	url = git@github.com:kmackay/micro-ecc.git
+[submodule "components/bt/controller/lib"]
+	path = components/bt/controller/lib
+	url = git@github.com:espressif/esp32-bt-lib.git
+[submodule "components/bt/host/nimble/nimble"]
+	path = components/bt/host/nimble/nimble
+	url = git@github.com:espressif/esp-nimble.git
+[submodule "components/esp_wifi/lib_esp32"]
+	path = components/esp_wifi/lib_esp32
+	url = git@github.com:espressif/esp32-wifi-lib.git
