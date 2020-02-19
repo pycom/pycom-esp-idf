@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include "dma.h"
-#include "rom/ets_sys.h"
+#include "esp32/rom/ets_sys.h"
 #include "string.h"
 #include "stdlib.h"
 

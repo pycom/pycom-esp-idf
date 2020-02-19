@@ -18,7 +18,7 @@
 #include "soc/spi_reg.h"
 #include "soc/rtc_cntl_reg.h"
 
-#include "rom/ets_sys.h"
+#include "esp32/rom/ets_sys.h"
 
 #include "esp_intr.h"
 #include "esp_attr.h"
