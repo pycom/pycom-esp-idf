@@ -135,12 +135,14 @@ typedef struct {
 	 *
 	 * Any value other than portMUX_FREE_VAL, CORE_ID_PRO, CORE_ID_APP indicates corruption
 	 */
-	uint32_t owner;
+    /* volatile is needed for Toolchain 1.22.0-98 */
+    volatile uint32_t owner;
 	/* count field:
 	 * If mux is unlocked, count should be zero.
 	 * If mux is locked, count is non-zero & represents the number of recursive locks on the mux.
 	 */
-	uint32_t count;
+    /* volatile is needed for Toolchain 1.22.0-98 */
+    volatile uint32_t count;
 #ifdef CONFIG_FREERTOS_PORTMUX_DEBUG
 	const char *lastLockedFn;
 	int lastLockedLine;

@@ -2480,3 +2480,24 @@ index 000000000..758554001
 @@ -0,0 +1 @@
 +YÏçIA))‰Ô->!ìPb4kè¹JœÊ¬He‚™£toÈ¡ÅŠK¡/¹œØ†”÷r›ÆfMÓ—D;þÿ|(E
 \ No newline at end of file
+diff --git a/components/freertos/include/freertos/portmacro.h b/components/freertos/include/freertos/portmacro.h
+index 7fd94d5a0..1f01e91a5 100644
+--- a/components/freertos/include/freertos/portmacro.h
++++ b/components/freertos/include/freertos/portmacro.h
+@@ -135,12 +135,14 @@ typedef struct {
+ 	 *
+ 	 * Any value other than portMUX_FREE_VAL, CORE_ID_PRO, CORE_ID_APP indicates corruption
+ 	 */
+-	uint32_t owner;
++    /* volatile is needed for Toolchain 1.22.0-98 */
++    volatile uint32_t owner;
+ 	/* count field:
+ 	 * If mux is unlocked, count should be zero.
+ 	 * If mux is locked, count is non-zero & represents the number of recursive locks on the mux.
+ 	 */
+-	uint32_t count;
++    /* volatile is needed for Toolchain 1.22.0-98 */
++    volatile uint32_t count;
+ #ifdef CONFIG_FREERTOS_PORTMUX_DEBUG
+ 	const char *lastLockedFn;
+ 	int lastLockedLine;
