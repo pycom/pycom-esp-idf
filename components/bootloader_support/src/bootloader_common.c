@@ -31,6 +31,8 @@
 #include "bootloader_sha.h"
 #include "sys/param.h"
 
+#include "Pycom_bootloader.h"
+
 #define ESP_PARTITION_HASH_LEN 32 /* SHA-256 digest length */
 
 static const char* TAG = "boot_comm";
@@ -38,6 +40,11 @@ static const char* TAG = "boot_comm";
 uint32_t bootloader_common_ota_select_crc(const esp_ota_select_entry_t *s)
 {
     return crc32_le(UINT32_MAX, (uint8_t*)&s->ota_seq, 4);
+}
+
+uint32_t pycom_bootloader_common_ota_select_crc(const boot_info_t *s)
+{
+  return crc32_le(UINT32_MAX, (uint8_t*)&s->ActiveImg, sizeof(boot_info_t) - sizeof(s->crc));
 }
 
 bool bootloader_common_ota_select_invalid(const esp_ota_select_entry_t *s)
@@ -48,6 +55,14 @@ bool bootloader_common_ota_select_invalid(const esp_ota_select_entry_t *s)
 bool bootloader_common_ota_select_valid(const esp_ota_select_entry_t *s)
 {
     return bootloader_common_ota_select_invalid(s) == false && s->crc == bootloader_common_ota_select_crc(s);
+}
+
+bool pycom_bootloader_common_ota_select_valid(const boot_info_t *s)
+{
+    uint32_t _crc = pycom_bootloader_common_ota_select_crc(s);
+    ESP_LOGI(TAG, "Cal crc=%x, saved crc=%x", _crc, s->crc);
+    return s->Status != UINT32_MAX && s->crc == _crc;
+
 }
 
 esp_comm_gpio_hold_t bootloader_common_check_long_hold_gpio(uint32_t num_pin, uint32_t delay_sec)

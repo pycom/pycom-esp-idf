@@ -26,6 +26,8 @@
 #include "esp_image_format.h"
 #include "esp32/rom/rtc.h"
 
+#include "Pycom_bootloader.h"
+
 static const char* TAG = "boot";
 
 static int select_partition_number (bootloader_state_t *bs);
@@ -72,7 +74,7 @@ static int select_partition_number (bootloader_state_t *bs)
  */
 static int selected_boot_partition(const bootloader_state_t *bs)
 {
-    int boot_index = bootloader_utility_get_selected_boot_partition(bs);
+    int boot_index = pycom_bootloader_utility_get_selected_boot_partition(bs);
     if (boot_index == INVALID_INDEX) {
         return boot_index; // Unrecoverable failure (not due to corrupt ota data or bad partition contents)
     }
