@@ -26,7 +26,7 @@
 #include "esp_image_format.h"
 #include "esp32/rom/rtc.h"
 
-#include "Pycom_bootloader.h"
+#include "pycom_bootloader.h"
 
 static const char* TAG = "boot";
 

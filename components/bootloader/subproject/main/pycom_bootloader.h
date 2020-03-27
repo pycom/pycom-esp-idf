@@ -1,21 +1,20 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+/*
+ * Copyright (c) 2020, Pycom Limited.
+ *
+ * This software is licensed under the GNU GPL version 3 or any
+ * later version, with permitted additional terms. For more information
+ * see the Pycom Licence v1.0 document supplied with this file, or
+ * available at https://www.pycom.io/opensource/licensing
+ */
 
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-#ifndef __BOOTLOADER_H__
-#define __BOOTLOADER_H__
+/* This file contains the Pycom specific helper function for the bootloader*/
+
+#ifndef __PYCOM_BOOTLOADER_H__
+#define __PYCOM_BOOTLOADER_H__
 
 #include <stdint.h>
 #include "esp_flash_partitions.h"
+#include "esp_attr.h"
 #include "bootloader_config.h"
 
 #ifdef __cplusplus
@@ -76,14 +75,25 @@ typedef struct _boot_info_t
 
 #define SPI_ERROR_LOG "spi flash error"
 
-extern uint32_t pycom_bootloader_common_ota_select_crc(const boot_info_t *s);
-extern bool pycom_bootloader_common_ota_select_valid(const boot_info_t *s);
+// Luckily these are the same for all boards, they are defined in mpconfigboard.h
+#define MICROPY_HW_SAFE_PIN_NUM                                 (21)
+#define MICROPY_HW_HB_PIN_NUM                                   (0)
+
+
+
+extern esp_err_t pycom_read_otadata(const esp_partition_pos_t *ota_info, boot_info_t* boot_info);
 extern IRAM_ATTR bool pycom_ota_write_boot_info (boot_info_t *boot_info, uint32_t offset);
 extern int pycom_bootloader_utility_get_selected_boot_partition(const bootloader_state_t *bs);
+extern bool pycom_bootloader_common_ota_select_valid(const boot_info_t *s);
+extern void IRAM_ATTR mperror_set_rgb_color (uint32_t rgbcolor);
+extern void mperror_heartbeat_switch_off (void);
+extern void mperror_init0 (void);
+extern __attribute__((noreturn)) void mperror_fatal_error (void);
+extern uint32_t wait_for_safe_boot (const boot_info_t *boot_info, uint32_t *ActiveImg);
 
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __BOOTLOADER_H__ */
+#endif /* __PYCOM_BOOTLOADER_H__ */
