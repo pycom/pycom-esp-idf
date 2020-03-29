@@ -13,8 +13,6 @@
 #include <string.h>
 #include <stdint.h>
 
-//#include "mpconfigboard.h"
-
 #include "../../heap/include/esp_heap_caps.h"
 #include "sdkconfig.h"
 #include "esp_system.h"
