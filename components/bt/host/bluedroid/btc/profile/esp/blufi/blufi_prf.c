@@ -151,7 +151,6 @@ static void blufi_profile_cb(tBTA_GATTS_EVT event, tBTA_GATTS *p_data)
 
             if (blufi_env.prepare_buf == NULL) {
                 blufi_env.prepare_buf = osi_malloc(BLUFI_PREPAIR_BUF_MAX_SIZE);
-                blufi_env.prepare_len = 0;
                 if (blufi_env.prepare_buf == NULL) {
                     BLUFI_TRACE_ERROR("Blufi prep no mem\n");
                     status = GATT_NO_RESOURCES;
@@ -179,7 +178,6 @@ static void blufi_profile_cb(tBTA_GATTS_EVT event, tBTA_GATTS *p_data)
                 if (blufi_env.prepare_buf) {
                     osi_free(blufi_env.prepare_buf);
                     blufi_env.prepare_buf = NULL;
-                    blufi_env.prepare_len = 0;
                 }
                 BLUFI_TRACE_ERROR("write data error , error code 0x%x\n", status);
                 return;
@@ -215,7 +213,6 @@ static void blufi_profile_cb(tBTA_GATTS_EVT event, tBTA_GATTS *p_data)
         if (blufi_env.prepare_buf) {
             osi_free(blufi_env.prepare_buf);
             blufi_env.prepare_buf = NULL;
-            blufi_env.prepare_len = 0;
         }
 
         break;

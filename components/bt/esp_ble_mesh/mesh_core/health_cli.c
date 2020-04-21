@@ -235,7 +235,7 @@ const struct bt_mesh_model_op bt_mesh_health_cli_op[] = {
 
 int bt_mesh_health_attention_get(struct bt_mesh_msg_ctx *ctx)
 {
-    BLE_MESH_MODEL_BUF_DEFINE(msg, OP_ATTENTION_GET, 0);
+    NET_BUF_SIMPLE_DEFINE(msg, 2 + 0 + 4);
     int err;
 
     if (!ctx || !ctx->addr) {
@@ -257,7 +257,7 @@ int bt_mesh_health_attention_get(struct bt_mesh_msg_ctx *ctx)
 int bt_mesh_health_attention_set(struct bt_mesh_msg_ctx *ctx,
                                  u8_t attention, bool need_ack)
 {
-    BLE_MESH_MODEL_BUF_DEFINE(msg, OP_ATTENTION_SET, 1);
+    NET_BUF_SIMPLE_DEFINE(msg, 2 + 1 + 4);
     u32_t opcode;
     int err;
 
@@ -285,7 +285,7 @@ int bt_mesh_health_attention_set(struct bt_mesh_msg_ctx *ctx,
 
 int bt_mesh_health_period_get(struct bt_mesh_msg_ctx *ctx)
 {
-    BLE_MESH_MODEL_BUF_DEFINE(msg, OP_HEALTH_PERIOD_GET, 0);
+    NET_BUF_SIMPLE_DEFINE(msg, 2 + 0 + 4);
     int err;
 
     if (!ctx || !ctx->addr) {
@@ -307,7 +307,7 @@ int bt_mesh_health_period_get(struct bt_mesh_msg_ctx *ctx)
 int bt_mesh_health_period_set(struct bt_mesh_msg_ctx *ctx,
                               u8_t divisor, bool need_ack)
 {
-    BLE_MESH_MODEL_BUF_DEFINE(msg, OP_HEALTH_PERIOD_SET, 1);
+    NET_BUF_SIMPLE_DEFINE(msg, 2 + 1 + 4);
     u32_t opcode;
     int err;
 
@@ -336,7 +336,7 @@ int bt_mesh_health_period_set(struct bt_mesh_msg_ctx *ctx,
 int bt_mesh_health_fault_test(struct bt_mesh_msg_ctx *ctx,
                               u16_t cid, u8_t test_id, bool need_ack)
 {
-    BLE_MESH_MODEL_BUF_DEFINE(msg, OP_HEALTH_FAULT_TEST, 3);
+    NET_BUF_SIMPLE_DEFINE(msg, 2 + 3 + 4);
     u32_t opcode;
     int err;
 
@@ -366,7 +366,7 @@ int bt_mesh_health_fault_test(struct bt_mesh_msg_ctx *ctx,
 int bt_mesh_health_fault_clear(struct bt_mesh_msg_ctx *ctx,
                                u16_t cid, bool need_ack)
 {
-    BLE_MESH_MODEL_BUF_DEFINE(msg, OP_HEALTH_FAULT_CLEAR, 2);
+    NET_BUF_SIMPLE_DEFINE(msg, 2 + 2 + 4);
     u32_t opcode;
     int err;
 
@@ -394,7 +394,7 @@ int bt_mesh_health_fault_clear(struct bt_mesh_msg_ctx *ctx,
 
 int bt_mesh_health_fault_get(struct bt_mesh_msg_ctx *ctx, u16_t cid)
 {
-    BLE_MESH_MODEL_BUF_DEFINE(msg, OP_HEALTH_FAULT_GET, 2);
+    NET_BUF_SIMPLE_DEFINE(msg, 2 + 2 + 4);
     int err;
 
     if (!ctx || !ctx->addr) {
@@ -454,22 +454,19 @@ int bt_mesh_health_cli_init(struct bt_mesh_model *model, bool primary)
         return -EINVAL;
     }
 
-    if (!client->internal_data) {
-        internal = osi_calloc(sizeof(health_internal_data_t));
-        if (!internal) {
-            BT_ERR("%s, Failed to allocate memory", __func__);
-            return -ENOMEM;
-        }
-
-        sys_slist_init(&internal->queue);
-
-        client->model = model;
-        client->op_pair_size = ARRAY_SIZE(health_op_pair);
-        client->op_pair = health_op_pair;
-        client->internal_data = internal;
-    } else {
-        bt_mesh_client_clear_list(client->internal_data);
+    /* TODO: call osi_free() when deinit function is invoked*/
+    internal = osi_calloc(sizeof(health_internal_data_t));
+    if (!internal) {
+        BT_ERR("%s, Failed to allocate memory", __func__);
+        return -ENOMEM;
     }
+
+    sys_slist_init(&internal->queue);
+
+    client->model = model;
+    client->op_pair_size = ARRAY_SIZE(health_op_pair);
+    client->op_pair = health_op_pair;
+    client->internal_data = internal;
 
     bt_mesh_health_client_mutex_new();
 

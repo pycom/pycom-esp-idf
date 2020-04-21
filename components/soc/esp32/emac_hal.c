@@ -438,12 +438,11 @@ uint32_t emac_hal_get_tx_desc_owner(emac_hal_context_t *hal)
     return hal->tx_desc->TDES0.Own;
 }
 
-uint32_t emac_hal_transmit_frame(emac_hal_context_t *hal, uint8_t *buf, uint32_t length)
+void emac_hal_transmit_frame(emac_hal_context_t *hal, uint8_t *buf, uint32_t length)
 {
     /* Get the number of Tx buffers to use for the frame */
     uint32_t bufcount = 0;
     uint32_t lastlen = length;
-    uint32_t sentout = 0;
     while (lastlen > CONFIG_ETH_DMA_BUFFER_SIZE) {
         lastlen -= CONFIG_ETH_DMA_BUFFER_SIZE;
         bufcount++;
@@ -453,10 +452,6 @@ uint32_t emac_hal_transmit_frame(emac_hal_context_t *hal, uint8_t *buf, uint32_t
     }
     /* A frame is transmitted in multiple descriptor */
     for (uint32_t i = 0; i < bufcount; i++) {
-        /* Check if the descriptor is owned by the Ethernet DMA (when 1) or CPU (when 0) */
-        if (hal->tx_desc->TDES0.Own != EMAC_DMADESC_OWNER_CPU) {
-            goto err;
-        }
         /* Clear FIRST and LAST segment bits */
         hal->tx_desc->TDES0.FirstSegment = 0;
         hal->tx_desc->TDES0.LastSegment = 0;
@@ -473,22 +468,18 @@ uint32_t emac_hal_transmit_frame(emac_hal_context_t *hal, uint8_t *buf, uint32_t
             hal->tx_desc->TDES1.TransmitBuffer1Size = lastlen;
             /* copy data from uplayer stack buffer */
             memcpy((void *)(hal->tx_desc->Buffer1Addr), buf + i * CONFIG_ETH_DMA_BUFFER_SIZE, lastlen);
-            sentout += lastlen;
         } else {
             /* Program size */
             hal->tx_desc->TDES1.TransmitBuffer1Size = CONFIG_ETH_DMA_BUFFER_SIZE;
             /* copy data from uplayer stack buffer */
             memcpy((void *)(hal->tx_desc->Buffer1Addr), buf + i * CONFIG_ETH_DMA_BUFFER_SIZE, CONFIG_ETH_DMA_BUFFER_SIZE);
-            sentout += CONFIG_ETH_DMA_BUFFER_SIZE;
         }
         /* Set Own bit of the Tx descriptor Status: gives the buffer back to ETHERNET DMA */
         hal->tx_desc->TDES0.Own = EMAC_DMADESC_OWNER_DMA;
         /* Point to next descriptor */
         hal->tx_desc = (eth_dma_tx_descriptor_t *)(hal->tx_desc->Buffer2NextDescAddr);
     }
-err:
     hal->dma_regs->dmatxpolldemand = 0;
-    return sentout;
 }
 
 uint32_t emac_hal_receive_frame(emac_hal_context_t *hal, uint8_t *buf, uint32_t size, uint32_t *frames_remain)
@@ -497,9 +488,7 @@ uint32_t emac_hal_receive_frame(emac_hal_context_t *hal, uint8_t *buf, uint32_t 
     eth_dma_rx_descriptor_t *first_desc = NULL;
     uint32_t iter = 0;
     uint32_t seg_count = 0;
-    uint32_t ret_len = 0;
-    uint32_t copy_len = 0;
-    uint32_t write_len = 0;
+    uint32_t len = 0;
     uint32_t frame_count = 0;
 
     first_desc = hal->rx_desc;
@@ -511,9 +500,13 @@ uint32_t emac_hal_receive_frame(emac_hal_context_t *hal, uint8_t *buf, uint32_t 
         /* Last segment in frame */
         if (desc_iter->RDES0.LastDescriptor) {
             /* Get the Frame Length of the received packet: substruct 4 bytes of the CRC */
-            ret_len = desc_iter->RDES0.FrameLength - ETH_CRC_LENGTH;
-            /* packets larger than expected will be truncated */
-            copy_len = ret_len > size ? size : ret_len;
+            len = desc_iter->RDES0.FrameLength - ETH_CRC_LENGTH;
+            /* check if the buffer can store the whole frame */
+            if (len > size) {
+                /* return the real size that we want */
+                /* user need to compare the return value to the size they prepared when this function returned */
+                return len;
+            }
             /* update unhandled frame count */
             frame_count++;
         }
@@ -537,16 +530,15 @@ uint32_t emac_hal_receive_frame(emac_hal_context_t *hal, uint8_t *buf, uint32_t 
         }
         desc_iter = first_desc;
         for (iter = 0; iter < seg_count - 1; iter++) {
-            write_len = copy_len < CONFIG_ETH_DMA_BUFFER_SIZE ? copy_len : CONFIG_ETH_DMA_BUFFER_SIZE;
             /* copy data to buffer */
-            memcpy(buf, (void *)(desc_iter->Buffer1Addr), write_len);
-            buf += write_len;
-            copy_len -= write_len;
+            memcpy(buf + iter * CONFIG_ETH_DMA_BUFFER_SIZE,
+                   (void *)(desc_iter->Buffer1Addr), CONFIG_ETH_DMA_BUFFER_SIZE);
             /* Set Own bit in Rx descriptors: gives the buffers back to DMA */
             desc_iter->RDES0.Own = EMAC_DMADESC_OWNER_DMA;
             desc_iter = (eth_dma_rx_descriptor_t *)(desc_iter->Buffer2NextDescAddr);
         }
-        memcpy(buf, (void *)(desc_iter->Buffer1Addr), copy_len);
+        memcpy(buf + iter * CONFIG_ETH_DMA_BUFFER_SIZE,
+               (void *)(desc_iter->Buffer1Addr), len % CONFIG_ETH_DMA_BUFFER_SIZE);
         desc_iter->RDES0.Own = EMAC_DMADESC_OWNER_DMA;
         /* update rxdesc */
         hal->rx_desc = (eth_dma_rx_descriptor_t *)(desc_iter->Buffer2NextDescAddr);
@@ -555,7 +547,7 @@ uint32_t emac_hal_receive_frame(emac_hal_context_t *hal, uint8_t *buf, uint32_t 
         frame_count--;
     }
     *frames_remain = frame_count;
-    return ret_len;
+    return len;
 }
 
 IRAM_ATTR void emac_hal_isr(void *arg)
