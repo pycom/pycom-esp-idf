@@ -46,10 +46,15 @@ struct bt_mesh_adv {
               busy: 1;
     u8_t      xmit;
 
-    /* For transport layer segment sending */
-    struct {
-        u8_t attempts;
-    } seg;
+    union {
+        /* Address, used e.g. for Friend Queue messages */
+        u16_t addr;
+
+        /* For transport layer segment sending */
+        struct {
+            u8_t attempts;
+        } seg;
+    };
 };
 
 typedef struct bt_mesh_adv *(*bt_mesh_adv_alloc_t)(int id);

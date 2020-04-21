@@ -28,7 +28,9 @@ xt_highint5:
     bnez    a0, .read_apb_reg
 
 // Short interrupt
-    movi a0, 0
+    esync
+    rsr a0, CCOUNT
+    addi a0, a0, 27
     wsr a0, CCOMPARE2
     esync
 
