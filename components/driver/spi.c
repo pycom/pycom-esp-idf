@@ -20,7 +20,7 @@
 
 #include "esp32/rom/ets_sys.h"
 
-#include "esp_intr.h"
+#include "esp_intr_alloc.h"
 #include "esp_attr.h"
 #include "soc/dport_reg.h"
 
