@@ -2,6 +2,9 @@
 # Component Makefile
 #
 # (Uses default behaviour of compiling all source files in directory, adding 'include' to include path.)
+CFLAGS += -I $(IDF_PATH)/components/bootloader/subproject/main
+CFLAGS += -I $(IDF_PATH)/components/bootloader_support/include
+CFLAGS += -I $(IDF_PATH)/components/bootloader_support/include_bootloader
 
 # esp_app_desc structure is added as an undefined symbol because otherwise the 
 # linker will ignore this structure as it has no other files depending on it.
