@@ -80,10 +80,6 @@ typedef struct _boot_info_t
 #define MICROPY_HW_SAFE_PIN_NUM                                 (21)
 #define MICROPY_HW_HB_PIN_NUM                                   (0)
 
-
-
-extern esp_err_t pycom_read_otadata(const esp_partition_pos_t *ota_info, boot_info_t* boot_info);
-extern IRAM_ATTR bool pycom_ota_write_boot_info (boot_info_t *boot_info, uint32_t offset);
 extern int pycom_bootloader_utility_get_selected_boot_partition(const bootloader_state_t *bs);
 extern bool pycom_bootloader_common_ota_select_valid(const boot_info_t *s);
 extern void IRAM_ATTR mperror_set_rgb_color (uint32_t rgbcolor);

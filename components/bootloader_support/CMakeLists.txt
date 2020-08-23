@@ -9,12 +9,12 @@ set(srcs
     "src/flash_qio_mode.c"
     "src/bootloader_flash_config_${IDF_TARGET}.c"
     "src/bootloader_efuse_${IDF_TARGET}.c"
-    )
 
 if(IDF_TARGET STREQUAL "esp32")
     # Not supported on ESP32S2Beta yet
     list(APPEND srcs "src/flash_encrypt.c")
 endif()
+    "src/pycom_bootloader_support.c")
 
 if(BOOTLOADER_BUILD)
     set(include_dirs "include" "include_bootloader")

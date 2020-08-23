@@ -42,7 +42,7 @@
 #include "esp_efuse.h"
 
 #include "bootloader_utility.h"
-#include "pycom_bootloader.h"
+#include "pycom_bootloader_support.h"
 
 
 #define SUB_TYPE_ID(i) (i & 0x0F)

@@ -1,7 +1,6 @@
 idf_component_register(SRCS "esp_ota_ops.c" 
                             "esp_app_desc.c"
                     INCLUDE_DIRS "include"
-                                 "../bootloader/subproject/main"
                                  "../bootloader_support/include"
                                  "../bootloader_support/include_bootloader"
                     REQUIRES spi_flash partition_table bootloader_support bootloader)

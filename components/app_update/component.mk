@@ -2,7 +2,6 @@
 # Component Makefile
 #
 # (Uses default behaviour of compiling all source files in directory, adding 'include' to include path.)
-CFLAGS += -I $(IDF_PATH)/components/bootloader/subproject/main
 CFLAGS += -I $(IDF_PATH)/components/bootloader_support/include
 CFLAGS += -I $(IDF_PATH)/components/bootloader_support/include_bootloader
 
