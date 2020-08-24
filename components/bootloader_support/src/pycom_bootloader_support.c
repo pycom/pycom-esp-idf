@@ -46,33 +46,20 @@ esp_err_t pycom_read_otadata(const esp_partition_pos_t *ota_info, boot_info_t* b
     return ESP_OK;
 }
 
-IRAM_ATTR bool pycom_ota_write_boot_info (boot_info_t *boot_info, uint32_t offset) {
-    esp_rom_spiflash_result_t write_result;
+IRAM_ATTR bool pycom_ota_write_boot_info(boot_info_t *boot_info, uint32_t offset) {
 
     boot_info->crc = pycom_bootloader_common_ota_select_crc(boot_info);
-    Cache_Read_Disable(0);
-    if (ESP_ROM_SPIFLASH_RESULT_OK != esp_rom_spiflash_erase_sector(offset / 0x1000)) {
-        ESP_LOGE(TAG, SPI_ERROR_LOG);
-        Cache_Read_Enable(0);
+
+    esp_err_t err = bootloader_flash_erase_sector(offset / FLASH_SECTOR_SIZE);
+    if (err == ESP_OK) {
+        err = bootloader_flash_write(offset, boot_info, sizeof(boot_info_t), esp_flash_encryption_enabled());
+    }
+
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Error in pycom_ota_write_boot_info operation. err = 0x%x", err);
         return false;
     }
 
-    if (esp_flash_encryption_enabled()) {
-            // if flash is encrypted, then Write is done 32B chunks
-        uint8_t buff[64] __attribute__((aligned (32)));
-        memcpy(buff, (void *)boot_info, sizeof(boot_info_t));
-        write_result = esp_rom_spiflash_write_encrypted(offset, (void *)boot_info, 64);
-    }
-    else {
-            write_result = esp_rom_spiflash_write(offset, (void *)boot_info, sizeof(boot_info_t));
-    }
-
-    if (ESP_ROM_SPIFLASH_RESULT_OK != write_result) {
-        ESP_LOGE(TAG, SPI_ERROR_LOG);
-        Cache_Read_Enable(0);
-        return false;
-    }
-    Cache_Read_Enable(0);
     return true;
 }
 

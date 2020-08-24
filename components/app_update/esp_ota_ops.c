@@ -423,7 +423,7 @@ esp_err_t esp_ota_set_boot_partition(const esp_partition_t *partition)
              * At this point the current image is Factory for sure.
              */
             boot_info.PrevImg = IMG_ACT_FACTORY;
-            boot_info.ActiveImg = IMG_ACT_UPDATE2;
+            boot_info.ActiveImg = IMG_ACT_UPDATE1;
             boot_info.Status = IMG_STATUS_READY;
             if(true == pycom_ota_write_boot_info (&boot_info, bs.ota_info.offset)) {
                 return ESP_OK;
