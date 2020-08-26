@@ -39,7 +39,6 @@ typedef void (* coex_func_cb_t)(uint32_t event, int sched_cnt);
  */
 esp_err_t coex_pre_init(void);
 
-
 /**
  * @brief Init software coexist
  *        extern function for internal use.

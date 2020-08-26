@@ -22,7 +22,8 @@
 #include "esp_log.h"
 #include "soc/gpio_periph.h"
 #include "unity.h"
-#include "esp32/rom/ets_sys.h"
+
+#if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32S2BETA)
 
 #define PULSE_IO 18
 #define PCNT_INPUT_IO 4
@@ -57,7 +58,7 @@ static void produce_pulse(void)
         .freq_hz = 1,
         .clk_cfg = LEDC_AUTO_CLK,
     };
-    ledc_timer_config(&ledc_timer);
+    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
     ledc_channel_config_t ledc_channel = {
         .speed_mode = LEDC_HIGH_SPEED_MODE,
@@ -68,7 +69,7 @@ static void produce_pulse(void)
         .duty = 100,
         .hpoint = 0,
     };
-    ledc_channel_config(&ledc_channel);
+    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 }
 
 static void IRAM_ATTR pcnt_intr_handler(void *arg)
@@ -650,3 +651,5 @@ TEST_CASE("PCNT counting mode test", "[pcnt][test_env=UT_T1_PCNT]")
     printf("PCNT mode test for negative count\n");
     count_mode_test(PCNT_CTRL_GND_IO);
 }
+
+#endif

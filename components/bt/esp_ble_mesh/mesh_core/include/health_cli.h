@@ -11,8 +11,6 @@
 #ifndef _BLE_MESH_HEALTH_CLI_H_
 #define _BLE_MESH_HEALTH_CLI_H_
 
-#include "mesh_access.h"
-#include "mesh_kernel.h"
 #include "client_common.h"
 
 /**
@@ -21,6 +19,10 @@
  * @ingroup bt_mesh
  * @{
  */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Health client model common structure */
 typedef bt_mesh_client_user_data_t      bt_mesh_health_client_t;
@@ -68,6 +70,10 @@ struct bt_mesh_health_fault_status {
     u16_t cid;
     struct net_buf_simple *fault_array;
 };
+
+#ifdef __cplusplus
+}
+#endif
 
 /**
  * @}

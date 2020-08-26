@@ -36,8 +36,8 @@ typedef bool BOOLEAN;
 #define PACKED  __packed
 // #define INLINE  __inline
 
-#define BCM_STRCPY_S(x1,x2,x3)      strcpy((x1),(x3))
-#define BCM_STRNCPY_S(x1,x2,x3,x4)  strncpy((x1),(x3),(x4))
+#define BCM_STRCPY_S(x1,x2)      strcpy((x1),(x2))
+#define BCM_STRNCPY_S(x1,x2,x3)  strncpy((x1),(x2),(x3))
 
 /* READ WELL !!
 **
@@ -353,6 +353,11 @@ typedef UINT8 ACO[ACO_LEN];                 /* Authenticated ciphering offset */
 
 #define COF_LEN         12
 typedef UINT8 COF[COF_LEN];                 /* ciphering offset number */
+
+#define AFH_CHANNELS_LEN    10
+typedef UINT8 AFH_CHANNELS[AFH_CHANNELS_LEN];
+#define BLE_CHANNELS_LEN    5
+typedef UINT8 BLE_CHANNELS[BLE_CHANNELS_LEN];
 
 typedef struct {
     UINT8               qos_flags;          /* TBD */

@@ -1,6 +1,8 @@
 Non-volatile storage library
 ============================
 
+:link_to_translation:`zh_CN:[中文]`
+
 Introduction
 ------------
 
@@ -45,7 +47,7 @@ Data type check is also performed when reading a value. An error is returned if 
 Namespaces
 ^^^^^^^^^^
 
-To mitigate potential conflicts in key names between different components, NVS assigns each key-value pair to one of namespaces. Namespace names follow the same rules as key names, i.e., the maximum length is 15 characters. Namespace name is specified in the ``nvs_open`` or ``nvs_open_from_part`` call. This call returns an opaque handle, which is used in subsequent calls to the ``nvs_read_*``, ``nvs_write_*``, and ``nvs_commit`` functions. This way, a handle is associated with a namespace, and key names will not collide with same names in other namespaces.
+To mitigate potential conflicts in key names between different components, NVS assigns each key-value pair to one of namespaces. Namespace names follow the same rules as key names, i.e., the maximum length is 15 characters. Namespace name is specified in the ``nvs_open`` or ``nvs_open_from_part`` call. This call returns an opaque handle, which is used in subsequent calls to the ``nvs_get_*``, ``nvs_set_*``, and ``nvs_commit`` functions. This way, a handle is associated with a namespace, and key names will not collide with same names in other namespaces.
 Please note that the namespaces with the same name in different NVS partitions are considered as separate namespaces.
 
 
@@ -144,7 +146,7 @@ Entry and entry state bitmap
 Each entry can be in one of the following three states represented with two bits in the entry state bitmap. The final four bits in the bitmap (256 - 2 * 126) are not used.
 
 Empty (2'b11)
-    Nothing is written into the specific entry yet. It is in an uninitialized state (all bytes are ``0xff``). 
+    Nothing is written into the specific entry yet. It is in an uninitialized state (all bytes are ``0xff``).
 
 Written (2'b10)
     A key-value pair (or part of key-value pair which spans multiple entries) has been written into the entry.
@@ -169,12 +171,12 @@ For values of primitive types (currently integers from 1 to 8 bytes long), entry
                                              Primitive  +--------------------------------+
                                             +-------->  |     Data (8)                   |
                                             | Types     +--------------------------------+
-                       +-> Fixed length --                                                
+                       +-> Fixed length --
                        |                    |           +---------+--------------+---------------+-------+
                        |                    +-------->  | Size(4) | ChunkCount(1)| ChunkStart(1) | Rsv(2)|
         Data format ---+                    Blob Index  +---------+--------------+---------------+-------+
                        |
-                       |                             +----------+---------+-----------+ 
+                       |                             +----------+---------+-----------+
                        +->   Variable length   -->   | Size (2) | Rsv (2) | CRC32 (4) |
                             (Strings, Blob Data)     +----------+---------+-----------+
 
@@ -200,21 +202,21 @@ Key
     Zero-terminated ASCII string containing a key name. Maximum string length is 15 bytes, excluding a zero terminator.
 
 Data
-    For integer types, this field contains the value itself. If the value itself is shorter than 8 bytes, it is padded to the right, with unused bytes filled with ``0xff``. 
+    For integer types, this field contains the value itself. If the value itself is shorter than 8 bytes, it is padded to the right, with unused bytes filled with ``0xff``.
 
     For "blob index" entry, these 8 bytes hold the following information about data-chunks:
 
     - Size
         (Only for blob index.) Size, in bytes, of complete blob data.
 
-    - ChunkCount 
-        (Only for blob index.) Total number of blob-data chunks into which the blob was divided during storage. 
-     
-    - ChunkStart 
-        (Only for blob index.) ChunkIndex of the first blob-data chunk of this blob. Subsequent chunks have chunkIndex incrementally allocated (step of 1). 
+    - ChunkCount
+        (Only for blob index.) Total number of blob-data chunks into which the blob was divided during storage.
+
+    - ChunkStart
+        (Only for blob index.) ChunkIndex of the first blob-data chunk of this blob. Subsequent chunks have chunkIndex incrementally allocated (step of 1).
 
     For string and blob data chunks, these 8 bytes hold additional data about the value, which are described below:
-  
+
     - Size
         (Only for strings and blobs.) Size, in bytes, of actual data. For strings, this includes zero terminators.
 
@@ -227,7 +229,7 @@ Variable length values (strings and blobs) are written into subsequent entries, 
 Namespaces
 ^^^^^^^^^^
 
-As mentioned above, each key-value pair belongs to one of the namespaces. Namespace identifiers (strings) are stored as keys of key-value pairs in namespace with index 0. Values corresponding to these keys are indexes of these namespaces. 
+As mentioned above, each key-value pair belongs to one of the namespaces. Namespace identifiers (strings) are stored as keys of key-value pairs in namespace with index 0. Values corresponding to these keys are indexes of these namespaces.
 
 ::
 
@@ -261,7 +263,7 @@ Data stored in NVS partitions can be encrypted using AES-XTS in the manner simil
 NVS key partition
 ^^^^^^^^^^^^^^^^^
 
-An application requiring NVS encryption support needs to be compiled with a key-partition of the type `data` and subtype `key`. This partition should be marked as `encrypted`. Refer to :doc:`Partition Tables <../../api-guides/partition-tables>` for more details. The size of the partition should be 4096 bytes (minimum partition size). The structure of this partition is depicted below. 
+An application requiring NVS encryption support needs to be compiled with a key-partition of the type `data` and subtype `key`. This partition should be marked as `encrypted`. Refer to :doc:`Partition Tables <../../api-guides/partition-tables>` for more details. The size of the partition should be 4096 bytes (minimum partition size). The structure of this partition is depicted below.
 
 ::
 
@@ -280,7 +282,7 @@ It is possible for an application to use different keys for different NVS partit
 Encrypted Read/Write
 ^^^^^^^^^^^^^^^^^^^^
 
-The same NVS API functions ``nvs_read_*`` or ``nvs_write_*`` can be used for reading of, and writing to an encrypted nvs partition as well. However, the API functions for initialising NVS partitions are different: ``nvs_flash_secure_init`` and ``nvs_flash_secure_init_partition`` instead of ``nvs_flash_init`` and ``nvs_flash_init_partition`` respectively. The ``nvs_sec_cfg_t`` structure required for these API functions can be populated using ``nvs_flash_generate_keys`` or ``nvs_flash_read_security_cfg``.
+The same NVS API functions ``nvs_get_*`` or ``nvs_set_*`` can be used for reading of, and writing to an encrypted nvs partition as well. However, the API functions for initialising NVS partitions are different: ``nvs_flash_secure_init`` and ``nvs_flash_secure_init_partition`` instead of ``nvs_flash_init`` and ``nvs_flash_init_partition`` respectively. The ``nvs_sec_cfg_t`` structure required for these API functions can be populated using ``nvs_flash_generate_keys`` or ``nvs_flash_read_security_cfg``.
 
 Applications are expected to follow the steps below in order to perform NVS read/write operations with encryption enabled.
 
@@ -288,7 +290,7 @@ Applications are expected to follow the steps below in order to perform NVS read
     2. Populate the ``nvs_sec_cfg_t`` struct using the ``nvs_flash_read_security_cfg`` or ``nvs_flash_generate_keys`` API functions.
     3. Initialise NVS flash partition using the ``nvs_flash_secure_init`` or ``nvs_flash_secure_init_partition`` API functions.
     4. Open a namespace using the ``nvs_open`` or ``nvs_open_from_part`` API functions.
-    5. Perform NVS read/write operations using ``nvs_read_*`` or ``nvs_write_*``.
+    5. Perform NVS read/write operations using ``nvs_get_*`` or ``nvs_set_*``.
     6. Deinitialise an NVS partition using ``nvs_flash_deinit``.
 
 NVS iterators

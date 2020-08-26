@@ -11,6 +11,8 @@
 #include "test_utils.h"
 #include "sdkconfig.h"
 
+#if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32S2BETA)
+
 static __thread int tl_test_var1;
 static __thread uint8_t tl_test_var2 = 55;
 static __thread uint16_t tl_test_var3 = 44;
@@ -107,4 +109,5 @@ TEST_CASE("TLS test", "[freertos]")
     }
     vTaskDelay(10); /* Make sure idle task can clean up s_task, before it goes out of scope */
 }
+#endif
 

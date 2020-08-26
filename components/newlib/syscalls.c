@@ -81,6 +81,6 @@ int fcntl(int fd, int cmd, ...)
 /* No-op function, used to force linking this file,
    instead of the syscalls implementation from libgloss.
  */
-void newlib_include_syscalls_impl()
+void newlib_include_syscalls_impl(void)
 {
 }

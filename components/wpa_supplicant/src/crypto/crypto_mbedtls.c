@@ -25,10 +25,6 @@
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
 
-
-
-#define IANA_SECP256R1 19
-
 #ifdef ESP_PLATFORM
 int crypto_get_random(void *buf, size_t len)
 {
@@ -164,7 +160,7 @@ int crypto_bignum_mulmod(const struct crypto_bignum *a,
                          struct crypto_bignum *d)
 {
     int res;
-#if ALLOW_EVEN_MOD // Must enable this macro if c is even.
+#if ALLOW_EVEN_MOD || !CONFIG_MBEDTLS_HARDWARE_MPI // Must enable ALLOW_EVEN_MOD if c is even
     mbedtls_mpi temp;
     mbedtls_mpi_init(&temp);
 
@@ -270,7 +266,7 @@ struct crypto_ec *crypto_ec_init(int group)
         return NULL;
     }
 
-    mbedtls_ecp_group_init( &e->group );
+    mbedtls_ecp_group_init(&e->group);
 
     if (mbedtls_ecp_group_load(&e->group, grp_id)) {
         crypto_ec_deinit(e);
@@ -287,7 +283,7 @@ void crypto_ec_deinit(struct crypto_ec *e)
         return;
     }
 
-    mbedtls_ecp_group_free( &e->group );
+    mbedtls_ecp_group_free(&e->group);
     os_free(e);
 }
 
@@ -421,6 +417,7 @@ int crypto_ec_point_mul(struct crypto_ec *e, const struct crypto_ec_point *p,
     mbedtls_ctr_drbg_context ctr_drbg;
 
     mbedtls_entropy_init(&entropy);
+    mbedtls_ctr_drbg_init(&ctr_drbg);
 
     MBEDTLS_MPI_CHK(mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
                                     NULL, 0));
@@ -432,8 +429,8 @@ int crypto_ec_point_mul(struct crypto_ec *e, const struct crypto_ec_point *p,
                 mbedtls_ctr_drbg_random,
                 &ctr_drbg));
 cleanup:
-    mbedtls_ctr_drbg_free( &ctr_drbg );
-    mbedtls_entropy_free( &entropy );
+    mbedtls_ctr_drbg_free(&ctr_drbg);
+    mbedtls_entropy_free(&entropy);
     return ret ? -1 : 0;
 }
 
@@ -481,9 +478,11 @@ int crypto_ec_point_solve_y_coord(struct crypto_ec *e,
      * such that p ≡ 3 (mod 4)
      *  y_ = (y2 ^ ((p+1)/4)) mod p
      *
-     *  if y_bit: y = p-y_
-     *   else y = y_`
+     *  if LSB of both x and y are same: y = y_
+     *   else y = p - y_
+     * y_bit is LSB of x
      */
+    y_bit = (y_bit != 0);
 
     y_sqr = (mbedtls_mpi *) crypto_ec_point_compute_y_sqr(e, x);
 
@@ -493,9 +492,11 @@ int crypto_ec_point_solve_y_coord(struct crypto_ec *e,
         MBEDTLS_MPI_CHK(mbedtls_mpi_div_int(&temp, NULL, &temp, 4));
         MBEDTLS_MPI_CHK(mbedtls_mpi_exp_mod(y, y_sqr, &temp, &e->group.P, NULL));
 
-        if (y_bit) {
+        if (y_bit != mbedtls_mpi_get_bit(y, 0))
             MBEDTLS_MPI_CHK(mbedtls_mpi_sub_mpi(y, &e->group.P, y));
-        }
+
+        MBEDTLS_MPI_CHK(mbedtls_mpi_copy(&((mbedtls_ecp_point* )p)->X, (const mbedtls_mpi*) x));
+        MBEDTLS_MPI_CHK(mbedtls_mpi_lset(&((mbedtls_ecp_point *)p)->Z, 1));
     } else {
         ret = 1;
     }
@@ -588,6 +589,7 @@ int crypto_ec_point_is_on_curve(struct crypto_ec *e,
 
 cleanup:
     mbedtls_mpi_free(&y_sqr_lhs);
+    mbedtls_mpi_free(&two);
     mbedtls_mpi_free(y_sqr_rhs);
     os_free(y_sqr_rhs);
     return (ret == 0) && (on_curve == 1);

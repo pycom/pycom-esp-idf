@@ -121,7 +121,7 @@ static bool hal_open(const hci_hal_callbacks_t *upper_callbacks, void *task_thre
     return true;
 }
 
-static void hal_close()
+static void hal_close(void)
 {
     hci_hal_env_deinit();
 
@@ -338,7 +338,7 @@ static int host_recv_pkt_cb(uint8_t *data, uint16_t len)
 
     pkt_size = BT_HDR_SIZE + len;
     pkt = (BT_HDR *) osi_calloc(pkt_size);
-    //pkt = (BT_HDR *)hci_hal_env.allocator->alloc(pkt_size);
+
     if (!pkt) {
         HCI_TRACE_ERROR("%s couldn't aquire memory for inbound data buffer.\n", __func__);
         return -1;
@@ -367,7 +367,7 @@ static const hci_hal_t interface = {
     transmit_data,
 };
 
-const hci_hal_t *hci_hal_h4_get_interface()
+const hci_hal_t *hci_hal_h4_get_interface(void)
 {
     return &interface;
 }

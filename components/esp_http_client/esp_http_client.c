@@ -300,12 +300,10 @@ esp_err_t esp_http_client_set_username(esp_http_client_handle_t client, const ch
         ESP_LOGE(TAG, "client must not be NULL");
         return ESP_ERR_INVALID_ARG;
     }
-    if (username == NULL && client->connection_info.username != NULL) {
+    if (client->connection_info.username != NULL) {
         free(client->connection_info.username);
-        client->connection_info.username = NULL;
-    } else if (username != NULL) {
-        client->connection_info.username = strdup(username);
     }
+    client->connection_info.username = username ? strdup(username) : NULL;
     return ESP_OK;
 }
 
@@ -325,13 +323,21 @@ esp_err_t esp_http_client_set_password(esp_http_client_handle_t client, char *pa
         ESP_LOGE(TAG, "client must not be NULL");
         return ESP_ERR_INVALID_ARG;
     }
-    if (password == NULL && client->connection_info.password != NULL) {
+    if (client->connection_info.password != NULL) {
         memset(client->connection_info.password, 0, strlen(client->connection_info.password));
         free(client->connection_info.password);
-        client->connection_info.password = NULL;
-    } else if (password != NULL) {
-        client->connection_info.password = strdup(password);
     }
+    client->connection_info.password = password ? strdup(password) : NULL;
+    return ESP_OK;
+}
+
+esp_err_t esp_http_client_set_authtype(esp_http_client_handle_t client, esp_http_client_auth_type_t auth_type)
+{
+    if (client == NULL) {
+        ESP_LOGE(TAG, "client must not be NULL");
+        return ESP_ERR_INVALID_ARG;
+    }
+    client->connection_info.auth_type = auth_type;
     return ESP_OK;
 }
 
@@ -657,6 +663,7 @@ static esp_err_t esp_http_check_response(esp_http_client_handle_t client)
     switch (client->response->status_code) {
         case HttpStatus_MovedPermanently:
         case HttpStatus_Found:
+        case HttpStatus_TemporaryRedirect:
             esp_http_client_set_redirection(client);
             client->redirect_counter ++;
             client->process_again = 1;
@@ -796,6 +803,22 @@ static int esp_http_client_get_data(esp_http_client_handle_t client)
     return rlen;
 }
 
+bool esp_http_client_is_complete_data_received(esp_http_client_handle_t client)
+{
+    if (client->response->is_chunked) {
+        if (!client->is_chunk_complete) {
+            ESP_LOGD(TAG, "Chunks were not completely read");
+            return false;
+        }
+    } else {
+        if (client->response->data_process != client->response->content_length) {
+            ESP_LOGD(TAG, "Data processed %d != Data specified in content length %d", client->response->data_process, client->response->content_length);
+            return false;
+        }
+    }
+    return true;
+}
+
 int esp_http_client_read(esp_http_client_handle_t client, char *buffer, int len)
 {
     esp_http_buffer_t *res_buffer = client->response->buffer;
@@ -819,7 +842,7 @@ int esp_http_client_read(esp_http_client_handle_t client, char *buffer, int len)
         } else {
             is_data_remain = client->response->data_process < client->response->content_length;
         }
-        ESP_LOGD(TAG, "is_data_remain=%d, is_chunked=%d", is_data_remain, client->response->is_chunked);
+        ESP_LOGD(TAG, "is_data_remain=%d, is_chunked=%d, content_length=%d", is_data_remain, client->response->is_chunked, client->response->content_length);
         if (!is_data_remain) {
             break;
         }
@@ -827,10 +850,23 @@ int esp_http_client_read(esp_http_client_handle_t client, char *buffer, int len)
         if (byte_to_read > client->buffer_size_rx) {
             byte_to_read = client->buffer_size_rx;
         }
+        errno = 0;
         rlen = esp_transport_read(client->transport, res_buffer->data, byte_to_read, client->timeout_ms);
         ESP_LOGD(TAG, "need_read=%d, byte_to_read=%d, rlen=%d, ridx=%d", need_read, byte_to_read, rlen, ridx);
 
         if (rlen <= 0) {
+            if (errno != 0) {
+                esp_log_level_t sev = ESP_LOG_WARN;
+                /* On connection close from server, recv should ideally return 0 but we have error conversion
+                 * in `tcp_transport` SSL layer which translates it `-1` and hence below additional checks */
+                if (rlen == -1 && errno == ENOTCONN && client->response->is_chunked) {
+                    /* Explicit call to parser for invoking `message_complete` callback */
+                    http_parser_execute(client->parser, client->parser_settings, res_buffer->data, 0);
+                    /* ...and lowering the message severity, as closed connection from server side is expected in chunked transport */
+                    sev = ESP_LOG_DEBUG;
+                }
+                ESP_LOG_LEVEL(sev, TAG, "esp_transport_read returned:%d and errno:%d ", rlen, errno);
+            }
             return ridx;
         }
         res_buffer->output_ptr = buffer + ridx;

@@ -34,10 +34,12 @@ from idf_http_server_test import test as client
 # of large HTTP packets and malformed requests, running multiple parallel sessions, etc.
 # It is advised that all these tests be run locally, when making changes or adding new
 # features to this component.
+
+
 @ttfw_idf.idf_example_test(env_tag="Example_WIFI")
 def test_examples_protocol_http_server_advanced(env, extra_data):
     # Acquire DUT
-    dut1 = env.get_dut("http_server", "examples/protocols/http_server/advanced_tests")
+    dut1 = env.get_dut("http_server", "examples/protocols/http_server/advanced_tests", dut_class=ttfw_idf.ESP32DUT)
 
     # Get binary file
     binary_file = os.path.join(dut1.app.binary_path, "tests.bin")

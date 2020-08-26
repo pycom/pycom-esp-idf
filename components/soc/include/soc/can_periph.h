@@ -13,4 +13,10 @@
 // limitations under the License.
 
 #pragma once
+
+#include "sdkconfig.h"
+
+#if CONFIG_IDF_TARGET_ESP32
 #include "soc/can_struct.h"
+#include "soc/can_caps.h"
+#endif

@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.5)
 project(esp-idf C CXX ASM)
 
+if(CMAKE_CURRENT_LIST_DIR STREQUAL CMAKE_SOURCE_DIR)
+    message(FATAL_ERROR "Current directory '${CMAKE_CURRENT_LIST_DIR}' is not buildable. "
+    "Change directories to one of the example projects in '${CMAKE_CURRENT_LIST_DIR}/examples' and try "
+    "again.")
+endif()
+
 unset(compile_options)
 unset(c_compile_options)
 unset(cxx_compile_options)
@@ -10,11 +16,32 @@ unset(link_options)
 # Add the following build specifications here, since these seem to be dependent
 # on config values on the root Kconfig.
 
-if(CONFIG_COMPILER_OPTIMIZATION_LEVEL_RELEASE)
-    list(APPEND compile_options "-Os")
-    list(APPEND compile_options "-freorder-blocks")
-else()
-    list(APPEND compile_options "-Og")
+if(NOT BOOTLOADER_BUILD)
+
+    if(CONFIG_COMPILER_OPTIMIZATION_SIZE)
+        list(APPEND compile_options "-Os")
+        list(APPEND compile_options "-freorder-blocks")
+    elseif(CONFIG_COMPILER_OPTIMIZATION_DEFAULT)
+        list(APPEND compile_options "-Og")
+    elseif(CONFIG_COMPILER_OPTIMIZATION_NONE)
+        list(APPEND compile_options "-O0")
+    elseif(CONFIG_COMPILER_OPTIMIZATION_PERF)
+        list(APPEND compile_options "-O2")
+    endif()
+
+else()  # BOOTLOADER_BUILD
+
+    if(CONFIG_BOOTLOADER_COMPILER_OPTIMIZATION_SIZE)
+        list(APPEND compile_options "-Os")
+        list(APPEND compile_options "-freorder-blocks")
+    elseif(CONFIG_BOOTLOADER_COMPILER_OPTIMIZATION_DEBUG)
+        list(APPEND compile_options "-Og")
+    elseif(CONFIG_BOOTLOADER_COMPILER_OPTIMIZATION_NONE)
+        list(APPEND compile_options "-O0")
+    elseif(CONFIG_BOOTLOADER_COMPILER_OPTIMIZATION_PERF)
+        list(APPEND compile_options "-O2")
+    endif()
+
 endif()
 
 if(CONFIG_COMPILER_CXX_EXCEPTIONS)
@@ -35,19 +62,16 @@ if(CONFIG_COMPILER_DISABLE_GCC8_WARNINGS)
                                 "-Wno-sizeof-pointer-memaccess"
                                 "-Wno-clobbered")
 
-    # doesn't use GCC_NOT_5_2_0 because idf_set_global_variables was not called before
-    if(GCC_NOT_5_2_0)
-        list(APPEND compile_options "-Wno-format-overflow"
-                                    "-Wno-stringop-truncation"
-                                    "-Wno-misleading-indentation"
-                                    "-Wno-cast-function-type"
-                                    "-Wno-implicit-fallthrough"
-                                    "-Wno-unused-const-variable"
-                                    "-Wno-switch-unreachable"
-                                    "-Wno-format-truncation"
-                                    "-Wno-memset-elt-size"
-                                    "-Wno-int-in-bool-context")
-    endif()
+    list(APPEND compile_options "-Wno-format-overflow"
+                                "-Wno-stringop-truncation"
+                                "-Wno-misleading-indentation"
+                                "-Wno-cast-function-type"
+                                "-Wno-implicit-fallthrough"
+                                "-Wno-unused-const-variable"
+                                "-Wno-switch-unreachable"
+                                "-Wno-format-truncation"
+                                "-Wno-memset-elt-size"
+                                "-Wno-int-in-bool-context")
 endif()
 
 if(CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_DISABLE)

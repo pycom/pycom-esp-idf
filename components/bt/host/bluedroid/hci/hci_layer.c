@@ -299,7 +299,7 @@ static void event_command_ready(fixed_queue_t *queue)
 
     wait_entry = fixed_queue_dequeue(queue, FIXED_QUEUE_MAX_TIMEOUT);
 
-    if(wait_entry->opcode == HCI_HOST_NUM_PACKETS_DONE 
+    if(wait_entry->opcode == HCI_HOST_NUM_PACKETS_DONE
 #if (BLE_ADV_REPORT_FLOW_CONTROL == TRUE)
     || wait_entry->opcode == HCI_VENDOR_BLE_ADV_REPORT_FLOW_CONTROL
 #endif
@@ -535,7 +535,7 @@ static waiting_command_t *get_waiting_command(command_opcode_t opcode)
     return NULL;
 }
 
-static void init_layer_interface()
+static void init_layer_interface(void)
 {
     if (!interface_created) {
         interface.transmit_command = transmit_command;
@@ -555,7 +555,7 @@ static const packet_fragmenter_callbacks_t packet_fragmenter_callbacks = {
     fragmenter_transmit_finished
 };
 
-const hci_t *hci_layer_get_interface()
+const hci_t *hci_layer_get_interface(void)
 {
     hal = hci_hal_h4_get_interface();
     packet_fragmenter = packet_fragmenter_get_interface();

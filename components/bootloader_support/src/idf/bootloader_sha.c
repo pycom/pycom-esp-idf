@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "bootloader_sha.h"
+#include "bootloader_flash.h"
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 #include <sys/param.h>
 #include <mbedtls/sha256.h>
 
-bootloader_sha256_handle_t bootloader_sha256_start()
+bootloader_sha256_handle_t bootloader_sha256_start(void)
 {
     mbedtls_sha256_context *ctx = (mbedtls_sha256_context *)malloc(sizeof(mbedtls_sha256_context));
     if (!ctx) {

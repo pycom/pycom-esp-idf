@@ -27,7 +27,7 @@ ONE_SHOT_TIMER_PERIOD = 5000000
 
 @ttfw_idf.idf_example_test(env_tag='Example_WIFI')
 def test_examples_system_esp_timer(env, extra_data):
-    dut = env.get_dut('esp_timer_example', 'examples/system/esp_timer')
+    dut = env.get_dut('esp_timer_example', 'examples/system/esp_timer', dut_class=ttfw_idf.ESP32DUT)
     # start test
     dut.start_app()
     groups = dut.expect(STARTING_TIMERS_REGEX, timeout=30)

@@ -72,6 +72,9 @@ choice BT_HFP_ROLE
 
     config BT_HFP_CLIENT_ENABLE
         bool "Hands Free Unit"
+
+    config BT_HFP_AG_ENABLE
+        bool "Audio Gateway"
 endchoice
 
 choice BT_HFP_AUDIO_DATA_PATH
@@ -117,6 +120,14 @@ config BT_GATTS_ENABLE
     default y
     help
         This option can be disabled when the app work only on gatt client mode
+
+config BT_GATTS_PPCP_CHAR_GAP
+    bool "Enable Peripheral Preferred Connection Parameters characteristic in GAP service"
+    depends on BT_GATTS_ENABLE
+    default n
+    help
+        This enables "Peripheral Preferred Connection Parameters" characteristic (UUID: 0x2A04) in GAP service that has
+        connection parameters like min/max connection interval, slave latency and supervision timeout multiplier
 
 choice BT_GATTS_SEND_SERVICE_CHANGE_MODE
     prompt "GATTS Service Change Mode"

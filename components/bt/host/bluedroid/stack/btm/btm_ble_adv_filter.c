@@ -90,7 +90,7 @@ static UINT8 btm_ble_cs_update_pf_counter(tBTM_BLE_SCAN_COND_OP action,
 ** Returns          status
 **
 *******************************************************************************/
-tBTM_STATUS btm_ble_obtain_vsc_details()
+tBTM_STATUS btm_ble_obtain_vsc_details(void)
 {
     tBTM_STATUS st = BTM_SUCCESS;
 
@@ -921,7 +921,7 @@ tBTM_STATUS btm_ble_clear_scan_pf_filter(tBTM_BLE_SCAN_COND_OP action,
 
     /* clear the general filter entry */
     if (NULL == p_target) {
-        /* clear manufactuer data filter */
+        /* clear manufacturer data filter */
         st = btm_ble_update_pf_manu_data(BTM_BLE_SCAN_COND_CLEAR, filt_index, NULL,
                                          BTM_BLE_PF_MANU_DATA, cb_evt, ref_value);
         if (BTM_CMD_STARTED == st) {
@@ -1213,7 +1213,7 @@ tBTM_STATUS BTM_BleCfgFilterCondition(tBTM_BLE_SCAN_COND_OP action,
         st = btm_ble_update_addr_filter(action, filt_index, p_cond);
         break;
 
-    /* filter on service/solicitated UUID */
+    /* filter on service/solicited UUID */
     case BTM_BLE_PF_SRVC_UUID:
     case BTM_BLE_PF_SRVC_SOL_UUID:
         st = btm_ble_update_uuid_filter(action, filt_index, cond_type, p_cond, 0, ref_value);

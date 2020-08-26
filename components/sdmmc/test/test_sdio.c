@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "soc/soc_caps.h"
+#ifdef SOC_SDMMC_HOST_SUPPORTED
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,7 +43,6 @@
 
 /* TODO: add SDIO slave header files, remove these definitions */
 
-#define DR_REG_SLC_BASE 0x3ff58000
 #define DR_REG_SLC_MASK 0xfffffc00
 
 #define SLCCONF1 (DR_REG_SLC_BASE + 0x60)
@@ -52,7 +54,6 @@
 #define SLC_SLC0_TXLINK_RESTART (BIT(30))
 #define SLC_SLC0_TXLINK_START (BIT(29))
 
-#define DR_REG_SLCHOST_BASE 0x3ff55000
 #define DR_REG_SLCHOST_MASK 0xfffffc00
 #define SLCHOST_STATE_W0 (DR_REG_SLCHOST_BASE + 0x64)
 #define SLCHOST_CONF_W0 (DR_REG_SLCHOST_BASE + 0x6C)
@@ -126,12 +127,12 @@ static esp_err_t slave_slc_reg_write(sdmmc_card_t* card, uint32_t addr, uint32_t
 }
 
 /** Reset and put slave into download mode */
-static void reset_slave()
+static void reset_slave(void)
 {
     const int pin_en = 18;
     const int pin_io0 = 19;
     gpio_config_t gpio_cfg = {
-            .pin_bit_mask = BIT(pin_en) | BIT(pin_io0),
+            .pin_bit_mask = BIT64(pin_en) | BIT64(pin_io0),
             .mode = GPIO_MODE_OUTPUT_OD,
     };
     TEST_ESP_OK(gpio_config(&gpio_cfg));
@@ -384,3 +385,4 @@ TEST_CASE("can probe and talk to ESP32 SDIO slave", "[sdio][ignore]")
     free(card);
 }
 
+#endif

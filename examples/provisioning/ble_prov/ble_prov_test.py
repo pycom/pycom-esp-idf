@@ -17,7 +17,6 @@
 from __future__ import print_function
 import re
 import os
-import time
 
 import ttfw_idf
 import esp_prov
@@ -29,7 +28,7 @@ esp_prov.config_throw_except = True
 @ttfw_idf.idf_example_test(env_tag="Example_WIFI_BT")
 def test_examples_provisioning_ble(env, extra_data):
     # Acquire DUT
-    dut1 = env.get_dut("ble_prov", "examples/provisioning/ble_prov")
+    dut1 = env.get_dut("ble_prov", "examples/provisioning/ble_prov", dut_class=ttfw_idf.ESP32DUT)
 
     # Get binary file
     binary_file = os.path.join(dut1.app.binary_path, "ble_prov.bin")
@@ -82,19 +81,7 @@ def test_examples_provisioning_ble(env, extra_data):
     if not esp_prov.apply_wifi_config(transport, security):
         raise RuntimeError("Failed to send apply config")
 
-    success = False
-    while True:
-        time.sleep(5)
-        print("Wi-Fi connection state")
-        ret = esp_prov.get_wifi_config(transport, security)
-        if (ret == 1):
-            continue
-        elif (ret == 0):
-            print("Provisioning was successful")
-            success = True
-        break
-
-    if not success:
+    if not esp_prov.wait_wifi_connected(transport, security):
         raise RuntimeError("Provisioning failed")
 
 

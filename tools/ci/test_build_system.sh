@@ -46,7 +46,7 @@ function run_tests()
     if [ -z $CHECKOUT_REF_SCRIPT ]; then
         git checkout ${CI_BUILD_REF_NAME} || echo "Using esp-idf-template default branch..."
     else
-        $CHECKOUT_REF_SCRIPT esp-idf-template
+        $CHECKOUT_REF_SCRIPT esp-idf-template .
     fi
 
     print_status "Updating template config..."
@@ -272,16 +272,18 @@ function run_tests()
     ( make 2>&1 | grep "does not fit in configured flash size 1MB" ) || failure "Build didn't fail with expected flash size failure message"
     mv sdkconfig.bak sdkconfig
 
-    print_status "sdkconfig should have contents of both files: sdkconfig and sdkconfig.defaults"
+    print_status "sdkconfig should have contents of all files: sdkconfig, sdkconfig.defaults, sdkconfig.defaults.IDF_TARGET"
     make clean > /dev/null;
     rm -f sdkconfig.defaults;
     rm -f sdkconfig;
     echo "CONFIG_PARTITION_TABLE_OFFSET=0x10000" >> sdkconfig.defaults;
+    echo "CONFIG_ESP32_DEFAULT_CPU_FREQ_240=y" >> sdkconfig.defaults.esp32;
     echo "CONFIG_PARTITION_TABLE_TWO_OTA=y" >> sdkconfig;
     make defconfig > /dev/null;
     grep "CONFIG_PARTITION_TABLE_OFFSET=0x10000" sdkconfig || failure "The define from sdkconfig.defaults should be into sdkconfig"
+    grep "CONFIG_ESP32_DEFAULT_CPU_FREQ_240=y" sdkconfig || failure "The define from sdkconfig.defaults.esp32 should be into sdkconfig"
     grep "CONFIG_PARTITION_TABLE_TWO_OTA=y" sdkconfig || failure "The define from sdkconfig should be into sdkconfig"
-    rm sdkconfig sdkconfig.defaults
+    rm sdkconfig sdkconfig.defaults sdkconfig.defaults.esp32
     make defconfig
 
     print_status "can build with phy_init_data"

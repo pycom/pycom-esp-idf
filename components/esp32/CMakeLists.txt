@@ -1,4 +1,10 @@
+idf_build_get_property(target IDF_TARGET)
+if(NOT "${target}" STREQUAL "esp32")
+    return()
+endif()
+
 idf_build_get_property(sdkconfig_header SDKCONFIG_HEADER)
+
 if(BOOTLOADER_BUILD)
     # For bootloader, all we need from esp32 is headers
     idf_component_register(INCLUDE_DIRS include)
@@ -14,7 +20,6 @@ else()
         "crosscore_int.c"
         "dport_access.c"
         "dport_panic_highint_hdl.S"
-        "esp_adapter.c"
         "esp_timer_esp32.c"
         "esp_himem.c"
         "hw_random.c"
@@ -27,16 +32,16 @@ else()
         "sleep_modes.c"
         "spiram.c"
         "spiram_psram.c"
-        "system_api.c"
+        "system_api_esp32.c"
         "task_wdt.c")
     set(include_dirs "include")
 
-    set(requires driver esp_event efuse soc) #unfortunately rom/uart uses SOC registers directly
+    set(requires driver efuse soc) #unfortunately rom/uart uses SOC registers directly
 
     # driver is a public requirement because esp_sleep.h uses gpio_num_t & touch_pad_t
     # app_update is added here because cpu_start.c uses esp_ota_get_app_description() function.
     set(priv_requires app_trace app_update bootloader_support log mbedtls nvs_flash pthread
-        spi_flash vfs wpa_supplicant espcoredump esp_common esp_wifi)
+        spi_flash vfs espcoredump esp_common perfmon)
     set(fragments linker.lf ld/esp32_fragments.lf)
 
     idf_component_register(SRCS "${srcs}"
@@ -96,5 +101,19 @@ else()
         target_compile_options(${COMPONENT_LIB} PUBLIC -mfix-esp32-psram-cache-issue)
         # also, make sure we link with this option so correct toolchain libs are pulled in
         target_link_libraries(${COMPONENT_LIB} PUBLIC -mfix-esp32-psram-cache-issue)
+        # set strategy selected
+        # note that we don't need to set link options as the library linked is independent of this
+        if(CONFIG_SPIRAM_CACHE_WORKAROUND_STRATEGY_DUPLDST)
+            target_compile_options(${COMPONENT_LIB} PUBLIC -mfix-esp32-psram-cache-strategy=dupldst)
+            target_link_libraries(${COMPONENT_LIB} PUBLIC -mfix-esp32-psram-cache-strategy=dupldst)
+        endif()
+        if(CONFIG_SPIRAM_CACHE_WORKAROUND_STRATEGY_MEMW)
+            target_compile_options(${COMPONENT_LIB} PUBLIC -mfix-esp32-psram-cache-strategy=memw)
+            target_link_libraries(${COMPONENT_LIB} PUBLIC -mfix-esp32-psram-cache-strategy=memw)
+        endif()
+        if(CONFIG_SPIRAM_CACHE_WORKAROUND_STRATEGY_NOPS)
+            target_compile_options(${COMPONENT_LIB} PUBLIC -mfix-esp32-psram-cache-strategy=nops)
+            target_link_libraries(${COMPONENT_LIB} PUBLIC -mfix-esp32-psram-cache-strategy=nops)
+        endif()
     endif()
 endif()

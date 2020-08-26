@@ -62,9 +62,12 @@ SDKCONFIG_DEFAULTS_CI=sdkconfig.ci
 
 EXAMPLE_PATHS=$( find ${IDF_PATH}/examples/ -type f -name Makefile | grep -v "/build_system/cmake/" | sort )
 
-if [ -z {CI_NODE_TOTAL} ]
+if [ -z "${CI_NODE_TOTAL:-}" ]
 then
     START_NUM=0
+    if [ "${1:-}" ]; then
+        START_NUM=$1
+    fi
     END_NUM=999
 else
     JOB_NUM=${CI_NODE_INDEX}
@@ -96,7 +99,7 @@ build_example () {
 
     local EXAMPLE_DIR=$(dirname "${MAKE_FILE}")
     local EXAMPLE_NAME=$(basename "${EXAMPLE_DIR}")
-    
+
     # Check if the example needs a different base directory.
     # Path of the Makefile relative to $IDF_PATH
     local MAKE_FILE_REL=${MAKE_FILE#"${IDF_PATH}/"}
@@ -116,7 +119,7 @@ build_example () {
     pushd "example_builds/${ID}/${EXAMPLE_DIR_REL}"
         # be stricter in the CI build than the default IDF settings
         export EXTRA_CFLAGS=${PEDANTIC_CFLAGS}
-        export EXTRA_CXXFLAGS=${EXTRA_CFLAGS}
+        export EXTRA_CXXFLAGS=${PEDANTIC_CXXFLAGS}
 
         # sdkconfig files are normally not checked into git, but may be present when
         # a developer runs this script locally
@@ -125,6 +128,9 @@ build_example () {
         # If sdkconfig.ci file is present, append it to sdkconfig.defaults,
         # replacing environment variables
         if [[ -f "$SDKCONFIG_DEFAULTS_CI" ]]; then
+            # Make sure that the last line of sdkconfig.defaults is terminated. Otherwise, the first line
+            # of $SDKCONFIG_DEFAULTS_CI will be joined with the last one of sdkconfig.defaults.
+            echo >> sdkconfig.defaults
             cat $SDKCONFIG_DEFAULTS_CI | $IDF_PATH/tools/ci/envsubst.py >> sdkconfig.defaults
         fi
 
@@ -179,7 +185,8 @@ echo -e "\nFound issues:"
 IGNORE_WARNS="\
 library/error\.o\
 \|\ -Werror\
-\|error\.d\
+\|.*error.*\.o\
+\|.*error.*\.d\
 \|reassigning to symbol\
 \|changes choice state\
 \|Compiler version is not supported\

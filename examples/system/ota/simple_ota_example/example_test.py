@@ -103,7 +103,7 @@ def test_examples_protocol_simple_ota_example(env, extra_data):
       2. Fetch OTA image over HTTPS
       3. Reboot with the new OTA image
     """
-    dut1 = env.get_dut("simple_ota_example", "examples/system/ota/simple_ota_example")
+    dut1 = env.get_dut("simple_ota_example", "examples/system/ota/simple_ota_example", dut_class=ttfw_idf.ESP32DUT)
     # check and log bin size
     binary_file = os.path.join(dut1.app.binary_path, "simple_ota.bin")
     bin_size = os.path.getsize(binary_file)

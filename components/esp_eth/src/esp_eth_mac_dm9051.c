@@ -337,9 +337,10 @@ err:
 /**
  * @brief start dm9051: enable interrupt and start receive
  */
-static esp_err_t dm9051_start(emac_dm9051_t *emac)
+static esp_err_t emac_dm9051_start(esp_eth_mac_t *mac)
 {
     esp_err_t ret = ESP_OK;
+    emac_dm9051_t *emac = __containerof(mac, emac_dm9051_t, parent);
     /* enable interrupt */
     MAC_CHECK(dm9051_register_write(emac, DM9051_IMR, IMR_ALL) == ESP_OK, "write IMR failed", err, ESP_FAIL);
     /* enable rx */
@@ -355,9 +356,10 @@ err:
 /**
  * @brief stop dm9051: disable interrupt and stop receive
  */
-static esp_err_t dm9051_stop(emac_dm9051_t *emac)
+static esp_err_t emac_dm9051_stop(esp_eth_mac_t *mac)
 {
     esp_err_t ret = ESP_OK;
+    emac_dm9051_t *emac = __containerof(mac, emac_dm9051_t, parent);
     /* disable interrupt */
     MAC_CHECK(dm9051_register_write(emac, DM9051_IMR, 0x00) == ESP_OK, "write IMR failed", err, ESP_FAIL);
     /* disable rx */
@@ -397,8 +399,10 @@ static void emac_dm9051_task(void *arg)
         if (status & ISR_PR) {
             do {
                 length = ETH_MAX_PACKET_SIZE;
-                buffer = (uint8_t *)heap_caps_malloc(length, MALLOC_CAP_DMA);
-                if (emac->parent.receive(&emac->parent, buffer, &length) == ESP_OK) {
+                buffer = heap_caps_malloc(length, MALLOC_CAP_DMA);
+                if (!buffer) {
+                    ESP_LOGE(TAG, "no mem for receive buffer");
+                } else if (emac->parent.receive(&emac->parent, buffer, &length) == ESP_OK) {
                     /* pass the buffer to stack (e.g. TCP/IP layer) */
                     if (length) {
                         emac->eth->stack_input(emac->eth, buffer, length);
@@ -517,11 +521,11 @@ static esp_err_t emac_dm9051_set_link(esp_eth_mac_t *mac, eth_link_t link)
     switch (link) {
     case ETH_LINK_UP:
         MAC_CHECK(nsr & NSR_LINKST, "phy is not link up", err, ESP_ERR_INVALID_STATE);
-        MAC_CHECK(dm9051_start(emac) == ESP_OK, "dm9051 start failed", err, ESP_FAIL);
+        MAC_CHECK(mac->start(mac) == ESP_OK, "dm9051 start failed", err, ESP_FAIL);
         break;
     case ETH_LINK_DOWN:
         MAC_CHECK(!(nsr & NSR_LINKST), "phy is not link down", err, ESP_ERR_INVALID_STATE);
-        MAC_CHECK(dm9051_stop(emac) == ESP_OK, "dm9051 stop failed", err, ESP_FAIL);
+        MAC_CHECK(mac->stop(mac) == ESP_OK, "dm9051 stop failed", err, ESP_FAIL);
         break;
     default:
         MAC_CHECK(false, "unknown link status", err, ESP_ERR_INVALID_ARG);
@@ -597,8 +601,6 @@ static esp_err_t emac_dm9051_transmit(esp_eth_mac_t *mac, uint8_t *buf, uint32_t
 {
     esp_err_t ret = ESP_OK;
     emac_dm9051_t *emac = __containerof(mac, emac_dm9051_t, parent);
-    MAC_CHECK(buf, "can't set buf to null", err, ESP_ERR_INVALID_ARG);
-    MAC_CHECK(length, "buf length can't be zero", err, ESP_ERR_INVALID_ARG);
     /* Check if last transmit complete */
     uint8_t tcr = 0;
     MAC_CHECK(dm9051_register_read(emac, DM9051_TCR, &tcr) == ESP_OK, "read TCR failed", err, ESP_FAIL);
@@ -620,7 +622,6 @@ static esp_err_t emac_dm9051_receive(esp_eth_mac_t *mac, uint8_t *buf, uint32_t 
 {
     esp_err_t ret = ESP_OK;
     emac_dm9051_t *emac = __containerof(mac, emac_dm9051_t, parent);
-    MAC_CHECK(buf && length, "can't set buf and length to null", err, ESP_ERR_INVALID_ARG);
     uint8_t rxbyte = 0;
     uint16_t rx_len = 0;
     __attribute__((aligned(4))) dm9051_rx_header_t header; // SPI driver needs the rx buffer 4 byte align
@@ -630,12 +631,12 @@ static esp_err_t emac_dm9051_receive(esp_eth_mac_t *mac, uint8_t *buf, uint32_t 
     MAC_CHECK(dm9051_register_read(emac, DM9051_MRCMDX, &rxbyte) == ESP_OK, "read MRCMDX failed", err, ESP_FAIL);
     /* rxbyte must be 0xFF, 0 or 1 */
     if (rxbyte > 1) {
-        MAC_CHECK(dm9051_stop(emac) == ESP_OK, "stop dm9051 failed", err, ESP_FAIL);
+        MAC_CHECK(mac->stop(mac) == ESP_OK, "stop dm9051 failed", err, ESP_FAIL);
         /* reset rx fifo pointer */
         MAC_CHECK(dm9051_register_write(emac, DM9051_MPTRCR, MPTRCR_RST_RX) == ESP_OK,
                   "write MPTRCR failed", err, ESP_FAIL);
         ets_delay_us(10);
-        MAC_CHECK(dm9051_start(emac) == ESP_OK, "start dm9051 failed", err, ESP_FAIL);
+        MAC_CHECK(mac->start(mac) == ESP_OK, "start dm9051 failed", err, ESP_FAIL);
         MAC_CHECK(false, "reset rx fifo pointer", err, ESP_FAIL);
     } else if (rxbyte) {
         MAC_CHECK(dm9051_memory_peek(emac, (uint8_t *)&header, sizeof(header)) == ESP_OK,
@@ -699,7 +700,7 @@ static esp_err_t emac_dm9051_deinit(esp_eth_mac_t *mac)
 {
     emac_dm9051_t *emac = __containerof(mac, emac_dm9051_t, parent);
     esp_eth_mediator_t *eth = emac->eth;
-    dm9051_stop(emac);
+    mac->stop(mac);
     gpio_isr_handler_remove(emac->int_gpio_num);
     gpio_reset_pin(emac->int_gpio_num);
     eth->on_state_changed(eth, ETH_STATE_DEINIT, NULL);
@@ -732,6 +733,8 @@ esp_eth_mac_t *esp_eth_mac_new_dm9051(const eth_dm9051_config_t *dm9051_config, 
     emac->parent.set_mediator = emac_dm9051_set_mediator;
     emac->parent.init = emac_dm9051_init;
     emac->parent.deinit = emac_dm9051_deinit;
+    emac->parent.start = emac_dm9051_start;
+    emac->parent.stop = emac_dm9051_stop;
     emac->parent.del = emac_dm9051_del;
     emac->parent.write_phy_reg = emac_dm9051_write_phy_reg;
     emac->parent.read_phy_reg = emac_dm9051_read_phy_reg;

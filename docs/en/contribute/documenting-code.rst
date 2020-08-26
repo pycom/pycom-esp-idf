@@ -1,6 +1,8 @@
 Documenting Code
 ================
 
+:link_to_translation:`zh_CN:[中文]`
+
 The purpose of this description is to provide quick summary on documentation style used in `espressif/esp-idf`_ repository and how to add new documentation. 
 
 
@@ -21,7 +23,7 @@ Typical comment block, that contains documentation of a function, looks like bel
     :align: center
     :alt: Sample inline code documentation
  
-Doxygen supports couple of formatting styles. It also gives you great flexibility on level of details to include in documentation. To get familiar with available features, please check data reach and very well organized `Doxygen Manual <https://www.stack.nl/~dimitri/doxygen/manual/index.html>`_.
+Doxygen supports couple of formatting styles. It also gives you great flexibility on level of details to include in documentation. To get familiar with available features, please check data rich and very well organized `Doxygen Manual <https://www.stack.nl/~dimitri/doxygen/manual/index.html>`_.
 
 
 Why we need it?
@@ -125,7 +127,7 @@ There is couple of tips, how you can make your documentation even better and mor
 5. Use markdown to make your documentation even more readable. You will add headers, links, tables and more. ::
 
     *
-    * [ESP32 Technical Reference](https://espressif.com/sites/default/files/documentation/esp32_technical_reference_manual_en.pdf)
+    * [ESP32 Technical Reference Manual](https://espressif.com/sites/default/files/documentation/esp32_technical_reference_manual_en.pdf)
     *
 
 .. note::
@@ -139,7 +141,7 @@ There is couple of tips, how you can make your documentation even better and mor
 Linking Examples
 ----------------
 
-When linking to examples on GitHub do not use absolute / hadcoded URLs. Instead, use docutils custom roles that will generate links for you. These auto-generated links point to the tree or blob for the git commit ID (or tag) of the repository. This is needed to ensure that links do not get broken when files in master branch are moved around or deleted.
+When linking to examples on GitHub do not use absolute / hardcoded URLs. Instead, use docutils custom roles that will generate links for you. These auto-generated links point to the tree or blob for the git commit ID (or tag) of the repository. This is needed to ensure that links do not get broken when files in master branch are moved around or deleted.
 
 The following roles are provided:
 
@@ -213,6 +215,35 @@ Try them out by modifying the source code and see the diagram instantly renderin
 .. note::
 
     There may be slight differences in rendering of font used by the `interactive shell`_ compared to the font used in the esp-idf documentation.
+
+
+Add Notes
+---------
+
+Working on a document, you might need to:
+
+- Place some suggestions on what should be added or modified in future.
+- Leave a reminder for yourself or somebody else to follow up.
+
+In this case, add a todo note to your reST file using the directive ``.. todo::``. For example:
+
+.. code-block:: none
+
+   .. todo::
+
+      Add a package diagram.
+
+If you add ``.. todolist::`` to a reST file, the directive will be replaced by a list of all todo notes from the whole documentation.
+
+By default, the directives ``.. todo::`` and ``.. todolist::`` are ignored by documentation builders. If you want the notes and the list of notes to be visible in your locally built documentation, do the following:
+
+1. Open your local ``conf_common.py`` file.
+2. Find the parameter ``todo_include_todos``.
+3. Change its value from ``False`` to ``True``.
+
+Before pushing your changes to origin, please set the value of ``todo_include_todos`` back to ``False``.
+
+For more details about the extension, see `sphinx.ext.todo <https://www.sphinx-doc.org/en/master/usage/extensions/todo.html#directive-todolist>`_ documenation.
 
 
 Put it all together

@@ -10,8 +10,12 @@
 #ifndef _CRYPTO_H_
 #define _CRYPTO_H_
 
-#include "mesh_types.h"
 #include <string.h>
+#include "mesh_buf.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct bt_mesh_sg {
     const void *data;
@@ -162,5 +166,9 @@ int bt_mesh_prov_decrypt(const u8_t key[16], u8_t nonce[13],
 
 int bt_mesh_prov_encrypt(const u8_t key[16], u8_t nonce[13],
                          const u8_t data[25], u8_t out[33]);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _CRYPTO_H_ */

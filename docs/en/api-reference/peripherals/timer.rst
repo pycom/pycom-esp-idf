@@ -1,6 +1,8 @@
 Timer
 =====
 
+:link_to_translation:`zh_CN:[中文]`
+
 Introduction
 ------------
 
@@ -105,3 +107,4 @@ API Reference
 -------------
 
 .. include:: /_build/inc/timer.inc
+.. include:: /_build/inc/timer_types.inc

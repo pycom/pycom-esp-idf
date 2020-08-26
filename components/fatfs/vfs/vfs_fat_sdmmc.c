@@ -111,7 +111,8 @@ esp_err_t esp_vfs_fat_sdmmc_mount(const char* base_path,
     if (res != FR_OK) {
         err = ESP_FAIL;
         ESP_LOGW(TAG, "failed to mount card (%d)", res);
-        if (!(res == FR_NO_FILESYSTEM && mount_config->format_if_mount_failed)) {
+        if (!((res == FR_NO_FILESYSTEM || res == FR_INT_ERR)
+              && mount_config->format_if_mount_failed)) {
             goto fail;
         }
         ESP_LOGW(TAG, "partitioning card");
@@ -164,7 +165,7 @@ fail:
     return err;
 }
 
-esp_err_t esp_vfs_fat_sdmmc_unmount()
+esp_err_t esp_vfs_fat_sdmmc_unmount(void)
 {
     if (s_card == NULL) {
         return ESP_ERR_INVALID_STATE;
@@ -173,7 +174,7 @@ esp_err_t esp_vfs_fat_sdmmc_unmount()
     char drv[3] = {(char)('0' + s_pdrv), ':', 0};
     f_mount(0, drv, 0);
     // release SD driver
-    esp_err_t (*host_deinit)() = s_card->host.deinit;
+    esp_err_t (*host_deinit)(void) = s_card->host.deinit;
     ff_diskio_unregister(s_pdrv);
     free(s_card);
     s_card = NULL;

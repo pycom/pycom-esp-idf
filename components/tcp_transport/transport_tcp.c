@@ -52,7 +52,7 @@ static int resolve_dns(const char *host, struct sockaddr_in *ip) {
 static int tcp_connect(esp_transport_handle_t t, const char *host, int port, int timeout_ms)
 {
     struct sockaddr_in remote_ip;
-    struct timeval tv;
+    struct timeval tv = { 0 };
     transport_tcp_t *tcp = esp_transport_get_context_data(t);
 
     bzero(&remote_ip, sizeof(struct sockaddr_in));
@@ -74,9 +74,10 @@ static int tcp_connect(esp_transport_handle_t t, const char *host, int port, int
     remote_ip.sin_family = AF_INET;
     remote_ip.sin_port = htons(port);
 
-    esp_transport_utils_ms_to_timeval(timeout_ms, &tv);
+    esp_transport_utils_ms_to_timeval(timeout_ms, &tv); // if timeout=-1, tv is unchanged, 0, i.e. waits forever
 
     setsockopt(tcp->sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(tcp->sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
     ESP_LOGD(TAG, "[sock=%d],connecting to server IP:%s,Port:%d...",
              tcp->sock, ipaddr_ntoa((const ip_addr_t*)&remote_ip.sin_addr.s_addr), port);
@@ -115,23 +116,47 @@ static int tcp_read(esp_transport_handle_t t, char *buffer, int len, int timeout
 static int tcp_poll_read(esp_transport_handle_t t, int timeout_ms)
 {
     transport_tcp_t *tcp = esp_transport_get_context_data(t);
-    fd_set readset;
-    FD_ZERO(&readset);
-    FD_SET(tcp->sock, &readset);
+    int ret = -1;
     struct timeval timeout;
-    esp_transport_utils_ms_to_timeval(timeout_ms, &timeout);
-    return select(tcp->sock + 1, &readset, NULL, NULL, &timeout);
+    fd_set readset;
+    fd_set errset;
+    FD_ZERO(&readset);
+    FD_ZERO(&errset);
+    FD_SET(tcp->sock, &readset);
+    FD_SET(tcp->sock, &errset);
+
+    ret = select(tcp->sock + 1, &readset, NULL, &errset, esp_transport_utils_ms_to_timeval(timeout_ms, &timeout));
+    if (ret > 0 && FD_ISSET(tcp->sock, &errset)) {
+        int sock_errno = 0;
+        uint32_t optlen = sizeof(sock_errno);
+        getsockopt(tcp->sock, SOL_SOCKET, SO_ERROR, &sock_errno, &optlen);
+        ESP_LOGE(TAG, "tcp_poll_read select error %d, errno = %s, fd = %d", sock_errno, strerror(sock_errno), tcp->sock);
+        ret = -1;
+    }
+    return ret;
 }
 
 static int tcp_poll_write(esp_transport_handle_t t, int timeout_ms)
 {
     transport_tcp_t *tcp = esp_transport_get_context_data(t);
-    fd_set writeset;
-    FD_ZERO(&writeset);
-    FD_SET(tcp->sock, &writeset);
+    int ret = -1;
     struct timeval timeout;
-    esp_transport_utils_ms_to_timeval(timeout_ms, &timeout);
-    return select(tcp->sock + 1, NULL, &writeset, NULL, &timeout);
+    fd_set writeset;
+    fd_set errset;
+    FD_ZERO(&writeset);
+    FD_ZERO(&errset);
+    FD_SET(tcp->sock, &writeset);
+    FD_SET(tcp->sock, &errset);
+
+    ret = select(tcp->sock + 1, NULL, &writeset, &errset, esp_transport_utils_ms_to_timeval(timeout_ms, &timeout));
+    if (ret > 0 && FD_ISSET(tcp->sock, &errset)) {
+        int sock_errno = 0;
+        uint32_t optlen = sizeof(sock_errno);
+        getsockopt(tcp->sock, SOL_SOCKET, SO_ERROR, &sock_errno, &optlen);
+        ESP_LOGE(TAG, "tcp_poll_write select error %d, errno = %s, fd = %d", sock_errno, strerror(sock_errno), tcp->sock);
+        ret = -1;
+    }
+    return ret;
 }
 
 static int tcp_close(esp_transport_handle_t t)
@@ -153,7 +178,7 @@ static esp_err_t tcp_destroy(esp_transport_handle_t t)
     return 0;
 }
 
-esp_transport_handle_t esp_transport_tcp_init()
+esp_transport_handle_t esp_transport_tcp_init(void)
 {
     esp_transport_handle_t t = esp_transport_init();
     transport_tcp_t *tcp = calloc(1, sizeof(transport_tcp_t));

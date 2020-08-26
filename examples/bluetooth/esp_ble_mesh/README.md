@@ -30,19 +30,19 @@ See [ble_mesh_provisioner](ble_mesh_console/ble_mesh_provisioner) folder for mor
 
 This example illustrates the solution of ESP-BLE-MESH Fast Provisioning.
 
-#### ble_mesh_fast_prov_client
+#### fast_prov_client
 
 This example shows how ESP32, acting as a BLE Mesh Fast Provisioning Client, provisions other unprovisioned devices and then controls the nodes.
 
-See [ble_mesh_fast_prov_client](ble_mesh_fast_provision/ble_mesh_fast_prov_client) folder for more details.
+See [fast_prov_client](ble_mesh_fast_provision/fast_prov_client) folder for more details.
 
-#### ble_mesh_fast_prov_server
+#### fast_prov_server
 
 This example illustrates the process that:
 1. ESP32 as a BLE Mesh Fast Provisioning Server is provisioned into a node;
 2. ESP32 as a Temporary Provisioner provisions other unprovisioned devices.
 
-See [ble_mesh_fast_prov_server](ble_mesh_fast_provision/ble_mesh_fast_prov_server) folder for more details.
+See [fast_prov_server](ble_mesh_fast_provision/fast_prov_server) folder for more details.
 
 ## ble_mesh_node
 
@@ -65,6 +65,22 @@ See [onoff_server](ble_mesh_node/onoff_server) folder for more details.
 This example shows how ESP32 acts as a BLE Mesh Provisioner and provisions other unprovisioned devices.
 
 See [ble_mesh_provisioner](ble_mesh_provisioner) folder for more details.
+
+## ble_mesh_vendor_model
+
+This example demonstrates how ESP32 acts as a BLE Mesh Provisioner with vendor client model or as a BLE Mesh node with vendor server model.
+
+#### vendor_client
+
+This example shows how ESP32 acts as a BLE Mesh Provisioner with a vendor client model in the Primary Element.
+
+See [vendor_client](ble_mesh_vendor_model/vendor_client) folder for more details.
+
+#### vendor_server
+
+This example shows how ESP32 acts as a BLE Mesh Node with a vendor server model in the Primary Element.
+
+See [vendor_server](ble_mesh_vendor_model/vendor_server) folder for more details.
 
 ## ble_mesh_wifi_coexist
 

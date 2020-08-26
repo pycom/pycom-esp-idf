@@ -25,7 +25,7 @@
 
 static const char *TAG = "app";
 
-static void start_ble_provisioning();
+static void start_ble_provisioning(void);
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                           int event_id, void* event_data)
@@ -69,14 +69,13 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-        ESP_LOGI(TAG, "got ip:%s",
-                 ip4addr_ntoa(&event->ip_info.ip));
+        ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num_ap_not_found = 0;
         s_retry_num_ap_auth_fail = 0;
     }
 }
 
-static void wifi_init_sta()
+static void wifi_init_sta(void)
 {
     /* Set our event handling */
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, event_handler, NULL));
@@ -87,7 +86,7 @@ static void wifi_init_sta()
     ESP_ERROR_CHECK(esp_wifi_start());
 }
 
-static void start_ble_provisioning()
+static void start_ble_provisioning(void)
 {
     /* Security version */
     int security = 0;
@@ -110,10 +109,10 @@ static void start_ble_provisioning()
     ESP_ERROR_CHECK(app_prov_start_ble_provisioning(security, pop));
 }
 
-void app_main()
+void app_main(void)
 {
     /* Initialize networking stack */
-    tcpip_adapter_init();
+    ESP_ERROR_CHECK(esp_netif_init());
 
     /* Create default event loop needed by the
      * main app and the provisioning service */
@@ -122,7 +121,8 @@ void app_main()
     /* Initialize NVS needed by Wi-Fi */
     ESP_ERROR_CHECK(nvs_flash_init());
 
-    /* Initialize Wi-Fi with default config */
+    /* Initialize Wi-Fi including netif with default config */
+    esp_netif_create_default_wifi_sta();
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 

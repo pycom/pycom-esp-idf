@@ -10,7 +10,7 @@ EXPECT_TIMEOUT = 20
 
 @ttfw_idf.idf_example_test(env_tag='Example_CAN1')
 def test_can_alert_and_recovery_example(env, extra_data):
-    dut = env.get_dut('dut1', 'examples/peripherals/can/can_alert_and_recovery')
+    dut = env.get_dut('dut1', 'examples/peripherals/can/can_alert_and_recovery', dut_class=ttfw_idf.ESP32DUT)
     dut.start_app()
 
     for string in STR_EXPECT:

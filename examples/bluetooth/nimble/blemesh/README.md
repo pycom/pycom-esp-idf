@@ -6,7 +6,7 @@ This example implements Bluetooth Mesh node that supports On/Off and Level model
 
 It has suport for both Advertising Bearer and GATT Bearer.
 
-For more information on NimBLE MESH, please visit [NimBLE_MESH](https://mynewt.apache.org/latest/network/docs/mesh/index.html#bluetooth-mesh).
+For more information on NimBLE MESH, please visit [NimBLE_MESH](https://mynewt.apache.org/latest/network/mesh/index.html#bluetooth-mesh).
 
 It uses ESP32's Bluetooth controller and NimBLE stack based BLE host.
 
@@ -22,8 +22,6 @@ To test this demo, any BLE mesh provisioner app can be used.
 ```
 idf.py menuconfig
 ```
-
-* Set serial port under Serial Flasher Options.
 
 * Select 'Enable BLE mesh functionality' under 'Component config > Bluetooth > Enable NimBLE host stack'.
 

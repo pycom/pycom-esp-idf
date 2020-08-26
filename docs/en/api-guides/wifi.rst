@@ -122,7 +122,7 @@ The ESP32 Wi-Fi programming model is depicted as follows:
 
 The Wi-Fi driver can be considered a black box that knows nothing about high-layer code, such as the TCP/IP stack, application task, event task, etc. The application task (code) generally calls :doc:`Wi-Fi driver APIs <../api-reference/network/esp_wifi>` to initialize Wi-Fi and handles Wi-Fi events when necessary. Wi-Fi driver receives API calls, handles them, and post events to the application.
 
-Wi-Fi event handling is based on the :doc:`esp_event library <../api-reference/system/esp_event>`. Events are sent by the Wi-Fi driver to the :ref:`default event loop <esp-event-default-loops>`. Application may handle these events in callbacks registered using :cpp:func:`esp_event_handler_register`. Wi-Fi events are also handled by :doc:`tcpip_adapter component <../api-reference/network/tcpip_adapter>` to provide a set of default behaviors. For example, when Wi-Fi station connects to an AP, tcpip_adapter will automatically start the DHCP client.
+Wi-Fi event handling is based on the :doc:`esp_event library <../api-reference/system/esp_event>`. Events are sent by the Wi-Fi driver to the :ref:`default event loop <esp-event-default-loops>`. Application may handle these events in callbacks registered using :cpp:func:`esp_event_handler_register`. Wi-Fi events are also handled by :doc:`esp_netif component <../api-reference/network/esp_netif>` to provide a set of default behaviors. For example, when Wi-Fi station connects to an AP, esp_netif will automatically start the DHCP client (by default).
 
 ESP32 Wi-Fi Event Description
 ------------------------------------
@@ -181,10 +181,6 @@ Another thing deserves our attention is that the default behavior of LwIP is to 
 - Sixty seconds later, when the application sends out data with the keep-alive socket, the socket returns an error and the application closes the socket and re-creates it when necessary.
 
 In above scenario, ideally, the application sockets and the network layer should not be affected, since the Wi-Fi connection only fails temporarily and recovers very quickly. The application can enable "Keep TCP connections when IP changed" via LwIP menuconfig. 
-
-WIFI_EVENT_STA_AUTHMODE_CHANGE
-++++++++++++++++++++++++++++++++++++
-This event arises when the AP to which the station is connected changes its authentication mode, e.g., from no auth to WPA. Upon receiving this event, the event task will do nothing. Generally, the application event callback does not need to handle this either.
 
 IP_EVENT_STA_GOT_IP
 ++++++++++++++++++++++++++++++++++++
@@ -300,15 +296,17 @@ Below is a "big scenario" which describes some small scenarios in Station mode:
 
 1. Wi-Fi/LwIP Init Phase
 ++++++++++++++++++++++++++++++
- - s1.1: The main task calls tcpip_adapter_init() to create an LwIP core task and initialize LwIP-related work.
+ - s1.1: The main task calls esp_netif_init() to create an LwIP core task and initialize LwIP-related work.
 
  - s1.2: The main task calls esp_event_loop_init() to create a system Event task and initialize an application event's callback function. In the scenario above, the application event's callback function does nothing but relaying the event to the application task. 
 
- - s1.3: The main task calls esp_wifi_init() to create the Wi-Fi driver task and initialize the Wi-Fi driver.
+ - s1.3: The main task calls esp_netif_create_default_wifi_ap() or esp_netif_create_default_wifi_sta() to create default network interface instance binding station or AP with TCP/IP stack.
 
- - s1.4: The main task calls OS API to create the application task.
+ - s1.4: The main task calls esp_wifi_init() to create the Wi-Fi driver task and initialize the Wi-Fi driver.
 
-Step 1.1~1.4 is a recommended sequence that initializes a Wi-Fi-/LwIP-based application. However, it is **NOT** a must-follow sequence, which means that you can create the application task in step 1.1 and put all other initializations in the application task. Moreover, you may not want to create the application task in the initialization phase if the application task depends on the sockets. Rather, you can defer the task creation until the IP is obtained.
+ - s1.5: The main task calls OS API to create the application task.
+
+Step 1.1~1.5 is a recommended sequence that initializes a Wi-Fi-/LwIP-based application. However, it is **NOT** a must-follow sequence, which means that you can create the application task in step 1.1 and put all other initializations in the application task. Moreover, you may not want to create the application task in the initialization phase if the application task depends on the sockets. Rather, you can defer the task creation until the IP is obtained.
 
 2. Wi-Fi Configuration Phase
 +++++++++++++++++++++++++++++++
@@ -1010,6 +1008,10 @@ The table below shows the reason-code defined in ESP32. The first column is the 
 |                           |       |         | WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT.                         |
 |                           |       |         |                                                             |
 +---------------------------+-------+---------+-------------------------------------------------------------+
+| CONNECTION_FAIL           |  205  |reserved | Espressif-specific Wi-Fi reason-code: the                   |
+|                           |       |         | connection to the AP has failed.                            |
+|                           |       |         |                                                             |
++---------------------------+-------+---------+-------------------------------------------------------------+
 
 ESP32 Wi-Fi Station Connecting When Multiple APs Are Found
 ---------------------------------------------------------------
@@ -1139,6 +1141,8 @@ API esp_wifi_set_config() can be used to configure the station. The table below 
 |                  | threshold is open.                                           |
 +------------------+--------------------------------------------------------------+
 
+.. attention::
+    WEP/WPA security modes are deprecated in IEEE802.11-2016 specifications and are recommended not to be used. These modes can be rejected using authmode threshold by setting threshold as WPA2 by threshold.authmode as WIFI_AUTH_WPA2_PSK.
 
 AP Basic Configuration
 +++++++++++++++++++++++++++++++++++++
@@ -1385,13 +1389,48 @@ Following table depicts which country info is used in different WiFi Mode and di
 Home Channel
 *************************
 
-In AP mode, the home channel is defined as that of the AP channel. In Station mode, the home channel is defined as the channel of the AP to which the station is connected. In Station+AP mode, the home channel of AP and station must be the same. If the home channels of Station and AP are different, the station's home channel is always in priority. Take the following as an example: at the beginning, the AP is on channel 6, then the station connects to an AP whose channel is 9. Since the station's home channel has a higher priority, the AP needs to switch its channel from 6 to 9 to make sure that both station and AP have the same home channel.
+In AP mode, the home channel is defined as that of the AP channel. In Station mode, the home channel is defined as the channel of the AP to which the station is connected. In Station+AP mode, the home channel of AP and station must be the same. If the home channels of Station and AP are different, the station's home channel is always in priority. Take the following as an example: at the beginning, the AP is on channel 6, then the station connects to an AP whose channel is 9. Since the station's home channel has a higher priority, the AP needs to switch its channel from 6 to 9 to make sure that both station and AP have the same home channel. While switching channel, the ESP32 in SoftAP mode will notify the connected stations about the channel migration using a Channel Switch Announcement (CSA). Stations that support channel switching will transition smoothly whereas stations who do not will disconnect and reconnect to the SoftAP.
 
 
 Wi-Fi Vendor IE Configuration
 +++++++++++++++++++++++++++++++++++
 
 By default, all Wi-Fi management frames are processed by the Wi-Fi driver, and the application does not need to care about them. Some applications, however, may have to handle the beacon, probe request, probe response and other management frames. For example, if you insert some vendor-specific IE into the management frames, it is only the management frames which contain this vendor-specific IE that will be processed. In ESP32, esp_wifi_set_vendor_ie() and esp_wifi_set_vendor_ie_cb() are responsible for this kind of tasks.
+
+Wi-Fi Security
+-------------------------------
+
+In addition to traditional security methods (WEP/WPA-TKIP/WPA2-CCMP), ESP32 Wi-Fi now supports state-of-the-art security protocols, namely Protected Management Frames based on 802.11w standard and Wi-Fi Protected Access 3 (WPA3-Personal). Together, PMF and WPA3 provide better privacy and robustness against known attacks in traditional modes.
+
+Protected Management Frames (PMF)
+++++++++++++++++++++++++++++++++++
+
+In Wi-Fi, management frames such as beacons, probes, (de)authentication, (dis)association are used by non-AP stations to scan and connect to an AP. Unlike data frames, these frames are sent unencrypted. 
+An attacker can use eavesdropping and packet injection to send spoofed (de)authentication/(dis)association frames at the right time, leading to following attacks in case of unprotected management frame exchanges.
+
+ - DOS attack on one or all clients in the range of the attacker.
+ - Tearing down existing association on AP side by sending association request.
+ - Forcing a client to perform 4-way handshake again in case PSK is compromised in order to get PTK.
+ - Getting SSID of hidden network from association request.
+ - Launching man-in-the-middle attack by forcing clients to deauth from legitimate AP and associating to a rogue one.
+
+PMF provides protection against these attacks by encrypting unicast management frames and providing integrity checks for broadcast management frames. These include deauthentication, disassociation and robust management frames. It also provides Secure Association (SA) teardown mechanism to prevent spoofed association/authentication frames from disconnecting already connected clients.
+
+ESP32 supports the following three modes of operation with respect to PMF.
+
+ - PMF not supported: In this mode, ESP32 indicates to AP that it is not capable of supporting management protection during association. In effect, security in this mode will be equivalent to that in traditional mode.
+ - PMF capable, but not required: In this mode, ESP32 indicates to AP that it is capable of supporting PMF. The management protection will be used if AP mandates PMF or is at least capable of supporting PMF.
+ - PMF capable and required: In this mode, ESP32 will only connect to AP, if AP supports PMF. If not, ESP32 will refuse to connect to the AP.
+
+:cpp:func:`esp_wifi_set_config` can be used to configure PMF mode by setting appropriate flags in `pmf_cfg` parameter. Currently, PMF is supported only in Station mode.
+
+
+WPA3-Personal
++++++++++++++++++++++++++++++++++
+
+Wi-Fi Protected Access-3 (WPA3) is a set of enhancements to Wi-Fi access security intended to replace the current WPA2 standard. In order to provide more robust authentication, WPA3 uses Simultaneous Authentication of Equals (SAE), which is password-authenticated key agreement method based on Diffie-Hellman key exchange. Unlike WPA2, the technology is resistant to offline-dictionary attack, where the attacker attempts to determine shared password based on captured 4-way handshake without any further network interaction. WPA3 also provides forward secrecy, which means the captured data cannot be decrypted even if password is compromised after data transmission. Please refer to `Security <https://www.wi-fi.org/discover-wi-fi/security>`_ section of Wi-Fi Alliance's official website for further details.
+
+In order to enable WPA3-Personal, "Enable WPA3-Personal" should be selected in menuconfig. If enabled, ESP32 uses SAE for authentication if supported by the AP. Since PMF is a mandatory requirement for WPA3, PMF capability should be at least set to "PMF capable, but not required" for ESP32 to use WPA3 mode. Application developers need not worry about the underlying security mode as highest available is chosen from security standpoint. Note that Wi-Fi stack size requirement will increase approximately by 3k when WPA3 is used. Currently, WPA3 is supported only in Station mode. 
 
 ESP32 Wi-Fi Power-saving Mode
 -----------------------------------
@@ -1751,6 +1790,8 @@ WPS Enrolle
 
 ESP32 supports WPS enrollee feature in Wi-Fi mode WIFI_MODE_STA or WIFI_MODE_APSTA. Currently ESP32 supports WPS enrollee type PBC and PIN.
 
+.. _wifi-buffer-usage:
+
 Wi-Fi Buffer Usage
 --------------------------
 
@@ -1772,26 +1813,9 @@ Due to these reasons, there is not a good-for-all application configuration. Rat
 Dynamic vs. Static Buffer
 ++++++++++++++++++++++++++++++
 
-The default type of buffer in LwIP and Wi-Fi drivers is "dynamic". Most of the time the dynamic buffer can significantly save memory. However, it makes the application programming a little more difficult, because in this case the application needs to consider memory usage in LwIP/Wi-Fi.
+The default type of buffer in Wi-Fi drivers is "dynamic". Most of the time the dynamic buffer can significantly save memory. However, it makes the application programming a little more difficult, because in this case the application needs to consider memory usage in Wi-Fi.
 
-
-Peak LwIP Dynamic Buffer
-++++++++++++++++++++++++++++++
-
-The default type of LwIP buffer is "dynamic", and this section considers the dynamic buffer only.
-The peak heap memory that LwIP consumes is the **theoretically-maximum memory** that the LwIP driver consumes. Generally, the peak heap memory that the LwIP consumes depends on:
-
- - the memory required to create a UDP connection: lwip_udp_conn
- - the memory required to create a TCP connection: lwip_tcp_conn
- - the number of UDP connections that the application has: lwip_udp_con_num
- - the number of TCP connections that the application has: lwip_tcp_con_num
- - the TCP TX window size: lwip_tcp_tx_win_size
- - the TCP RX window size: lwip_tcp_rx_win_size
-
-**So, the peak heap memory that the LwIP consumes can be calculated with the following formula:**
-  lwip_dynamic_peek_memory =  (lwip_udp_con_num * lwip_udp_conn)  + (lwip_tcp_con_num * (lwip_tcp_tx_win_size + lwip_tcp_rx_win_size + lwip_tcp_conn))
-
-Some TCP-based applications need only one TCP connection. However, they may choose to close this TCP connection and create a new one when an error (such as a sending failure) occurs. This may result in multiple TCP connections existing in the system simultaneously, because it may take a long time for a TCP connection to close, according to the TCP state machine (refer to RFC793).
+lwIP also allocates buffers at the TCP/IP layer, and this buffer allocation is also dynamic. See :ref:`lwIP documentation section about memory use and performance<lwip-ram-usage>`.
 
 Peak Wi-Fi Dynamic Buffer
 ++++++++++++++++++++++++++++++

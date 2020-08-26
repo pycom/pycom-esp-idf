@@ -94,6 +94,11 @@ static esp_err_t dm9051_update_link_duplex_speed(phy_dm9051_t *dm9051)
     eth_duplex_t duplex = ETH_DUPLEX_HALF;
     bmsr_reg_t bmsr;
     dscsr_reg_t dscsr;
+    // BMSR is a latch low register
+    // after power up, the first latched value must be 0, which means down
+    // to speed up power up link speed, double read this register as a workaround
+    PHY_CHECK(eth->phy_reg_read(eth, dm9051->addr, ETH_PHY_BMSR_REG_ADDR, &(bmsr.val)) == ESP_OK,
+              "read BMSR failed", err);
     PHY_CHECK(eth->phy_reg_read(eth, dm9051->addr, ETH_PHY_BMSR_REG_ADDR, &(bmsr.val)) == ESP_OK,
               "read BMSR failed", err);
     eth_link_t link = bmsr.link_status ? ETH_LINK_UP : ETH_LINK_DOWN;
@@ -285,6 +290,10 @@ static esp_err_t dm9051_init(esp_eth_phy_t *phy)
 {
     phy_dm9051_t *dm9051 = __containerof(phy, phy_dm9051_t, parent);
     esp_eth_mediator_t *eth = dm9051->eth;
+    // Detect PHY address
+    if (dm9051->addr == ESP_ETH_PHY_ADDR_AUTO) {
+        PHY_CHECK(esp_eth_detect_phy_addr(eth, &dm9051->addr) == ESP_OK, "Detect PHY address failed", err);
+    }
     /* Power on Ethernet PHY */
     PHY_CHECK(dm9051_pwrctl(phy, true) == ESP_OK, "power control failed", err);
     /* Reset Ethernet PHY */
@@ -315,7 +324,6 @@ err:
 esp_eth_phy_t *esp_eth_phy_new_dm9051(const eth_phy_config_t *config)
 {
     PHY_CHECK(config, "can't set phy config to null", err);
-    PHY_CHECK(config->phy_addr == 1, "dm9051's phy address can only set to 1", err);
     phy_dm9051_t *dm9051 = calloc(1, sizeof(phy_dm9051_t));
     PHY_CHECK(dm9051, "calloc dm9051 failed", err);
     dm9051->addr = config->phy_addr;

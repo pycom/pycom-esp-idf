@@ -2,6 +2,8 @@
 Flash Encryption
 ================
 
+:link_to_translation:`zh_CN:[中文]`
+
 This document provides introduction to Flash encryption concept on ESP32 and demonstrates how this feature can be used during development as well as production by the user using a sample example. The primary intention of the document is to act as a quick start guide to test and verify flash encryption operations. The details of the flash encryption block can be found in the `ESP32 Technical reference manual`_.
 
 .. _ESP32 Technical Reference Manual: https://www.espressif.com/sites/default/files/documentation/esp32_technical_reference_manual_en.pdf
@@ -17,12 +19,12 @@ With flash encryption enabled, following kinds of flash data are encrypted by de
   - Partition Table
   - All "app" type partitions
 
-  Other type of flash data are encrypted conditionally:
+  Other types of flash data are encrypted conditionally:
 
   - Secure boot bootloader digest (if secure boot is enabled)
   - Any partition marked with the "encrypted" flag in the partition table
 
-Flash encryption is separate from the :doc:`Secure Boot <secure-boot>` feature, and you can use flash encryption without enabling secure boot. However, for a secure environment both should be used simultaneously.
+Flash encryption is separate from the :doc:`Secure Boot <secure-boot-v2>` feature, and you can use flash encryption without enabling secure boot. However, for a secure environment both should be used simultaneously.
 
 .. important::
    For production use, flash encryption should be enabled in the "Release" mode only.
@@ -375,7 +377,8 @@ On next boot second stage bootloader will encrypt the flash app partition and th
 
 Once the flash encryption is enabled in Release mode the bootloader will write protect the ``FLASH_CRYPT_CNT`` eFuse.
 
-For subsequent plaintext update in field OTA scheme should be used. Please refer :doc:`OTA <../api-reference/system/ota>` for further details.
+For subsequent plaintext update in field :ref:`OTA scheme <updating-encrypted-flash-ota>` should be used.
+
 
 Possible Failures
 ^^^^^^^^^^^^^^^^^
@@ -545,6 +548,10 @@ OTA Updates
 
 OTA updates to encrypted partitions will automatically write encrypted, as long as the ``esp_partition_write`` function is used.
 
+Any app image which will be OTA updated onto a device with flash encryption enabled requires :ref:`Enable flash encryption on boot <CONFIG_SECURE_FLASH_ENC_ENABLED>` option to be enabled in the app configuration as well, when building the app.
+
+Please refer to :doc:`OTA <../api-reference/system/ota>` for general information about ESP-IDF OTA updates.
+
 .. _updating-encrypted-flash-serial:
 
 
@@ -579,7 +586,7 @@ Flash encryption prevents plaintext readout of the encrypted flash, to protect f
 
 - For the same reason, an attacker can always tell when a pair of adjacent 16 byte blocks (32 byte aligned) contain two identical 16 byte sequences. Keep this in mind if storing sensitive data on the flash, design your flash storage so this doesn't happen (using a counter byte or some other non-identical value every 16 bytes is sufficient). :ref:`NVS Encryption <nvs_encryption>` deals with this and is suitable for many uses.
 
-- Flash encryption alone may not prevent an attacker from modifying the firmware of the device. To prevent unauthorised firmware from running on the device, use flash encryption in combination with :doc:`Secure Boot <secure-boot>`.
+- Flash encryption alone may not prevent an attacker from modifying the firmware of the device. To prevent unauthorised firmware from running on the device, use flash encryption in combination with :doc:`Secure Boot <secure-boot-v2>`.
 
 .. _flash-encryption-and-secure-boot:
 
@@ -594,8 +601,8 @@ It is recommended to use flash encryption and secure boot together. However, if 
 
 .. _flash-encryption-advanced-features:
 
-Flash Encryption Advanced Features
-----------------------------------
+Advanced Features
+-----------------
 
 The following information is useful for advanced use of flash encryption:
 
@@ -661,6 +668,12 @@ It is possible to write these eFuse manually, and write protect it before first 
 
 It is strongly recommended to never write protect ``FLASH_CRYPT_CONFIG`` when it the value is zero. If this eFuse is set to zero, no bits in the flash encryption key are tweaked and the flash encryption algorithm is equivalent to AES ECB mode.
 
+JTAG Debugging
+^^^^^^^^^^^^^^
+
+By default, when Flash Encryption is enabled (in either Development or Release mode) then JTAG debugging is disabled via eFuse. The bootloader does this on first boot, at the same time it enables flash encryption.
+
+See :ref:`jtag-debugging-security-features` for more information about using JTAG Debugging with Flash Encryption.
 
 Technical Details
 -----------------

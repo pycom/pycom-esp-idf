@@ -6,28 +6,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <string.h>
-#include <stdint.h>
 #include <errno.h>
-#include <stdbool.h>
 
-#include "mesh_types.h"
-#include "mesh_kernel.h"
-#include "mesh_trace.h"
-#include "mesh.h"
-
+#include "mesh_common.h"
 #include "model_opcode.h"
-#include "server_common.h"
 #include "state_binding.h"
 #include "state_transition.h"
-#include "generic_server.h"
-#include "lighting_server.h"
 
 #define MINDIFF (2.25e-308)
 
 static float bt_mesh_sqrt(float square)
 {
-    float root, last, diff;
+    float root = 0.0, last = 0.0, diff = 0.0;
 
     root = square / 3.0;
     diff = 1;
@@ -192,6 +182,15 @@ int bt_mesh_update_binding_state(struct bt_mesh_model *model,
 
         bt_mesh_server_stop_transition(&srv->actual_transition);
         srv->state->lightness_actual = value->light_lightness_actual.lightness;
+        /**
+         * Whenever the Light Lightness Actual state is changed with a non-transactional
+         * message or a completed sequence of transactional messages to a non-zero value,
+         * the value of the Light Lightness Last shall be set to the value of the Light
+         * Lightness Actual.
+         */
+        if (srv->state->lightness_actual) {
+            srv->state->lightness_last = srv->state->lightness_actual;
+        }
         light_lightness_publish(model, BLE_MESH_MODEL_OP_LIGHT_LIGHTNESS_STATUS);
         break;
     }

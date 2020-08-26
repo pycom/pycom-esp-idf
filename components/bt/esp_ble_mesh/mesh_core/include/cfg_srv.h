@@ -11,7 +11,6 @@
 #define _BLE_MESH_CFG_SRV_H_
 
 #include "mesh_access.h"
-#include "mesh_kernel.h"
 
 /**
  * @brief Bluetooth Mesh
@@ -19,6 +18,10 @@
  * @ingroup bt_mesh
  * @{
  */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /** Mesh Configuration Server Model Context */
 struct bt_mesh_cfg_srv {
@@ -207,6 +210,10 @@ typedef union {
         u8_t transmit;
     } cfg_net_transmit_set;
 } bt_mesh_cfg_server_state_change_t;
+
+#ifdef __cplusplus
+}
+#endif
 
 /**
  * @}

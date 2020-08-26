@@ -11,7 +11,7 @@ import ttfw_idf
 #   espefuse.py --do-not-confirm -p $ESPPORT burn_key flash_encryption key.bin
 @ttfw_idf.idf_example_test(env_tag='Example_Flash_Encryption')
 def test_examples_security_flash_encryption(env, extra_data):
-    dut = env.get_dut('flash_encryption', 'examples/security/flash_encryption')
+    dut = env.get_dut('flash_encryption', 'examples/security/flash_encryption', dut_class=ttfw_idf.ESP32DUT)
     # start test
     dut.start_app()
     lines = [

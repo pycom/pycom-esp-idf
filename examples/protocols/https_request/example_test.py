@@ -4,7 +4,7 @@ import os
 import ttfw_idf
 
 
-@ttfw_idf.idf_example_test(env_tag="Example_WIFI", ignore=True)
+@ttfw_idf.idf_example_test(env_tag="Example_EthKitV1")
 def test_examples_protocol_https_request(env, extra_data):
     """
     steps: |
@@ -12,7 +12,7 @@ def test_examples_protocol_https_request(env, extra_data):
       2. connect to www.howsmyssl.com:443
       3. send http request
     """
-    dut1 = env.get_dut("https_request", "examples/protocols/https_request")
+    dut1 = env.get_dut("https_request", "examples/protocols/https_request", dut_class=ttfw_idf.ESP32DUT)
     # check and log bin size
     binary_file = os.path.join(dut1.app.binary_path, "https_request.bin")
     bin_size = os.path.getsize(binary_file)

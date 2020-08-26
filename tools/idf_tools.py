@@ -1093,7 +1093,10 @@ def action_download(args):
         tool_for_platform = tool_obj.copy_for_platform(platform)
         tools_info_for_platform[name] = tool_for_platform
 
-    if 'all' in tools_spec:
+    if not tools_spec or 'required' in tools_spec:
+        tools_spec = [k for k, v in tools_info_for_platform.items() if v.get_install_type() == IDFTool.INSTALL_ALWAYS]
+        info('Downloading tools for {}: {}'.format(platform, ', '.join(tools_spec)))
+    elif 'all' in tools_spec:
         tools_spec = [k for k, v in tools_info_for_platform.items() if v.get_install_type() != IDFTool.INSTALL_NEVER]
         info('Downloading tools for {}: {}'.format(platform, ', '.join(tools_spec)))
 
@@ -1112,7 +1115,9 @@ def action_download(args):
             raise SystemExit(1)
         if tool_version is None:
             tool_version = tool_obj.get_recommended_version()
-        assert tool_version is not None
+        if tool_version is None:
+            fatal('tool {} not found for {} platform'.format(tool_name, platform))
+            raise SystemExit(1)
         tool_spec = '{}@{}'.format(tool_name, tool_version)
 
         info('Downloading {}'.format(tool_spec))
@@ -1124,7 +1129,7 @@ def action_download(args):
 def action_install(args):
     tools_info = load_tools_info()
     tools_spec = args.tools
-    if not tools_spec:
+    if not tools_spec or 'required' in tools_spec:
         tools_spec = [k for k, v in tools_info.items() if v.get_install_type() == IDFTool.INSTALL_ALWAYS]
         info('Installing tools: {}'.format(', '.join(tools_spec)))
     elif 'all' in tools_spec:
@@ -1180,7 +1185,7 @@ def action_install_python_env(args):
             subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--user', 'virtualenv'],
                                   stdout=sys.stdout, stderr=sys.stderr)
 
-        subprocess.check_call([sys.executable, '-m', 'virtualenv', '--no-site-packages', idf_python_env_path],
+        subprocess.check_call([sys.executable, '-m', 'virtualenv', idf_python_env_path],
                               stdout=sys.stdout, stderr=sys.stderr)
     run_args = [virtualenv_python, '-m', 'pip', 'install', '--no-warn-script-location']
     requirements_txt = os.path.join(global_idf_path, 'requirements.txt')
@@ -1282,15 +1287,19 @@ def main(argv):
                                                 'will be used instead. If this flag is given, the version in PATH ' +
                                                 'will be used.', action='store_true')
     install = subparsers.add_parser('install', help='Download and install tools into the tools directory')
-    install.add_argument('tools', nargs='*', help='Tools to install. ' +
-                                                  'To install a specific version use tool_name@version syntax.' +
-                                                  'Use \'all\' to install all tools, including the optional ones.')
+    install.add_argument('tools', metavar='TOOL', nargs='*', default=['required'],
+                         help='Tools to install. ' +
+                         'To install a specific version use <tool_name>@<version> syntax. ' +
+                         'Use empty or \'required\' to install required tools, not optional ones. ' +
+                         'Use \'all\' to install all tools, including the optional ones.')
 
     download = subparsers.add_parser('download', help='Download the tools into the dist directory')
     download.add_argument('--platform', help='Platform to download the tools for')
-    download.add_argument('tools', nargs='+', help='Tools to download. ' +
-                                                   'To download a specific version use tool_name@version syntax.' +
-                                                   'Use \'all\' to download all tools, including the optional ones.')
+    download.add_argument('tools', metavar='TOOL', nargs='*', default=['required'],
+                          help='Tools to download. ' +
+                          'To download a specific version use <tool_name>@<version> syntax. ' +
+                          'Use empty or \'required\' to download required tools, not optional ones. ' +
+                          'Use \'all\' to download all tools, including the optional ones.')
 
     if IDF_MAINTAINER:
         for subparser in [download, install]:
@@ -1339,9 +1348,15 @@ def main(argv):
         global_idf_path = args.idf_path
     if not global_idf_path:
         global_idf_path = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
+    os.environ['IDF_PATH'] = global_idf_path
 
     global global_idf_tools_path
     global_idf_tools_path = os.environ.get('IDF_TOOLS_PATH') or os.path.expanduser(IDF_TOOLS_PATH_DEFAULT)
+
+    # On macOS, unset __PYVENV_LAUNCHER__ variable if it is set.
+    # Otherwise sys.executable keeps pointing to the system Python, even when a python binary from a virtualenv is invoked.
+    # See https://bugs.python.org/issue22490#msg283859.
+    os.environ.pop('__PYVENV_LAUNCHER__', None)
 
     if sys.version_info.major == 2:
         try:

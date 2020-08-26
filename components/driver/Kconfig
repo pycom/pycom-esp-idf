@@ -71,4 +71,28 @@ menu "Driver configurations"
 
     endmenu # SPI Configuration
 
+    menu "UART configuration"
+
+        config UART_ISR_IN_IRAM
+            bool "Place UART ISR function into IRAM"
+            default n
+            help
+                If this option is not selected, UART interrupt will be disabled for a long time and
+                may cause data lost when doing spi flash operation.
+
+    endmenu # UART Configuration
+
+    menu "RTCIO configuration"
+
+        config RTCIO_SUPPORT_RTC_GPIO_DESC
+            bool "Support array `rtc_gpio_desc` for ESP32"
+            depends on IDF_TARGET_ESP32
+            default n
+            help
+                The the array `rtc_gpio_desc` will don't compile by default.
+                If this option is selected, the array `rtc_gpio_desc` can be compile.
+                If user use this array, please enable this configuration.
+
+    endmenu # RTCIO Configuration
+
 endmenu  # Driver configurations

@@ -1,4 +1,10 @@
-set(srcs 
+if(BOOTLOADER_BUILD)
+    # bootloader only needs FreeRTOS for config, not for anything else
+    idf_component_register()
+    return()
+endif()
+
+set(srcs
     "croutine.c"
     "event_groups.c"
     "FreeRTOS-openocd.c"
@@ -24,8 +30,13 @@ idf_component_register(SRCS "${srcs}"
                     LDFRAGMENTS linker.lf
                     REQUIRES app_trace
                     PRIV_REQUIRES soc)
+    
+idf_component_get_property(COMPONENT_DIR freertos COMPONENT_DIR)
+idf_component_set_property(freertos ORIG_INCLUDE_PATH "${COMPONENT_DIR}/include/freertos/")
 
-target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--undefined=uxTopUsedPriority")
+if(CONFIG_FREERTOS_DEBUG_OCDAWARE)
+    target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--undefined=uxTopUsedPriority")
+endif()
 
 set_source_files_properties(
     tasks.c

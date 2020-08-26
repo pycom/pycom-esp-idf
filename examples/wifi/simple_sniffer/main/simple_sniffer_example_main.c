@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include "linenoise/linenoise.h"
 #include "argtable3/argtable3.h"
-#include "tcpip_adapter.h"
+#include "esp_netif.h"
 #include "esp_console.h"
 #include "esp_event.h"
 #include "esp_vfs_dev.h"
@@ -36,7 +36,7 @@ static const char *TAG = "example";
 
 #if CONFIG_SNIFFER_STORE_HISTORY
 /* Initialize filesystem for command history store */
-static void initialize_filesystem()
+static void initialize_filesystem(void)
 {
     static wl_handle_t wl_handle;
     const esp_vfs_fat_mount_config_t mount_config = {
@@ -51,7 +51,7 @@ static void initialize_filesystem()
 }
 #endif
 
-static void initialize_nvs()
+static void initialize_nvs(void)
 {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -62,9 +62,9 @@ static void initialize_nvs()
 }
 
 /* Initialize wifi with tcp/ip adapter */
-static void initialize_wifi()
+static void initialize_wifi(void)
 {
-    tcpip_adapter_init();
+    ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -73,7 +73,7 @@ static void initialize_wifi()
 }
 
 /* Initialize console component */
-static void initialize_console()
+static void initialize_console(void)
 {
     /* Disable buffering on stdin */
     setvbuf(stdin, NULL, _IONBF, 0);
@@ -172,7 +172,7 @@ static int mount(int argc, char **argv)
     return 0;
 }
 
-static void register_mount()
+static void register_mount(void)
 {
     mount_args.device = arg_str1(NULL, NULL, "<sd>", "choose a proper device to mount/unmount");
     mount_args.end = arg_end(1);
@@ -204,7 +204,7 @@ static int unmount(int argc, char **argv)
     return 0;
 }
 
-static void register_unmount()
+static void register_unmount(void)
 {
     mount_args.device = arg_str1(NULL, NULL, "<sd>", "choose a proper device to mount/unmount");
     mount_args.end = arg_end(1);

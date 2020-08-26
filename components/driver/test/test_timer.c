@@ -11,68 +11,44 @@
 #define TIMER_DELTA 0.001
 static bool alarm_flag;
 
-// group0 interruption
-static void test_timer_group0_isr(void *para)
-{
-    int timer_idx = (int) para;
-    uint64_t timer_val;
-    double time;
-    uint64_t alarm_value;
-    alarm_flag = true;
-    if (TIMERG0.hw_timer[timer_idx].config.autoreload == 1) {
-        if (timer_idx == 0) {
-            TIMERG0.int_clr_timers.t0 = 1;
-        } else {
-            TIMERG0.int_clr_timers.t1 = 1;
-        }
-        ets_printf("This is TG0 timer[%d] reload-timer alarm!\n", timer_idx);
-        timer_get_counter_value(TIMER_GROUP_0, timer_idx, &timer_val);
-        timer_get_counter_time_sec(TIMER_GROUP_0, timer_idx, &time);
-        ets_printf("time: %.8f S\n", time);
-    } else {
-        if (timer_idx == 0) {
-            TIMERG0.int_clr_timers.t0 = 1;
-        } else {
-            TIMERG0.int_clr_timers.t1 = 1;
-        }
-        ets_printf("This is TG0 timer[%d] count-up-timer alarm!\n", timer_idx);
-        timer_get_counter_value(TIMER_GROUP_0, timer_idx, &timer_val);
-        timer_get_counter_time_sec(TIMER_GROUP_0, timer_idx, &time);
-        timer_get_alarm_value(TIMER_GROUP_0, timer_idx, &alarm_value);
-        ets_printf("time: %.8f S\n", time);
-        double alarm_time = (double) alarm_value / TIMER_SCALE;
-        ets_printf("alarm_time: %.8f S\n", alarm_time);
-    }
-}
+typedef struct {
+    timer_group_t timer_group;
+    timer_idx_t timer_idx;
+} timer_info_t;
 
-// group1 interruption
-static void test_timer_group1_isr(void *para)
+#define TIMER_INFO_INIT(TG, TID)    {.timer_group = (TG), .timer_idx = (TID),}
+
+static timer_info_t timer_info[4] = {
+    TIMER_INFO_INIT(TIMER_GROUP_0, TIMER_0),
+    TIMER_INFO_INIT(TIMER_GROUP_0, TIMER_1),
+    TIMER_INFO_INIT(TIMER_GROUP_1, TIMER_0),
+    TIMER_INFO_INIT(TIMER_GROUP_1, TIMER_1),
+};
+
+#define GET_TIMER_INFO(TG, TID) (&timer_info[(TG)*2+(TID)])
+
+// timer group interruption
+static void test_timer_group_isr(void *para)
 {
-    int timer_idx = (int) para;
+    timer_info_t* info = (timer_info_t*) para;
+    const timer_group_t timer_group = info->timer_group;
+    const timer_idx_t timer_idx = info->timer_idx;
     uint64_t timer_val;
     double time;
     uint64_t alarm_value;
     alarm_flag = true;
-    if (TIMERG1.hw_timer[timer_idx].config.autoreload == 1) {
-        if (timer_idx == 0) {
-            TIMERG1.int_clr_timers.t0 = 1;
-        } else {
-            TIMERG1.int_clr_timers.t1 = 1;
-        }
-        ets_printf("This is TG1 timer[%d] reload-timer alarm!\n", timer_idx);
-        timer_get_counter_value(TIMER_GROUP_1, timer_idx, &timer_val);
-        timer_get_counter_time_sec(TIMER_GROUP_1, timer_idx, &time);
+    if (timer_group_get_auto_reload_in_isr(timer_group, timer_idx)) {
+        timer_group_clr_intr_status_in_isr(timer_group, timer_idx);
+        ets_printf("This is TG%d timer[%d] reload-timer alarm!\n", timer_group, timer_idx);
+        timer_get_counter_value(timer_group, timer_idx, &timer_val);
+        timer_get_counter_time_sec(timer_group, timer_idx, &time);
         ets_printf("time: %.8f S\n", time);
     } else {
-        if (timer_idx == 0) {
-            TIMERG1.int_clr_timers.t0 = 1;
-        } else {
-            TIMERG1.int_clr_timers.t1 = 1;
-        }
-        ets_printf("This is TG1 timer[%d] count-up-timer alarm!\n", timer_idx);
-        timer_get_counter_value(TIMER_GROUP_1, timer_idx, &timer_val);
-        timer_get_counter_time_sec(TIMER_GROUP_1, timer_idx, &time);
-        timer_get_alarm_value(TIMER_GROUP_1, timer_idx, &alarm_value);
+        timer_group_clr_intr_status_in_isr(timer_group, timer_idx);
+        ets_printf("This is TG%d timer[%d] count-up-timer alarm!\n", timer_group, timer_idx);
+        timer_get_counter_value(timer_group, timer_idx, &timer_val);
+        timer_get_counter_time_sec(timer_group, timer_idx, &time);
+        timer_get_alarm_value(timer_group, timer_idx, &alarm_value);
         ets_printf("time: %.8f S\n", time);
         double alarm_time = (double) alarm_value / TIMER_SCALE;
         ets_printf("alarm_time: %.8f S\n", alarm_time);
@@ -86,13 +62,7 @@ static void tg_timer_init(int timer_group, int timer_idx, double alarm_time)
     timer_set_counter_value(timer_group, timer_idx, 0x0);
     timer_set_alarm_value(timer_group, timer_idx, alarm_time * TIMER_SCALE);
     timer_enable_intr(timer_group, timer_idx);
-    if (timer_group == 0) {
-        timer_isr_register(timer_group, timer_idx, test_timer_group0_isr,
-                           (void *) timer_idx, ESP_INTR_FLAG_LOWMED, NULL);
-    } else {
-        timer_isr_register(timer_group, timer_idx, test_timer_group1_isr,
-                           (void *) timer_idx, ESP_INTR_FLAG_LOWMED, NULL);
-    }
+    timer_isr_register(timer_group, timer_idx, test_timer_group_isr, GET_TIMER_INFO(timer_group, timer_idx), ESP_INTR_FLAG_LOWMED, NULL);
     timer_start(timer_group, timer_idx);
 }
 
@@ -127,7 +97,7 @@ static void all_timer_init(timer_config_t config, bool flag)
 }
 
 // start all of timer
-static void all_timer_start()
+static void all_timer_start(void)
 {
     esp_err_t ret;
     ret = timer_start(TIMER_GROUP_0, TIMER_0);
@@ -153,7 +123,7 @@ static void all_timer_set_counter_value(uint64_t set_timer_val)
     TEST_ASSERT(ret == ESP_OK);
 }
 
-static void all_timer_pause()
+static void all_timer_pause(void)
 {
     esp_err_t ret;
     ret = timer_pause(TIMER_GROUP_0, TIMER_0);
@@ -747,8 +717,8 @@ TEST_CASE("Timer enable timer interrupt", "[hw_timer]")
     // enable  timer_intr0
     timer_set_counter_value(TIMER_GROUP_0, TIMER_0, set_timer_val);
     timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, 1.2 * TIMER_SCALE);
-    timer_isr_register(TIMER_GROUP_0, TIMER_0, test_timer_group0_isr,
-                       (void *) TIMER_0, ESP_INTR_FLAG_LOWMED, NULL);
+    timer_isr_register(TIMER_GROUP_0, TIMER_0, test_timer_group_isr,
+                       GET_TIMER_INFO(TIMER_GROUP_0, TIMER_0), ESP_INTR_FLAG_LOWMED, NULL);
     timer_start(TIMER_GROUP_0, TIMER_0);
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     TEST_ASSERT(alarm_flag == true)
@@ -765,8 +735,8 @@ TEST_CASE("Timer enable timer interrupt", "[hw_timer]")
     // enable  timer_intr1
     timer_set_counter_value(TIMER_GROUP_1, TIMER_1, set_timer_val);
     timer_set_alarm_value(TIMER_GROUP_1, TIMER_1, 1.2 * TIMER_SCALE);
-    timer_isr_register(TIMER_GROUP_1, TIMER_1, test_timer_group1_isr,
-                       (void *) TIMER_1, ESP_INTR_FLAG_LOWMED, NULL);
+    timer_isr_register(TIMER_GROUP_1, TIMER_1, test_timer_group_isr,
+                       GET_TIMER_INFO(TIMER_GROUP_1, TIMER_1), ESP_INTR_FLAG_LOWMED, NULL);
     timer_start(TIMER_GROUP_1, TIMER_1);
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     TEST_ASSERT(alarm_flag == true)
@@ -813,23 +783,21 @@ TEST_CASE("Timer enable timer group interrupt", "[hw_timer][ignore]")
     all_timer_set_alarm_value(1.2);
 
     // enable timer group
-    timer_group_intr_enable(TIMER_GROUP_0, TIMG_T0_INT_ENA_M);
-    timer_isr_register(TIMER_GROUP_0, TIMER_0, test_timer_group0_isr,
-                       (void *) TIMER_0, ESP_INTR_FLAG_LOWMED, NULL);
+    timer_group_intr_enable(TIMER_GROUP_0, TIMER_INTR_T0);
+    timer_isr_register(TIMER_GROUP_0, TIMER_0, test_timer_group_isr, GET_TIMER_INFO(TIMER_GROUP_0, TIMER_0), ESP_INTR_FLAG_LOWMED, NULL);
     timer_start(TIMER_GROUP_0, TIMER_0);
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     TEST_ASSERT(alarm_flag == true);
 
     //test enable auto_reload
     alarm_flag = false;
-    timer_group_intr_disable(TIMER_GROUP_0, TIMG_T0_INT_ENA_M);
+    timer_group_intr_disable(TIMER_GROUP_0, TIMER_INTR_T0);
     timer_start(TIMER_GROUP_0, TIMER_0);
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     TEST_ASSERT(alarm_flag == false);
 
-    timer_group_intr_enable(TIMER_GROUP_0, TIMG_T0_INT_ENA_M);
-    timer_isr_register(TIMER_GROUP_0, TIMER_0, test_timer_group0_isr,
-                       (void *) TIMER_0, ESP_INTR_FLAG_LOWMED, NULL);
+    timer_group_intr_enable(TIMER_GROUP_0, TIMER_INTR_T0);
+    timer_isr_register(TIMER_GROUP_0, TIMER_0, test_timer_group_isr, GET_TIMER_INFO(TIMER_GROUP_0, TIMER_0), ESP_INTR_FLAG_LOWMED, NULL);
     timer_start(TIMER_GROUP_0, TIMER_0);
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     TEST_ASSERT(alarm_flag == true);
@@ -868,3 +836,57 @@ TEST_CASE("Timer interrupt register", "[hw_timer]")
     }
     TEST_ASSERT_INT_WITHIN(100, heap_size, esp_get_free_heap_size());
 }
+
+// The following test cases are used to check if the timer_group fix works.
+// Some applications use a software reset, at the reset time, timer_group happens to generate an interrupt.
+// but software reset does not clear interrupt status, this is not safe for application when enable the interrupt of timer_group.
+// This case will check under this fix, whether the interrupt status is cleared after timer_group initialization.
+static void timer_group_test_init(void)
+{
+    static const uint32_t time_ms = 100; //Alarm value 100ms.
+    static const uint16_t timer_div = 10; //Timer prescaler
+    static const uint32_t ste_val = time_ms * (TIMER_BASE_CLK / timer_div / 1000);
+    timer_config_t config = {
+        .divider = timer_div,
+        .counter_dir = TIMER_COUNT_UP,
+        .counter_en = TIMER_PAUSE,
+        .alarm_en = TIMER_ALARM_EN,
+        .intr_type = TIMER_INTR_LEVEL,
+        .auto_reload = true,
+    };
+    ESP_ERROR_CHECK(timer_init(TIMER_GROUP_0, TIMER_0, &config));
+    ESP_ERROR_CHECK(timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0x00000000ULL));
+    ESP_ERROR_CHECK(timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, ste_val));
+    //Now the timer is ready.
+    //We only need to check the interrupt status and don't have to register a interrupt routine.
+}
+
+static void timer_group_test_first_stage(void)
+{
+    static uint8_t loop_cnt = 0;
+    timer_group_test_init();
+    //Start timer
+    ESP_ERROR_CHECK(timer_enable_intr(TIMER_GROUP_0, TIMER_0));
+    ESP_ERROR_CHECK(timer_start(TIMER_GROUP_0, TIMER_0));
+    //Waiting for timer_group to generate an interrupt
+    while( !(timer_group_get_intr_status_in_isr(TIMER_GROUP_0) & TIMER_INTR_T0) &&
+            loop_cnt++ < 100) {
+        vTaskDelay(200);
+    }
+    //TIMERG0.int_raw.t0 == 1 means an interruption has occurred
+    TEST_ASSERT(timer_group_get_intr_status_in_isr(TIMER_GROUP_0) & TIMER_INTR_T0);
+    esp_restart();
+}
+
+static void timer_group_test_second_stage(void)
+{
+    TEST_ASSERT_EQUAL(ESP_RST_SW, esp_reset_reason());
+    timer_group_test_init();
+    //After the timer_group is initialized, TIMERG0.int_raw.t0 should be cleared.
+    TEST_ASSERT_EQUAL(0, timer_group_get_intr_status_in_isr(TIMER_GROUP_0) & TIMER_INTR_T0);
+}
+
+TEST_CASE_MULTIPLE_STAGES("timer_group software reset test",
+        "[intr_status][intr_status = 0]",
+        timer_group_test_first_stage,
+        timer_group_test_second_stage);

@@ -144,7 +144,7 @@ portMUX_TYPE s_time_update_lock = portMUX_INITIALIZER_UNLOCKED;
 #define TIMER_IS_AFTER_OVERFLOW(a) (ALARM_OVERFLOW_VAL < (a) && (a) <= FRC_TIMER_LOAD_VALUE(1))
 
 // Check if timer overflow has happened (but was not handled by ISR yet)
-static inline bool IRAM_ATTR timer_overflow_happened()
+static inline bool IRAM_ATTR timer_overflow_happened(void)
 {
     return ((REG_READ(FRC_TIMER_CTRL_REG(1)) & FRC_TIMER_INT_STATUS) != 0 &&
               ((REG_READ(FRC_TIMER_ALARM_REG(1)) == ALARM_OVERFLOW_VAL && TIMER_IS_AFTER_OVERFLOW(REG_READ(FRC_TIMER_COUNT_REG(1))) && !s_mask_overflow) ||
@@ -166,17 +166,17 @@ static inline void IRAM_ATTR timer_count_reload(void)
     REG_WRITE(FRC_TIMER_LOAD_REG(1), REG_READ(FRC_TIMER_COUNT_REG(1)) - ALARM_OVERFLOW_VAL);
 }
 
-void esp_timer_impl_lock()
+void esp_timer_impl_lock(void)
 {
     portENTER_CRITICAL(&s_time_update_lock);
 }
 
-void esp_timer_impl_unlock()
+void esp_timer_impl_unlock(void)
 {
     portEXIT_CRITICAL(&s_time_update_lock);
 }
 
-uint64_t IRAM_ATTR esp_timer_impl_get_time()
+uint64_t IRAM_ATTR esp_timer_impl_get_time(void)
 {
     uint32_t timer_val;
     uint64_t time_base;
@@ -211,15 +211,19 @@ uint64_t IRAM_ATTR esp_timer_impl_get_time()
 
 void IRAM_ATTR esp_timer_impl_set_alarm(uint64_t timestamp)
 {
-    portENTER_CRITICAL(&s_time_update_lock);
+    portENTER_CRITICAL_SAFE(&s_time_update_lock);
     // Use calculated alarm value if it is less than ALARM_OVERFLOW_VAL.
     // Note that if by the time we update ALARM_REG, COUNT_REG value is higher,
     // interrupt will not happen for another ALARM_OVERFLOW_VAL timer ticks,
     // so need to check if alarm value is too close in the future (e.g. <2 us away).
-    const int32_t offset = s_timer_ticks_per_us * 2;
+    int32_t offset = s_timer_ticks_per_us * 2;
     do {
         // Adjust current time if overflow has happened
-        if (timer_overflow_happened()) {
+        if (timer_overflow_happened() ||
+            ((REG_READ(FRC_TIMER_COUNT_REG(1)) > ALARM_OVERFLOW_VAL) &&
+            ((REG_READ(FRC_TIMER_CTRL_REG(1)) & FRC_TIMER_INT_STATUS) == 0))) {
+            // 1. timer_overflow_happened() checks overflow with the interrupt flag.
+            // 2. During several loops, the counter can be higher than the alarm and even step over ALARM_OVERFLOW_VAL boundary (the interrupt flag is not set).
             timer_count_reload();
             s_time_base_us += s_timer_us_per_overflow;
         }
@@ -236,8 +240,20 @@ void IRAM_ATTR esp_timer_impl_set_alarm(uint64_t timestamp)
             alarm_reg_val = (uint32_t) compare_val;
         }
         REG_WRITE(FRC_TIMER_ALARM_REG(1), alarm_reg_val);
-    } while (REG_READ(FRC_TIMER_ALARM_REG(1)) <= REG_READ(FRC_TIMER_COUNT_REG(1)));
-    portEXIT_CRITICAL(&s_time_update_lock);
+        int64_t delta = (int64_t)alarm_reg_val - (int64_t)REG_READ(FRC_TIMER_COUNT_REG(1));
+        if (delta <= 0) {
+            /*
+                When the timestamp is a bit less than the current counter then the alarm = current_counter + offset.
+                But due to CPU_freq in some case can be equal APB_freq the offset time can not exceed the overhead
+                (the alarm will be less than the counter) and it leads to the infinity loop.
+                To exclude this behavior to the offset was added the delta to have the opportunity to go through it.
+            */
+            offset += abs((int)delta) + s_timer_ticks_per_us * 2;
+        } else {
+            break;
+        }
+    } while (1);
+    portEXIT_CRITICAL_SAFE(&s_time_update_lock);
 }
 
 static void IRAM_ATTR timer_alarm_isr(void *arg)
@@ -254,6 +270,17 @@ static void IRAM_ATTR timer_alarm_isr(void *arg)
     // Set alarm to the next overflow moment. Later, upper layer function may
     // call esp_timer_impl_set_alarm to change this to an earlier value.
     REG_WRITE(FRC_TIMER_ALARM_REG(1), ALARM_OVERFLOW_VAL);
+    if ((REG_READ(FRC_TIMER_COUNT_REG(1)) > ALARM_OVERFLOW_VAL) &&
+        ((REG_READ(FRC_TIMER_CTRL_REG(1)) & FRC_TIMER_INT_STATUS) == 0)) {
+        /*
+            This check excludes the case when the alarm can be less than the counter.
+            Without this check, it is possible because DPORT uses 4-lvl, and users can use the 5 Hi-interrupt,
+            they can interrupt this function between FRC_TIMER_INT_CLR and setting the alarm = ALARM_OVERFLOW_VAL
+            that lead to the counter will go ahead leaving the alarm behind.
+        */
+        timer_count_reload();
+        s_time_base_us += s_timer_us_per_overflow;
+    }
     portEXIT_CRITICAL_ISR(&s_time_update_lock);
     // Call the upper layer handler
     (*s_alarm_handler)(arg);
@@ -355,7 +382,7 @@ esp_err_t esp_timer_impl_init(intr_handler_t alarm_handler)
     return ESP_OK;
 }
 
-void esp_timer_impl_deinit()
+void esp_timer_impl_deinit(void)
 {
     esp_intr_disable(s_timer_interrupt_handle);
 
@@ -370,13 +397,13 @@ void esp_timer_impl_deinit()
 // FIXME: This value is safe for 80MHz APB frequency.
 // Should be modified to depend on clock frequency.
 
-uint64_t IRAM_ATTR esp_timer_impl_get_min_period_us()
+uint64_t IRAM_ATTR esp_timer_impl_get_min_period_us(void)
 {
     return 50;
 }
 
 #ifdef ESP_TIMER_DYNAMIC_OVERFLOW_VAL
-uint32_t esp_timer_impl_get_overflow_val()
+uint32_t esp_timer_impl_get_overflow_val(void)
 {
     return s_alarm_overflow_val;
 }

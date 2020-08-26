@@ -10,7 +10,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "tcpip_adapter.h"
+#include "esp_netif.h"
 #include "esp_eth.h"
 #include "esp_event.h"
 #include "esp_log.h"
@@ -53,7 +53,7 @@ static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
                                  int32_t event_id, void *event_data)
 {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
-    const tcpip_adapter_ip_info_t *ip_info = &event->ip_info;
+    const esp_netif_ip_info_t *ip_info = &event->ip_info;
 
     ESP_LOGI(TAG, "Ethernet Got IP Address");
     ESP_LOGI(TAG, "~~~~~~~~~~~");
@@ -63,12 +63,17 @@ static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
     ESP_LOGI(TAG, "~~~~~~~~~~~");
 }
 
-void app_main()
+void app_main(void)
 {
-    tcpip_adapter_init();
-
+    // Initialize TCP/IP network interface (should be called only once in application)
+    ESP_ERROR_CHECK(esp_netif_init());
+    // Create default event loop that running in background
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    ESP_ERROR_CHECK(tcpip_adapter_set_default_eth_handlers());
+    esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
+    esp_netif_t *eth_netif = esp_netif_new(&cfg);
+    // Set default handlers to process TCP/IP stuffs
+    ESP_ERROR_CHECK(esp_eth_set_default_handlers(eth_netif));
+    // Register user defined event handers
     ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &got_ip_event_handler, NULL));
 
@@ -118,5 +123,8 @@ void app_main()
     esp_eth_config_t config = ETH_DEFAULT_CONFIG(mac, phy);
     esp_eth_handle_t eth_handle = NULL;
     ESP_ERROR_CHECK(esp_eth_driver_install(&config, &eth_handle));
+    /* attach Ethernet driver to TCP/IP stack */
+    ESP_ERROR_CHECK(esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handle)));
+    /* start Ethernet driver state machine */
     ESP_ERROR_CHECK(esp_eth_start(eth_handle));
 }

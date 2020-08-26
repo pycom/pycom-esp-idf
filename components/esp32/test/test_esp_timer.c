@@ -12,17 +12,18 @@
 #include "freertos/semphr.h"
 #include "test_utils.h"
 #include "esp_private/esp_timer_impl.h"
+#include "esp_freertos_hooks.h"
 
 #ifdef CONFIG_ESP_TIMER_PROFILING
 #define WITH_PROFILING 1
 #endif
 
-extern uint32_t esp_timer_impl_get_overflow_val();
+extern uint32_t esp_timer_impl_get_overflow_val(void);
 extern void esp_timer_impl_set_overflow_val(uint32_t overflow_val);
 
 static uint32_t s_old_overflow_val;
 
-static void setup_overflow()
+static void setup_overflow(void)
 {
     s_old_overflow_val = esp_timer_impl_get_overflow_val();
     /* Overflow every 0.1 sec.
@@ -32,7 +33,7 @@ static void setup_overflow()
     esp_timer_impl_set_overflow_val(8000000);
 }
 
-static void teardown_overflow()
+static void teardown_overflow(void)
 {
     esp_timer_impl_set_overflow_val(s_old_overflow_val);
 }
@@ -410,7 +411,7 @@ TEST_CASE("esp_timer_get_time call takes less than 1us", "[esp_timer]")
     TEST_PERFORMANCE_LESS_THAN(ESP_TIMER_GET_TIME_PER_CALL, "%dns", ns_per_call);
 }
 
-static int64_t IRAM_ATTR __attribute__((noinline)) get_clock_diff()
+static int64_t IRAM_ATTR __attribute__((noinline)) get_clock_diff(void)
 {
     uint64_t hs_time = esp_timer_get_time();
     uint64_t ref_time = ref_clock_get();
@@ -651,6 +652,43 @@ TEST_CASE("after esp_timer_impl_advance, timers run when expected", "[esp_timer]
     ref_clock_deinit();
 }
 
+static esp_timer_handle_t timer1;
+static SemaphoreHandle_t sem;
+static void IRAM_ATTR test_tick_hook(void)
+{
+    static int i;
+    const int iterations = 16;
+
+    if (++i <= iterations) {
+        if (i & 0x1) {
+            TEST_ESP_OK(esp_timer_start_once(timer1, 5000));
+        } else {
+            TEST_ESP_OK(esp_timer_stop(timer1));
+        }
+    } else {
+        xSemaphoreGiveFromISR(sem, 0);
+    }
+}
+
+TEST_CASE("Can start/stop timer from ISR context", "[esp_timer]")
+{
+    void timer_func(void* arg)
+    {
+        printf("timer cb\n");
+    }
+
+    esp_timer_create_args_t create_args = {
+        .callback = &timer_func,
+    };
+    TEST_ESP_OK(esp_timer_create(&create_args, &timer1));
+    sem = xSemaphoreCreateBinary();
+    esp_register_freertos_tick_hook(test_tick_hook);
+    TEST_ASSERT(xSemaphoreTake(sem, portMAX_DELAY));
+    esp_deregister_freertos_tick_hook(test_tick_hook);
+    TEST_ESP_OK( esp_timer_delete(timer1) );
+    vSemaphoreDelete(sem);
+}
+
 #if !defined(CONFIG_FREERTOS_UNICORE) && defined(CONFIG_ESP32_DPORT_WORKAROUND)
 
 #include "soc/dport_reg.h"
@@ -797,4 +835,14 @@ TEST_CASE("Test case when esp_timer_impl_set_alarm needs set timer < now_time", 
     const uint32_t offset = 80 * 2; // s_timer_ticks_per_us
     printf("alarm_reg = 0x%x, count_reg 0x%x\n", alarm_reg, count_reg);
     TEST_ASSERT(alarm_reg <= (count_reg + offset));
+}
+
+TEST_CASE("Test esp_timer_impl_set_alarm when the counter is near an overflow value", "[esp_timer]")
+{
+    for (int i = 0; i < 1024; ++i) {
+        uint32_t count_reg = 0xeffffe00 + i;
+        REG_WRITE(FRC_TIMER_LOAD_REG(1), count_reg);
+        printf("%d) count_reg = 0x%x\n", i, count_reg);
+        esp_timer_impl_set_alarm(1); // timestamp is expired
+    }
 }

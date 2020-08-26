@@ -16,13 +16,17 @@ from tiny_test_fw.Utility import CIAssignTest
 
 
 class Group(CIAssignTest.Group):
-    SORT_KEYS = ["test environment", "tags"]
+    SORT_KEYS = ["test environment", "tags", "chip_target"]
     MAX_CASE = 50
     ATTR_CONVERT_TABLE = {
         "execution_time": "execution time"
     }
-    # when IDF support multiple chips, SDK will be moved into tags, we can remove it
-    CI_JOB_MATCH_KEYS = ["test environment", "SDK"]
+    CI_JOB_MATCH_KEYS = ["test environment"]
+    DUT_CLS_NAME = {
+        "esp32": "ESP32DUT",
+        "esp32s2beta": "ESP32S2DUT",
+        "esp8266": "ESP8266DUT",
+    }
 
     def __init__(self, case):
         super(Group, self).__init__(case)
@@ -102,6 +106,18 @@ class Group(CIAssignTest.Group):
 
         :return: {"Filter": case filter, "CaseConfig": list of case configs for cases in this group}
         """
+
+        target = self._get_case_attr(self.case_list[0], "chip_target")
+        if target:
+            overwrite = {
+                "dut": {
+                    "package": "ttfw_idf",
+                    "class": self.DUT_CLS_NAME[target],
+                }
+            }
+        else:
+            overwrite = dict()
+
         case_by_test_function = self._divide_case_by_test_function()
 
         output_data = {
@@ -110,6 +126,7 @@ class Group(CIAssignTest.Group):
                 {
                     "name": test_function,
                     "extra_data": self._create_extra_data(test_cases, test_function),
+                    "overwrite": overwrite,
                 } for test_function, test_cases in case_by_test_function.iteritems() if test_cases
             ],
         }

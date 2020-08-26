@@ -6,6 +6,8 @@ Setup Linux Toolchain from Scratch
 
 The following instructions are alternative to downloading binary toolchain from Espressif website. To quickly setup the binary toolchain, instead of compiling it yourself, backup and proceed to section :doc:`linux-setup`.
 
+.. note:: The reason you might need to build your own toolchain is to solve the Y2K38 problem (time_t expand to 64 bits instead of 32 bits).
+
 Install Prerequisites
 =====================
 
@@ -21,7 +23,7 @@ To compile with ESP-IDF you need to get the following packages:
 
 - Arch::
 
-    sudo pacman -S --needed gcc git make ncurses flex bison gperf python2-pyserial python2-click python2-cryptography python2-future python2-pyparsing python2-pyelftools cmake ninja ccache
+    sudo pacman -S --needed gcc git make ncurses flex bison gperf python-pyserial python-click python-cryptography python-future python-pyparsing python-pyelftools cmake ninja ccache
 
 .. note::
     CMake version 3.5 or newer is required for use with ESP-IDF. Older Linux distributions may require updating, enabling of a "backports" repository, or installing of a "cmake3" package rather than "cmake".
@@ -60,13 +62,15 @@ Download ``crosstool-NG`` and build it:
 
 .. include:: /_build/inc/scratch-build-code.inc
 
+.. note:: To create a toolchain with support for 64-bit time_t, you need to remove the ``--enable-newlib-long-time_t`` option from the ``crosstool-NG/samples/xtensa-esp32-elf/crosstool.config`` file in 33 and 43 lines.
+
 Build the toolchain::
 
     ./ct-ng xtensa-esp32-elf
     ./ct-ng build
     chmod -R u+w builds/xtensa-esp32-elf
 
-Toolchain will be built in ``~/esp/crosstool-NG/builds/xtensa-esp32-elf``. Follow `instructions for standard setup <setup-linux-toolchain-add-it-to-path>`_ to add the toolchain to your ``PATH``.
+Toolchain will be built in ``~/esp/crosstool-NG/builds/xtensa-esp32-elf``. Follow :ref:`instructions for standard setup <setup-linux-toolchain-add-it-to-path-legacy>` to add the toolchain to your ``PATH``.
 
 
 Next Steps

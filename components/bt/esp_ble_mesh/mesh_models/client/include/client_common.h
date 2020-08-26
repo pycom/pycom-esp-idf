@@ -17,6 +17,10 @@
 
 #include "mesh_access.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** Client model opcode pair table */
 typedef struct {
     u32_t cli_op;       /* Client message opcode */
@@ -65,6 +69,7 @@ typedef struct {
     struct bt_mesh_msg_ctx ctx;     /* Message context */
     u32_t opcode;                   /* Message opcode */
     u32_t op_pending;               /* Expected status message opcode */
+    s32_t timeout;                  /* Calculated message timeout value */
     struct k_delayed_work timer;    /* Time used to get response. Only for internal use. */
 } bt_mesh_client_node_t;
 
@@ -83,6 +88,8 @@ void bt_mesh_client_model_lock(void);
 void bt_mesh_client_model_unlock(void);
 
 int bt_mesh_client_init(struct bt_mesh_model *model);
+
+int bt_mesh_client_deinit(struct bt_mesh_model *model);
 
 /**
  * @brief Check if the msg received by client model is a publish msg or not
@@ -108,13 +115,7 @@ int bt_mesh_client_send_msg(struct bt_mesh_model *model,
 
 int bt_mesh_client_free_node(bt_mesh_client_node_t *node);
 
-enum {
-    NODE = 0,
-    PROVISIONER,
-    FAST_PROV,
-};
-
-#define ROLE_NVAL   0xFF
+int bt_mesh_client_clear_list(void *data);
 
 typedef struct {
     struct bt_mesh_model *model;    /* The client model structure */
@@ -129,6 +130,10 @@ typedef struct {
  * @return Zero - success, otherwise - fail
  */
 int bt_mesh_set_client_model_role(bt_mesh_role_param_t *common);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _CLIENT_COMMON_H_ */
 

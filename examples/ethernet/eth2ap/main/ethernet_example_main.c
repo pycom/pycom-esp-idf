@@ -11,7 +11,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
-#include "esp_event_loop.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_eth.h"
@@ -52,7 +51,7 @@ static esp_err_t pkt_wifi2eth(void *buffer, uint16_t len, void *eb)
 // Forward packets from Ethernet to Wi-Fi
 // Note that, Ethernet works faster than Wi-Fi on ESP32,
 // so we need to add an extra queue to balance their speed difference.
-static esp_err_t pkt_eth2wifi(esp_eth_handle_t eth_handle, uint8_t *buffer, uint32_t len)
+static esp_err_t pkt_eth2wifi(esp_eth_handle_t eth_handle, uint8_t *buffer, uint32_t len, void* priv)
 {
     esp_err_t ret = ESP_OK;
     flow_control_msg_t msg = {
@@ -191,7 +190,7 @@ static void initialize_ethernet(void)
     config.stack_input = pkt_eth2wifi;
     ESP_ERROR_CHECK(esp_eth_driver_install(&config, &s_eth_handle));
     esp_eth_ioctl(s_eth_handle, ETH_CMD_S_PROMISCUOUS, (void *)true);
-    ESP_ERROR_CHECK(esp_eth_start(s_eth_handle));
+    esp_eth_start(s_eth_handle);
 }
 
 static void initialize_wifi(void)
@@ -199,7 +198,6 @@ static void initialize_wifi(void)
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL));
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    ESP_ERROR_CHECK(tcpip_adapter_clear_default_wifi_handlers());
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     wifi_config_t wifi_config = {
         .ap = {
@@ -232,7 +230,7 @@ static esp_err_t initialize_flow_control(void)
     return ESP_OK;
 }
 
-void app_main()
+void app_main(void)
 {
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {

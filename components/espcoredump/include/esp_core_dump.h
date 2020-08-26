@@ -1,4 +1,4 @@
-// Copyright 2015-2016 Espressif Systems (Shanghai) PTE LTD
+// Copyright 2015-2019 Espressif Systems (Shanghai) PTE LTD
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@
  *
  * @note  Should be called at system startup.
  */
-void esp_core_dump_init();
+void esp_core_dump_init(void);
 
 /**
  * @brief  Saves core dump to flash.
@@ -69,7 +69,6 @@ void esp_core_dump_to_flash(XtExcFrame *frame);
  * 3) Printed base64 data are surrounded with special messages to help user recognize the start and end of actual data.
  */
 void esp_core_dump_to_uart(XtExcFrame *frame);
-
 
 /**************************************************************************************/
 /*********************************** USER MODE API ************************************/

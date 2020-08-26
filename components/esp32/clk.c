@@ -41,7 +41,18 @@
  */
 #define SLOW_CLK_CAL_CYCLES     CONFIG_ESP32_RTC_CLK_CAL_CYCLES
 
+#ifdef CONFIG_ESP32_RTC_XTAL_CAL_RETRY
+#define RTC_XTAL_CAL_RETRY CONFIG_ESP32_RTC_XTAL_CAL_RETRY
+#else
+#define RTC_XTAL_CAL_RETRY 1
+#endif
+
 #define MHZ (1000000)
+
+/* Lower threshold for a reasonably-looking calibration value for a 32k XTAL.
+ * The ideal value (assuming 32768 Hz frequency) is 1000000/32768*(2**19) = 16*10^6.
+ */
+#define MIN_32K_XTAL_CAL_VAL  15000000L
 
 /* Indicates that this 32k oscillator gets input from external oscillator, rather
  * than a crystal.
@@ -75,7 +86,7 @@ void esp_clk_init(void)
     rtc_config_t cfg = RTC_CONFIG_DEFAULT();
     rtc_init(cfg);
 
-#ifdef CONFIG_ESP32_COMPATIBLE_PRE_V2_1_BOOTLOADERS
+#if (CONFIG_ESP32_COMPATIBLE_PRE_V2_1_BOOTLOADERS || CONFIG_ESP32_APP_INIT_CLK)
     /* Check the bootloader set the XTAL frequency.
 
        Bootloaders pre-v2.1 don't do this.
@@ -168,6 +179,11 @@ static void select_rtc_slow_clk(slow_clk_sel_t slow_clk)
 {
     rtc_slow_freq_t rtc_slow_freq = slow_clk & RTC_CNTL_ANA_CLK_RTC_SEL_V;
     uint32_t cal_val = 0;
+    /* number of times to repeat 32k XTAL calibration
+     * before giving up and switching to the internal RC
+     */
+    int retry_32k_xtal = RTC_XTAL_CAL_RETRY;
+
     do {
         if (rtc_slow_freq == RTC_SLOW_FREQ_32K_XTAL) {
             /* 32k XTAL oscillator needs to be enabled and running before it can
@@ -186,7 +202,10 @@ static void select_rtc_slow_clk(slow_clk_sel_t slow_clk)
             // When SLOW_CLK_CAL_CYCLES is set to 0, clock calibration will not be performed at startup.
             if (SLOW_CLK_CAL_CYCLES > 0) {
                 cal_val = rtc_clk_cal(RTC_CAL_32K_XTAL, SLOW_CLK_CAL_CYCLES);
-                if (cal_val == 0 || cal_val < 15000000L) {
+                if (cal_val == 0 || cal_val < MIN_32K_XTAL_CAL_VAL) {
+                    if (retry_32k_xtal-- > 0) {
+                        continue;
+                    }
                     ESP_EARLY_LOGW(TAG, "32 kHz XTAL not found, switching to internal 150 kHz oscillator");
                     rtc_slow_freq = RTC_SLOW_FREQ_RTC;
                 }
@@ -210,7 +229,7 @@ static void select_rtc_slow_clk(slow_clk_sel_t slow_clk)
     esp_clk_slowclk_cal_set(cal_val);
 }
 
-void rtc_clk_select_rtc_slow_clk()
+void rtc_clk_select_rtc_slow_clk(void)
 {
     select_rtc_slow_clk(RTC_SLOW_FREQ_32K_XTAL);
 }
@@ -292,6 +311,8 @@ void esp_perip_clk_init(void)
                         DPORT_I2C_EXT1_CLK_EN |
                         DPORT_I2S1_CLK_EN |
                         DPORT_SPI_DMA_CLK_EN;
+
+    common_perip_clk &= ~DPORT_SPI01_CLK_EN;
 
 #if CONFIG_SPIRAM_SPEED_80M
 //80MHz SPIRAM uses SPI2/SPI3 as well; it's initialized before this is called. Because it is used in

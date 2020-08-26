@@ -19,11 +19,16 @@
 #include <sys/termios.h>
 #include <sys/errno.h>
 #include "unity.h"
+#if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/uart.h"
+#elif CONFIG_IDF_TARGET_ESP32S2BETA
+#include "esp32s2beta/rom/uart.h"
+#endif
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "driver/uart.h"
+#include "soc/uart_struct.h"
 #include "esp_vfs_dev.h"
 #include "esp_vfs.h"
 #include "sdkconfig.h"
@@ -39,11 +44,11 @@ static void fwrite_str_loopback(const char* str, size_t size)
     UART0.conf0.loopback = 0;
 }
 
-static void flush_stdin_stdout()
+static void flush_stdin_stdout(void)
 {
     vTaskDelay(10 / portTICK_PERIOD_MS);
-    char *bitbucket = (char*) 0x3f000000;
-    while (fread(bitbucket, 1, 128, stdin) > 0) {
+    char bitbucket[UART_FIFO_LEN];
+    while (fread(bitbucket, 1, UART_FIFO_LEN, stdin) > 0) {
         ;
     }
     fflush(stdout);
@@ -179,7 +184,7 @@ TEST_CASE("can write to UART while another task is reading", "[vfs]")
     flush_stdin_stdout();
 
     ESP_ERROR_CHECK( uart_driver_install(CONFIG_ESP_CONSOLE_UART_NUM,
-            256, 0, 0, NULL, 0, NULL) );
+            256, 0, 0, NULL, 0) );
     esp_vfs_dev_uart_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
 
 
@@ -221,10 +226,11 @@ TEST_CASE("Can use termios for UART", "[vfs]")
         .data_bits = UART_DATA_8_BITS,
         .parity    = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_APB,
     };
-    uart_param_config(UART_NUM_1, &uart_config);
     uart_driver_install(UART_NUM_1, 256, 256, 0, NULL, 0);
+    uart_param_config(UART_NUM_1, &uart_config);
 
     const int uart_fd = open("/dev/uart/1", O_RDWR);
     TEST_ASSERT_NOT_EQUAL_MESSAGE(uart_fd, -1, "Cannot open UART");

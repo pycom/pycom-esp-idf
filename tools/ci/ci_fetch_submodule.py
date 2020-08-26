@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+
+# internal use only for CI
+# download archive of one commit instead of cloning entire submodule repo
+
 import re
 import os
 import subprocess

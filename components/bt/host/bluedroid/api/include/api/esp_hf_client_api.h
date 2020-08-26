@@ -126,7 +126,7 @@ typedef union {
      * @brief ESP_HF_CLIENT_CIND_SERVICE_AVAILABILITY_EVT
      */
     struct hf_client_service_availability_param {
-        esp_hf_service_availability_status_t status;     /*!< service availability status */
+        esp_hf_network_state_t status;     /*!< service availability status */
     } service_availability;                              /*!< HF callback param of ESP_HF_CLIENT_CIND_SERVICE_AVAILABILITY_EVT */
 
     /**
@@ -248,7 +248,7 @@ typedef union {
         const char *number;                      /*!< phone number corresponding to the last voice tag in the HF */
     } binp;                                      /*!< HF callback param of ESP_HF_CLIENT_BINP_EVT */
 
-} esp_hf_client_cb_param_t;
+} esp_hf_client_cb_param_t;                      /*!< HFP client callback parameters */
 
 /**
  * @brief           HFP client incoming data callback function, the callback is useful in case of
@@ -577,6 +577,20 @@ esp_err_t esp_hf_client_send_dtmf(char code);
  *
  */
 esp_err_t esp_hf_client_request_last_voice_tag_number(void);
+
+/**
+ *
+ * @brief           Disable echo cancellation and noise reduction in the AG (use AT+NREC=0 command)
+ *                  As a precondition to use this API, Service Level Connection shall exist with AG
+ *
+ * @return
+ *                  - ESP_OK: NREC=0 request is sent to lower layer
+ *                  - ESP_INVALID_STATE: if bluetooth stack is not yet enabled
+ *                  - ESP_FAIL: others
+ *
+ */
+esp_err_t esp_hf_client_send_nrec(void);
+
 
 /**
  * @brief           Register HFP client data output function; the callback is only used in

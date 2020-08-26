@@ -26,6 +26,7 @@
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
 #ifdef CONFIG_ENABLE_ULP_TEMPERATURE_WAKEUP
+#if CONFIG_IDF_TARGET_ESP32
 
 /*
  * Offset (in 32-bit words) in RTC Slow memory where the data is placed
@@ -45,7 +46,7 @@ _Static_assert(ULP_DATA_OFFSET < CONFIG_ESP32_ULP_COPROC_RESERVE_MEM/4 - 6,
  * The program monitors on-chip temperature sensor and wakes up the SoC when
  * the temperature goes lower or higher than certain thresholds.
  */
-static void start_ulp_temperature_monitoring();
+static void start_ulp_temperature_monitoring(void);
 
 /**
  * @brief Utility function which reads data written by ULP program
@@ -68,15 +69,17 @@ static inline void ulp_data_write(size_t offset, uint16_t value)
 {
     RTC_SLOW_MEM[ULP_DATA_OFFSET + offset] = value;
 }
-
+#endif // CONFIG_IDF_TARGET_ESP32
 #endif // CONFIG_ENABLE_ULP_TEMPERATURE_WAKEUP
 
 #ifdef CONFIG_ENABLE_TOUCH_WAKEUP
+#if CONFIG_IDF_TARGET_ESP32
 #define TOUCH_THRESH_NO_USE 0
 static void calibrate_touch_pad(touch_pad_t pad);
 #endif
+#endif
 
-void app_main()
+void app_main(void)
 {
     struct timeval now;
     gettimeofday(&now, NULL);
@@ -104,6 +107,7 @@ void app_main()
         }
 #endif // CONFIG_ENABLE_TOUCH_WAKEUP
 #ifdef CONFIG_ENABLE_ULP_TEMPERATURE_WAKEUP
+#if CONFIG_IDF_TARGET_ESP32
         case ESP_SLEEP_WAKEUP_ULP: {
             printf("Wake up from ULP\n");
             int16_t diff_high = (int16_t) ulp_data_read(3);
@@ -117,6 +121,7 @@ void app_main()
             }
             break;
         }
+#endif // CONFIG_IDF_TARGET_ESP32
 #endif // CONFIG_ENABLE_ULP_TEMPERATURE_WAKEUP
         case ESP_SLEEP_WAKEUP_UNDEFINED:
         default:
@@ -124,10 +129,12 @@ void app_main()
     }
 
 #ifdef CONFIG_ENABLE_ULP_TEMPERATURE_WAKEUP
+#if CONFIG_IDF_TARGET_ESP32
     if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_UNDEFINED) {
         printf("ULP did %d temperature measurements in %d ms\n", ulp_data_read(1), sleep_time_ms);
         printf("Initial T=%d, latest T=%d\n", ulp_data_read(0), ulp_data_read(2));
     }
+#endif // CONFIG_IDF_TARGET_ESP32
 #endif // CONFIG_ENABLE_ULP_TEMPERATURE_WAKEUP
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
@@ -136,15 +143,16 @@ void app_main()
     printf("Enabling timer wakeup, %ds\n", wakeup_time_sec);
     esp_sleep_enable_timer_wakeup(wakeup_time_sec * 1000000);
 
-    const int ext_wakeup_pin_1 = 25;
+    const int ext_wakeup_pin_1 = 2;
     const uint64_t ext_wakeup_pin_1_mask = 1ULL << ext_wakeup_pin_1;
-    const int ext_wakeup_pin_2 = 26;
+    const int ext_wakeup_pin_2 = 4;
     const uint64_t ext_wakeup_pin_2_mask = 1ULL << ext_wakeup_pin_2;
 
     printf("Enabling EXT1 wakeup on pins GPIO%d, GPIO%d\n", ext_wakeup_pin_1, ext_wakeup_pin_2);
     esp_sleep_enable_ext1_wakeup(ext_wakeup_pin_1_mask | ext_wakeup_pin_2_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
 
 #ifdef CONFIG_ENABLE_TOUCH_WAKEUP
+#if CONFIG_IDF_TARGET_ESP32
     // Initialize touch pad peripheral.
     // The default fsm mode is software trigger mode.
     touch_pad_init();
@@ -160,32 +168,86 @@ void app_main()
     touch_pad_config(TOUCH_PAD_NUM9, TOUCH_THRESH_NO_USE);
     calibrate_touch_pad(TOUCH_PAD_NUM8);
     calibrate_touch_pad(TOUCH_PAD_NUM9);
+#elif CONFIG_IDF_TARGET_ESP32S2BETA
+    /* Initialize touch pad peripheral. */
+    touch_pad_init();
+    /* Only support one touch channel in sleep mode. */
+    touch_pad_config(TOUCH_PAD_NUM9);
+    /* Denoise setting at TouchSensor 0. */
+    touch_pad_denoise_t denoise = {
+        /* The bits to be cancelled are determined according to the noise level. */
+        .grade = TOUCH_PAD_DENOISE_BIT4,
+        .cap_level = TOUCH_PAD_DENOISE_CAP_L7,
+    };
+    touch_pad_denoise_set_config(&denoise);
+    touch_pad_denoise_enable();
+    printf("Denoise function init\n");
+    /* Filter setting */
+    touch_filter_config_t filter_info = {
+        .mode = TOUCH_PAD_FILTER_IIR_8,
+        .debounce_cnt = 1,      // 1 time count.
+        .hysteresis_thr = 3,    // 3%
+        .noise_thr = 0,         // 50%
+        .noise_neg_thr = 0,     // 50%
+        .neg_noise_limit = 10,  // 10 time count.
+        .jitter_step = 4,       // use for jitter mode.
+    };
+    touch_pad_filter_set_config(&filter_info);
+    touch_pad_filter_enable();
+    touch_pad_filter_reset_baseline(TOUCH_PAD_NUM9);
+    printf("touch pad filter init %d\n", TOUCH_PAD_FILTER_IIR_8);
+    /* Set sleep touch pad. */
+    touch_pad_sleep_channel_t slp_config = {
+        .touch_num = TOUCH_PAD_NUM9,
+        .sleep_pad_threshold = TOUCH_PAD_THRESHOLD_MAX,
+        .en_proximity = false,
+    };
+    touch_pad_sleep_channel_config(&slp_config);
+    /* Enable touch sensor clock. Work mode is "timer trigger". */
+    touch_pad_set_fsm_mode(TOUCH_FSM_MODE_TIMER);
+    touch_pad_fsm_start();
+    vTaskDelay(100 / portTICK_RATE_MS);
+    /* read sleep touch pad value */
+    uint32_t touch_value;
+    touch_pad_sleep_channel_read_baseline(&touch_value);
+    slp_config.sleep_pad_threshold = touch_value * 0.1;
+    touch_pad_sleep_channel_config(&slp_config); //10%
+    printf("test init: touch pad [%d] slp %d, thresh %d\n", 
+        TOUCH_PAD_NUM9, touch_value, (uint32_t)(touch_value * 0.1));
+#endif
     printf("Enabling touch pad wakeup\n");
     esp_sleep_enable_touchpad_wakeup();
-
+    esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
 #endif // CONFIG_ENABLE_TOUCH_WAKEUP
 
 #ifdef CONFIG_ENABLE_ULP_TEMPERATURE_WAKEUP
+#if CONFIG_IDF_TARGET_ESP32
     printf("Enabling ULP wakeup\n");
     esp_sleep_enable_ulp_wakeup();
 #endif
+#endif
 
+#if CONFIG_IDF_TARGET_ESP32
     // Isolate GPIO12 pin from external circuits. This is needed for modules
     // which have an external pull-up resistor on GPIO12 (such as ESP32-WROVER)
     // to minimize current consumption.
     rtc_gpio_isolate(GPIO_NUM_12);
+#endif
 
     printf("Entering deep sleep\n");
     gettimeofday(&sleep_enter_time, NULL);
 
 #ifdef CONFIG_ENABLE_ULP_TEMPERATURE_WAKEUP
+#if CONFIG_IDF_TARGET_ESP32
     start_ulp_temperature_monitoring();
+#endif
 #endif
 
     esp_deep_sleep_start();
-}
+} 
 
 #ifdef CONFIG_ENABLE_TOUCH_WAKEUP
+#if CONFIG_IDF_TARGET_ESP32
 static void calibrate_touch_pad(touch_pad_t pad)
 {
     int avg = 0;
@@ -207,10 +269,12 @@ static void calibrate_touch_pad(touch_pad_t pad)
         touch_pad_config(pad, threshold);
     }
 }
+#endif
 #endif // CONFIG_ENABLE_TOUCH_WAKEUP
 
 #ifdef CONFIG_ENABLE_ULP_TEMPERATURE_WAKEUP
-static void start_ulp_temperature_monitoring()
+#if CONFIG_IDF_TARGET_ESP32
+static void start_ulp_temperature_monitoring(void)
 {
     /*
      * This ULP program monitors the on-chip temperature sensor and wakes the chip up when
@@ -309,5 +373,6 @@ static void start_ulp_temperature_monitoring()
     // Start ULP
     ESP_ERROR_CHECK( ulp_run(0) );
 }
+#endif // CONFIG_IDF_TARGET_ESP32
 #endif // CONFIG_ENABLE_ULP_TEMPERATURE_WAKEUP
 

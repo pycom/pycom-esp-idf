@@ -18,6 +18,11 @@
 #include "esp_freertos_hooks.h"
 #include "sdkconfig.h"
 
+#ifdef CONFIG_IDF_TARGET_ESP32S2BETA
+#define int_clr_timers int_clr
+#define update update.update
+#define int_st_timers int_st
+#endif
 
 /* Counter task counts a target variable forever */
 static void task_count(void *vp_counter)
@@ -118,7 +123,7 @@ volatile bool timer_isr_fired;
 void IRAM_ATTR timer_group0_isr(void *vp_arg)
 {
     // Clear interrupt
-    TIMERG0.int_clr_timers.val = TIMERG0.int_st_timers.val;
+    timer_group_clr_intr_status_in_isr(TIMER_GROUP_0, TIMER_0);
 
     timer_isr_fired = true;
     TaskHandle_t handle = vp_arg;
@@ -164,6 +169,7 @@ static void test_resume_task_from_isr(int target_core)
 
     vTaskDelay(1);
 
+    timer_deinit(TIMER_GROUP_0, TIMER_0);
     TEST_ASSERT_TRUE(timer_isr_fired);
     TEST_ASSERT_TRUE(resumed);
 }
@@ -191,7 +197,7 @@ static void IRAM_ATTR suspend_scheduler_while_block_set(void* arg)
     xTaskResumeAll();
 }
 
-static void IRAM_ATTR suspend_scheduler_on_both_cpus()
+static void IRAM_ATTR suspend_scheduler_on_both_cpus(void)
 {
     block = true;
     if (suspend_both_cpus) {
@@ -201,7 +207,7 @@ static void IRAM_ATTR suspend_scheduler_on_both_cpus()
     vTaskSuspendAll();
 }
 
-static void IRAM_ATTR resume_scheduler_on_both_cpus()
+static void IRAM_ATTR resume_scheduler_on_both_cpus(void)
 {
     block = false;
     xTaskResumeAll();
@@ -286,7 +292,7 @@ TEST_CASE("Test the waiting task not missed due to scheduler suspension on one C
 
 static uint32_t count_tick[2];
 
-static void IRAM_ATTR tick_hook()
+static void IRAM_ATTR tick_hook(void)
 {
     ++count_tick[xPortGetCoreID()];
 }

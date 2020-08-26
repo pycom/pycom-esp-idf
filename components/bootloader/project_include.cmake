@@ -1,7 +1,7 @@
 set(BOOTLOADER_OFFSET 0x1000)
 
 # Do not generate flash file when building bootloader
-if(BOOTLOADER_BUILD)
+if(BOOTLOADER_BUILD OR NOT CONFIG_APP_BUILD_BOOTLOADER)
     return()
 endif()
 
@@ -19,8 +19,8 @@ set(bootloader_binary_files
 
 idf_build_get_property(project_dir PROJECT_DIR)
 
-# There are some additional processing when CONFIG_CONFIG_SECURE_SIGNED_APPS. This happens
-# when either CONFIG_SECURE_BOOT_ENABLED or SECURE_BOOT_BUILD_SIGNED_BINARIES.
+# There are some additional processing when CONFIG_SECURE_SIGNED_APPS. This happens
+# when either CONFIG_SECURE_BOOT_V1_ENABLED or CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES.
 # For both cases, the user either sets binaries to be signed during build or not
 # using CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES.
 #
@@ -29,7 +29,13 @@ idf_build_get_property(project_dir PROJECT_DIR)
 if(CONFIG_SECURE_SIGNED_APPS)
     add_custom_target(gen_secure_boot_keys)
 
-    if(CONFIG_SECURE_BOOT_ENABLED)
+    if(CONFIG_SECURE_SIGNED_APPS_ECDSA_SCHEME)
+        set(secure_apps_signing_scheme "1")
+    elseif(CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME)
+        set(secure_apps_signing_scheme "2")
+    endif()
+
+    if(CONFIG_SECURE_BOOT_V1_ENABLED)
         # Check that the configuration is sane
         if((CONFIG_SECURE_BOOTLOADER_REFLASHABLE AND CONFIG_SECURE_BOOTLOADER_ONE_TIME_FLASH) OR
             (NOT CONFIG_SECURE_BOOTLOADER_REFLASHABLE AND NOT CONFIG_SECURE_BOOTLOADER_ONE_TIME_FLASH))
@@ -60,16 +66,18 @@ if(CONFIG_SECURE_SIGNED_APPS)
             # (to pick up a new signing key if one exists, etc.)
             fail_at_build_time(gen_secure_boot_signing_key
                 "Secure Boot Signing Key ${CONFIG_SECURE_BOOT_SIGNING_KEY} does not exist. Generate using:"
-                "\tespsecure.py generate_signing_key ${CONFIG_SECURE_BOOT_SIGNING_KEY}")
+                "\tespsecure.py generate_signing_key --version ${secure_apps_signing_scheme} \
+                ${CONFIG_SECURE_BOOT_SIGNING_KEY}")
         else()
             add_custom_target(gen_secure_boot_signing_key)
         endif()
 
         set(SECURE_BOOT_SIGNING_KEY ${secure_boot_signing_key}) # needed by some other components
         set(sign_key_arg "-DSECURE_BOOT_SIGNING_KEY=${secure_boot_signing_key}")
+        set(ver_key_arg)
 
         add_dependencies(gen_secure_boot_keys gen_secure_boot_signing_key)
-    else()
+    elseif(CONFIG_SECURE_SIGNED_APPS_ECDSA_SCHEME)
 
         get_filename_component(secure_boot_verification_key
             ${CONFIG_SECURE_BOOT_VERIFICATION_KEY}
@@ -82,32 +90,39 @@ if(CONFIG_SECURE_SIGNED_APPS)
             fail_at_build_time(gen_secure_boot_verification_key
                 "Secure Boot Verification Public Key ${CONFIG_SECURE_BOOT_VERIFICATION_KEY} does not exist."
                 "\tThis can be extracted from the private signing key."
-                "\tSee docs/security/secure-boot.rst for details.")
+                "\tSee docs/security/secure-boot-v1.rst for details.")
         else()
             add_custom_target(gen_secure_boot_verification_key)
         endif()
 
+        set(sign_key_arg)
         set(ver_key_arg "-DSECURE_BOOT_VERIFICATION_KEY=${secure_boot_verification_key}")
 
         add_dependencies(gen_secure_boot_keys gen_secure_boot_verification_key)
     endif()
+else()
+    set(sign_key_arg)
+    set(ver_key_arg)
 endif()
 
 idf_build_get_property(idf_path IDF_PATH)
 idf_build_get_property(idf_target IDF_TARGET)
 idf_build_get_property(sdkconfig SDKCONFIG)
+idf_build_get_property(python PYTHON)
+idf_build_get_property(extra_cmake_args EXTRA_CMAKE_ARGS)
 
 externalproject_add(bootloader
     SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/subproject"
     BINARY_DIR "${BOOTLOADER_BUILD_DIR}"
     CMAKE_ARGS  -DSDKCONFIG=${sdkconfig} -DIDF_PATH=${idf_path} -DIDF_TARGET=${idf_target}
-                -DPYTHON_DEPS_CHECKED=1
+                -DPYTHON_DEPS_CHECKED=1 -DPYTHON=${python}
                 -DEXTRA_COMPONENT_DIRS=${CMAKE_CURRENT_LIST_DIR}
                 ${sign_key_arg} ${ver_key_arg}
                 # LEGACY_INCLUDE_COMMON_HEADERS has to be passed in via cache variable since
                 # the bootloader common component requirements depends on this and
                 # config variables are not available before project() call.
                 -DLEGACY_INCLUDE_COMMON_HEADERS=${CONFIG_LEGACY_INCLUDE_COMMON_HEADERS}
+                ${extra_cmake_args}
     INSTALL_COMMAND ""
     BUILD_ALWAYS 1  # no easy way around this...
     BUILD_BYPRODUCTS ${bootloader_binary_files}

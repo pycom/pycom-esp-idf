@@ -31,9 +31,12 @@ def dut_thread_callback(**kwargs):
 def test_can_network_example(env, extra_data):
 
     # Get device under test. "dut1", "dut2", and "dut3" must be properly defined in EnvConfig
-    dut_master = env.get_dut("dut1", "examples/peripherals/can/can_network/can_network_master")
-    dut_slave = env.get_dut("dut2", "examples/peripherals/can/can_network/can_network_slave")
-    dut_listen_only = env.get_dut("dut3", "examples/peripherals/can/can_network/can_network_listen_only")
+    dut_master = env.get_dut("dut1", "examples/peripherals/can/can_network/can_network_master",
+                             dut_class=ttfw_idf.ESP32DUT)
+    dut_slave = env.get_dut("dut2", "examples/peripherals/can/can_network/can_network_slave",
+                            dut_class=ttfw_idf.ESP32DUT)
+    dut_listen_only = env.get_dut("dut3", "examples/peripherals/can/can_network/can_network_listen_only",
+                                  dut_class=ttfw_idf.ESP32DUT)
 
     # Flash app onto each DUT, each DUT is reset again at the start of each thread
     dut_master.start_app()

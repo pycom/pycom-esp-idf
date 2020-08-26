@@ -395,14 +395,15 @@ static void spp_uart_init(void)
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_RTS,
         .rx_flow_ctrl_thresh = 122,
+        .source_clk = UART_SCLK_APB,
     };
 
+    //Install UART driver, and get the queue.
+    uart_driver_install(UART_NUM_0, 4096, 8192, 10,&spp_uart_queue,0);
     //Set UART parameters
     uart_param_config(UART_NUM_0, &uart_config);
     //Set UART pins
     uart_set_pin(UART_NUM_0, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    //Install UART driver, and get the queue.
-    uart_driver_install(UART_NUM_0, 4096, 8192, 10,&spp_uart_queue,0);
     xTaskCreate(uart_task, "uTask", 2048, (void*)UART_NUM_0, 8, NULL);
 }
 
@@ -648,7 +649,7 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
     } while (0);
 }
 
-void app_main()
+void app_main(void)
 {
     esp_err_t ret;
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();

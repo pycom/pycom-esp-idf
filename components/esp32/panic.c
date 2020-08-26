@@ -44,14 +44,16 @@
 #include "esp_private/system_internal.h"
 #include "sdkconfig.h"
 #include "esp_ota_ops.h"
+#include "driver/timer.h"
+#include "hal/timer_ll.h"
 #if CONFIG_SYSVIEW_ENABLE
 #include "SEGGER_RTT.h"
 #endif
 
-#if CONFIG_ESP32_APPTRACE_ONPANIC_HOST_FLUSH_TMO == -1
+#if CONFIG_APPTRACE_ONPANIC_HOST_FLUSH_TMO == -1
 #define APPTRACE_ONPANIC_HOST_FLUSH_TMO   ESP_APPTRACE_TMO_INFINITE
 #else
-#define APPTRACE_ONPANIC_HOST_FLUSH_TMO   (1000*CONFIG_ESP32_APPTRACE_ONPANIC_HOST_FLUSH_TMO)
+#define APPTRACE_ONPANIC_HOST_FLUSH_TMO   (1000*CONFIG_APPTRACE_ONPANIC_HOST_FLUSH_TMO)
 #endif
 /*
   Panic handlers; these get called when an unhandled exception occurs or the assembly-level
@@ -139,14 +141,14 @@ esp_reset_reason_t __attribute__((weak)) esp_reset_reason_get_hint(void)
 
 static bool abort_called;
 
-static __attribute__((noreturn)) inline void invoke_abort()
+static __attribute__((noreturn)) inline void invoke_abort(void)
 {
     abort_called = true;
-#if CONFIG_ESP32_APPTRACE_ENABLE
+#if CONFIG_APPTRACE_ENABLE
 #if CONFIG_SYSVIEW_ENABLE
-    SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
+    SEGGER_RTT_ESP32_FlushNoLock(CONFIG_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #else
-    esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH,
+    esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_APPTRACE_POSTMORTEM_FLUSH_THRESH,
                               APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #endif
 #endif
@@ -158,7 +160,7 @@ static __attribute__((noreturn)) inline void invoke_abort()
     }
 }
 
-void abort()
+void abort(void)
 {
 #if !CONFIG_ESP32_PANIC_SILENT_REBOOT
     ets_printf("abort() was called at PC 0x%08x on core %d\r\n", (intptr_t)__builtin_return_address(0) - 3, xPortGetCoreID());
@@ -189,12 +191,12 @@ static const char *edesc[] = {
 #define NUM_EDESCS (sizeof(edesc) / sizeof(char *))
 
 static void commonErrorHandler(XtExcFrame *frame);
-static inline void disableAllWdts();
+static inline void disableAllWdts(void);
 static void illegal_instruction_helper(XtExcFrame *frame);
 
 //The fact that we've panic'ed probably means the other CPU is now running wild, possibly
 //messing up the serial output, so we stall it here.
-static void haltOtherCore()
+static void haltOtherCore(void)
 {
     esp_cpu_stall( xPortGetCoreID() == 0 ? 1 : 0 );
 }
@@ -311,13 +313,13 @@ void panicHandler(XtExcFrame *frame)
         disableAllWdts();
         if (frame->exccause == PANIC_RSN_INTWDT_CPU0 ||
             frame->exccause == PANIC_RSN_INTWDT_CPU1) {
-            TIMERG1.int_clr_timers.wdt = 1;
+            timer_ll_wdt_clear_intr_status(&TIMERG1);
         }
-#if CONFIG_ESP32_APPTRACE_ENABLE
+#if CONFIG_APPTRACE_ENABLE
 #if CONFIG_SYSVIEW_ENABLE
-        SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
+        SEGGER_RTT_ESP32_FlushNoLock(CONFIG_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #else
-        esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH,
+        esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_APPTRACE_POSTMORTEM_FLUSH_THRESH,
                                   APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #endif
 #endif
@@ -346,11 +348,11 @@ void xt_unhandled_exception(XtExcFrame *frame)
             panicPutStr(" at pc=");
             panicPutHex(frame->pc);
             panicPutStr(". Setting bp and returning..\r\n");
-#if CONFIG_ESP32_APPTRACE_ENABLE
+#if CONFIG_APPTRACE_ENABLE
 #if CONFIG_SYSVIEW_ENABLE
-            SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
+            SEGGER_RTT_ESP32_FlushNoLock(CONFIG_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #else
-            esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH,
+            esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_APPTRACE_POSTMORTEM_FLUSH_THRESH,
                                       APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #endif
 #endif
@@ -399,40 +401,43 @@ static void illegal_instruction_helper(XtExcFrame *frame)
   all watchdogs except the timer group 0 watchdog, and it reconfigures that to reset the chip after
   one second.
 */
-static void reconfigureAllWdts()
+static void reconfigureAllWdts(void)
 {
-    TIMERG0.wdt_wprotect = TIMG_WDT_WKEY_VALUE;
-    TIMERG0.wdt_feed = 1;
-    TIMERG0.wdt_config0.sys_reset_length = 7;           //3.2uS
-    TIMERG0.wdt_config0.cpu_reset_length = 7;           //3.2uS
-    TIMERG0.wdt_config0.stg0 = TIMG_WDT_STG_SEL_RESET_SYSTEM; //1st stage timeout: reset system
-    TIMERG0.wdt_config1.clk_prescale = 80 * 500;        //Prescaler: wdt counts in ticks of 0.5mS
-    TIMERG0.wdt_config2 = 2000;                         //1 second before reset
-    TIMERG0.wdt_config0.en = 1;
-    TIMERG0.wdt_wprotect = 0;
+    timer_ll_wdt_set_protect(&TIMERG0, false);
+    timer_ll_wdt_feed(&TIMERG0);
+    timer_ll_wdt_init(&TIMERG0);
+    timer_ll_wdt_set_tick(&TIMERG0, TG0_WDT_TICK_US); //Prescaler: wdt counts in ticks of TG0_WDT_TICK_US
+    //1st stage timeout: reset system
+    timer_ll_wdt_set_timeout_behavior(&TIMERG0, 0, TIMER_WDT_RESET_SYSTEM);
+    //1 second before reset
+    timer_ll_wdt_set_timeout(&TIMERG0, 0, 1000*1000/TG0_WDT_TICK_US);
+    timer_ll_wdt_set_enable(&TIMERG0, true);
+    timer_ll_wdt_set_protect(&TIMERG0, true);
+
     //Disable wdt 1
-    TIMERG1.wdt_wprotect = TIMG_WDT_WKEY_VALUE;
-    TIMERG1.wdt_config0.en = 0;
-    TIMERG1.wdt_wprotect = 0;
+    timer_ll_wdt_set_protect(&TIMERG1, false);
+    timer_ll_wdt_set_enable(&TIMERG1, false);
+    timer_ll_wdt_set_protect(&TIMERG1, true);
 }
 
 /*
   This disables all the watchdogs for when we call the gdbstub.
 */
-static inline void disableAllWdts()
+static inline void disableAllWdts(void)
 {
-    TIMERG0.wdt_wprotect = TIMG_WDT_WKEY_VALUE;
-    TIMERG0.wdt_config0.en = 0;
-    TIMERG0.wdt_wprotect = 0;
-    TIMERG1.wdt_wprotect = TIMG_WDT_WKEY_VALUE;
-    TIMERG1.wdt_config0.en = 0;
-    TIMERG1.wdt_wprotect = 0;
+    timer_ll_wdt_set_protect(&TIMERG0, false);
+    timer_ll_wdt_set_enable(&TIMERG0, false);
+    timer_ll_wdt_set_protect(&TIMERG0, true);
+
+    timer_ll_wdt_set_protect(&TIMERG1, false);
+    timer_ll_wdt_set_enable(&TIMERG1, false);
+    timer_ll_wdt_set_protect(&TIMERG1, true);
 }
 
 #if CONFIG_ESP32_PANIC_PRINT_REBOOT || CONFIG_ESP32_PANIC_SILENT_REBOOT
-static void esp_panic_dig_reset() __attribute__((noreturn));
+static void esp_panic_dig_reset(void) __attribute__((noreturn));
 
-static void esp_panic_dig_reset()
+static void esp_panic_dig_reset(void)
 {
     // make sure all the panic handler output is sent from UART FIFO
     uart_tx_wait_idle(CONFIG_ESP_CONSOLE_UART_NUM);
@@ -445,7 +450,7 @@ static void esp_panic_dig_reset()
         ;
     }
 }
-#endif
+#endif // CONFIG_ESP32_PANIC_PRINT_REBOOT || CONFIG_ESP32_PANIC_SILENT_REBOOT
 
 static void putEntry(uint32_t pc, uint32_t sp)
 {
@@ -592,15 +597,23 @@ static __attribute__((noreturn)) void commonErrorHandler(XtExcFrame *frame)
     }
 #endif //!CONFIG_FREERTOS_UNICORE
 
-#if CONFIG_ESP32_APPTRACE_ENABLE
+#if CONFIG_APPTRACE_ENABLE
     disableAllWdts();
 #if CONFIG_SYSVIEW_ENABLE
-    SEGGER_RTT_ESP32_FlushNoLock(CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
+    SEGGER_RTT_ESP32_FlushNoLock(CONFIG_APPTRACE_POSTMORTEM_FLUSH_THRESH, APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #else
-    esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_ESP32_APPTRACE_POSTMORTEM_FLUSH_THRESH,
+    esp_apptrace_flush_nolock(ESP_APPTRACE_DEST_TRAX, CONFIG_APPTRACE_POSTMORTEM_FLUSH_THRESH,
                               APPTRACE_ONPANIC_HOST_FLUSH_TMO);
 #endif
     reconfigureAllWdts();
+#endif
+
+#if !CONFIG_ESP_PANIC_HANDLER_IRAM
+    // Re-enable CPU cache for current CPU if it was disabled
+    if (!spi_flash_cache_enabled()) {
+        spi_flash_enable_cache(core_id);
+        panicPutStr("Re-enable cpu cache.\r\n");
+    }
 #endif
 
 #if CONFIG_ESP32_PANIC_GDBSTUB
@@ -629,7 +642,7 @@ static __attribute__((noreturn)) void commonErrorHandler(XtExcFrame *frame)
     rtc_wdt_disable();
 #if CONFIG_ESP32_PANIC_PRINT_REBOOT || CONFIG_ESP32_PANIC_SILENT_REBOOT
     panicPutStr("Rebooting...\r\n");
-    if (frame->exccause != PANIC_RSN_CACHEERR) {
+    if (esp_cache_err_get_cpuid() == -1) {
         esp_restart_noos();
     } else {
         // The only way to clear invalid cache access interrupt is to reset the digital part

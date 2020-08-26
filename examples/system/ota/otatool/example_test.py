@@ -8,7 +8,7 @@ import ttfw_idf
 
 @ttfw_idf.idf_example_test(env_tag='Example_WIFI')
 def test_otatool_example(env, extra_data):
-    dut = env.get_dut('otatool', 'examples/system/ota/otatool')
+    dut = env.get_dut('otatool', 'examples/system/ota/otatool', dut_class=ttfw_idf.ESP32DUT)
 
     # Verify factory firmware
     dut.start_app()

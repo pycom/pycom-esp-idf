@@ -11,7 +11,6 @@
 #define _BLE_MESH_HEALTH_SRV_H_
 
 #include "mesh_access.h"
-#include "mesh_kernel.h"
 
 /**
  * @brief Bluetooth Mesh Health Server Model
@@ -19,6 +18,10 @@
  * @ingroup bt_mesh
  * @{
  */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct bt_mesh_health_srv_cb {
     /* Clear registered faults */
@@ -90,6 +93,10 @@ extern const struct bt_mesh_model_op bt_mesh_health_srv_op[];
             bt_mesh_health_srv_op, pub, srv)
 
 int bt_mesh_fault_update(struct bt_mesh_elem *elem);
+
+#ifdef __cplusplus
+}
+#endif
 
 /**
  * @}

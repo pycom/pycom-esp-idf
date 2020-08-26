@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "soc/spi_periph.h"
 #include "test/test_common_spi.h"
+#include "sdkconfig.h"
 
 /********************************************************************************
  *      Test By Internal Connections
@@ -21,10 +22,11 @@ static const ptest_func_t local_test_func = {
 
 #define TEST_SPI_LOCAL(name, param_set) \
     PARAM_GROUP_DECLARE(name, param_set) \
-    TEST_LOCAL(name, param_set, "[spi][timeout=120]", &local_test_func)
+    TEST_SINGLE_BOARD(SPI_##name, param_set, "[spi][timeout=120]", &local_test_func)
 
 static void local_test_init(void** arg)
 {
+    esp_log_level_set("gpio", ESP_LOG_WARN);
     TEST_ASSERT(*arg==NULL);
     *arg = malloc(sizeof(spitest_context_t));
     spitest_context_t* context = (spitest_context_t*)*arg;
@@ -55,20 +57,20 @@ static void local_test_start(spi_device_handle_t *spi, int freq, const spitest_p
     assert(!pset->master_iomux || !pset->slave_iomux);
     if (pset->slave_iomux) {
         //only in this case, use VSPI iomux pins
-        buscfg.miso_io_num = VSPI_IOMUX_PIN_NUM_MISO;
-        buscfg.mosi_io_num = VSPI_IOMUX_PIN_NUM_MOSI;
-        buscfg.sclk_io_num = VSPI_IOMUX_PIN_NUM_CLK;
-        devcfg.spics_io_num = VSPI_IOMUX_PIN_NUM_CS;
-        slvcfg.spics_io_num = VSPI_IOMUX_PIN_NUM_CS;
+        buscfg.miso_io_num =  SLAVE_IOMUX_PIN_MISO;
+        buscfg.mosi_io_num =  SLAVE_IOMUX_PIN_MOSI;
+        buscfg.sclk_io_num =  SLAVE_IOMUX_PIN_SCLK;
+        devcfg.spics_io_num = SLAVE_IOMUX_PIN_CS;
+        slvcfg.spics_io_num = SLAVE_IOMUX_PIN_CS;
     } else {
-        buscfg.miso_io_num = HSPI_IOMUX_PIN_NUM_MISO;
-        buscfg.mosi_io_num = HSPI_IOMUX_PIN_NUM_MOSI;
-        buscfg.sclk_io_num = HSPI_IOMUX_PIN_NUM_CLK;
-        devcfg.spics_io_num = HSPI_IOMUX_PIN_NUM_CS;
-        slvcfg.spics_io_num = HSPI_IOMUX_PIN_NUM_CS;
+        buscfg.miso_io_num =  MASTER_IOMUX_PIN_MISO;
+        buscfg.mosi_io_num =  MASTER_IOMUX_PIN_MOSI;
+        buscfg.sclk_io_num =  MASTER_IOMUX_PIN_SCLK;
+        devcfg.spics_io_num = MASTER_IOMUX_PIN_CS;
+        slvcfg.spics_io_num = MASTER_IOMUX_PIN_CS;
     }
     //this does nothing, but avoid the driver from using iomux pins if required
-    buscfg.quadhd_io_num = (!pset->master_iomux && !pset->slave_iomux ? VSPI_IOMUX_PIN_NUM_MISO : -1);
+    buscfg.quadhd_io_num = (!pset->master_iomux && !pset->slave_iomux ? UNCONNECTED_PIN : -1);
     devcfg.mode = pset->mode;
     const int cs_pretrans_max = 15;
     if (pset->dup == HALF_DUPLEX_MISO) {
@@ -100,25 +102,21 @@ static void local_test_start(spi_device_handle_t *spi, int freq, const spitest_p
 
     //initialize master and slave on the same pins break some of the output configs, fix them
     if (pset->master_iomux) {
-        spitest_gpio_output_sel(buscfg.mosi_io_num, FUNC_SPI, HSPID_OUT_IDX);
-        spitest_gpio_output_sel(buscfg.miso_io_num, FUNC_GPIO, VSPIQ_OUT_IDX);
-        spitest_gpio_output_sel(devcfg.spics_io_num, FUNC_SPI, HSPICS0_OUT_IDX);
-        spitest_gpio_output_sel(buscfg.sclk_io_num, FUNC_SPI, HSPICLK_OUT_IDX);
+        spitest_gpio_output_sel(buscfg.mosi_io_num, FUNC_SPI, spi_periph_signal[TEST_SPI_HOST].spid_out);
+        spitest_gpio_output_sel(buscfg.miso_io_num, FUNC_GPIO, spi_periph_signal[TEST_SLAVE_HOST].spiq_out);
+        spitest_gpio_output_sel(devcfg.spics_io_num, FUNC_SPI, spi_periph_signal[TEST_SPI_HOST].spics_out[0]);
+        spitest_gpio_output_sel(buscfg.sclk_io_num, FUNC_SPI, spi_periph_signal[TEST_SPI_HOST].spiclk_out);
     } else if (pset->slave_iomux) {
-        spitest_gpio_output_sel(buscfg.mosi_io_num, FUNC_GPIO, HSPID_OUT_IDX);
-        spitest_gpio_output_sel(buscfg.miso_io_num, FUNC_SPI, VSPIQ_OUT_IDX);
-        spitest_gpio_output_sel(devcfg.spics_io_num, FUNC_GPIO, HSPICS0_OUT_IDX);
-        spitest_gpio_output_sel(buscfg.sclk_io_num, FUNC_GPIO, HSPICLK_OUT_IDX);
+        spitest_gpio_output_sel(buscfg.mosi_io_num, FUNC_GPIO, spi_periph_signal[TEST_SPI_HOST].spid_out);
+        spitest_gpio_output_sel(buscfg.miso_io_num, FUNC_SPI, spi_periph_signal[TEST_SLAVE_HOST].spiq_out);
+        spitest_gpio_output_sel(devcfg.spics_io_num, FUNC_GPIO, spi_periph_signal[TEST_SPI_HOST].spics_out[0]);
+        spitest_gpio_output_sel(buscfg.sclk_io_num, FUNC_GPIO, spi_periph_signal[TEST_SPI_HOST].spiclk_out);
     } else {
-        spitest_gpio_output_sel(buscfg.mosi_io_num, FUNC_GPIO, HSPID_OUT_IDX);
-        spitest_gpio_output_sel(buscfg.miso_io_num, FUNC_GPIO, VSPIQ_OUT_IDX);
-        spitest_gpio_output_sel(devcfg.spics_io_num, FUNC_GPIO, HSPICS0_OUT_IDX);
-        spitest_gpio_output_sel(buscfg.sclk_io_num, FUNC_GPIO, HSPICLK_OUT_IDX);
+        spitest_gpio_output_sel(buscfg.mosi_io_num, FUNC_GPIO, spi_periph_signal[TEST_SPI_HOST].spid_out);
+        spitest_gpio_output_sel(buscfg.miso_io_num, FUNC_GPIO, spi_periph_signal[TEST_SLAVE_HOST].spiq_out);
+        spitest_gpio_output_sel(devcfg.spics_io_num, FUNC_GPIO, spi_periph_signal[TEST_SPI_HOST].spics_out[0]);
+        spitest_gpio_output_sel(buscfg.sclk_io_num, FUNC_GPIO, spi_periph_signal[TEST_SPI_HOST].spiclk_out);
     }
-
-    //prepare slave tx data
-    for (int k = 0; k < pset->test_size; k++)
-        xQueueSend(context->slave_context.data_to_send, &context->slave_trans[k], portMAX_DELAY);
 
     //clear master receive buffer
     memset(context->master_rxbuf, 0x66, sizeof(context->master_rxbuf));
@@ -139,35 +137,71 @@ static void local_test_loop(const void* arg1, void* arg2)
         if (freq==0) break;
         if (pset->freq_limit && freq > pset->freq_limit) break;
 
-        ESP_LOGI(MASTER_TAG, "======> %dk", freq / 1000);
+        ESP_LOGI(MASTER_TAG, "==> %dkHz", freq / 1000);
+
+        bool check_master_data = (pset->dup!=HALF_DUPLEX_MOSI &&
+                (pset->master_limit==0 || freq <= pset->master_limit));
+        if (!check_master_data) ESP_LOGI(MASTER_TAG, "skip master data check");
+
+        bool check_slave_data = (pset->dup!=HALF_DUPLEX_MISO);
+        if (!check_slave_data) ESP_LOGI(SLAVE_TAG, "skip slave data check");
+
         local_test_start(&spi, freq, pset, context);
 
         for (int k = 0; k < pset->test_size; k++) {
+            WORD_ALIGNED_ATTR uint8_t recvbuf[320+8];
+            slave_txdata_t *txdata = &context->slave_trans[k];
+            spi_slave_transaction_t slave_trans = {
+                .tx_buffer = txdata->start,
+                .rx_buffer = recvbuf,
+                .length = txdata->len,
+            };
+            esp_err_t err = spi_slave_queue_trans(TEST_SLAVE_HOST, &slave_trans, portMAX_DELAY);
+            TEST_ESP_OK(err);
+
             //wait for both master and slave end
-            ESP_LOGI(MASTER_TAG, "=> test%d", k);
-            //send master tx data
-            vTaskDelay(9);
-
             spi_transaction_t *t = &context->master_trans[k];
-            TEST_ESP_OK(spi_device_transmit(spi, t));
             int len = get_trans_len(pset->dup, t);
-            spitest_master_print_data(t, len);
+            ESP_LOGI(MASTER_TAG, "  ==> #%d: len: %d", k, len);
+            //send master tx data
 
-            size_t rcv_len;
-            slave_rxdata_t *rcv_data = xRingbufferReceive(context->slave_context.data_received, &rcv_len, portMAX_DELAY);
-            spitest_slave_print_data(rcv_data, true);
+            err = spi_device_transmit(spi, t);
+            TEST_ESP_OK(err);
 
-            //check result
-            bool check_master_data = (pset->dup!=HALF_DUPLEX_MOSI &&
-                    (pset->master_limit==0 || freq <= pset->master_limit));
-            bool check_slave_data = (pset->dup!=HALF_DUPLEX_MISO);
-            const bool check_len = true;
-            if (!check_master_data) ESP_LOGI(MASTER_TAG, "skip master data check");
-            if (!check_slave_data) ESP_LOGI(SLAVE_TAG, "skip slave data check");
+            spi_slave_transaction_t *ret_trans;
+            err = spi_slave_get_trans_result(TEST_SLAVE_HOST, &ret_trans, 5);
+            TEST_ESP_OK(err);
+            TEST_ASSERT_EQUAL(&slave_trans, ret_trans);
 
-            TEST_ESP_OK(spitest_check_data(len, t, rcv_data, check_master_data, check_len, check_slave_data));
-            //clean
-            vRingbufferReturnItem(context->slave_context.data_received, rcv_data);
+            uint32_t rcv_len = slave_trans.trans_len;
+            bool failed = false;
+
+            //check master data
+            if (check_master_data && memcmp(slave_trans.tx_buffer, t->rx_buffer, (len + 7) / 8) != 0 ) {
+                failed = true;
+            }
+
+            //check slave data and length
+            //currently the rcv_len can be in range of [t->length-1, t->length+3]
+            if ( rcv_len < len - 1 || rcv_len > len + 4) {
+                failed = true;
+            }
+            if (check_slave_data && memcmp(t->tx_buffer, slave_trans.rx_buffer, (len + 7) / 8) != 0 ) {
+                failed = true;
+            }
+
+            if (failed) {
+                ESP_LOGI(SLAVE_TAG, "slave_recv_len: %d", rcv_len);
+                spitest_master_print_data(t, len);
+
+                ESP_LOG_BUFFER_HEX("slave tx", slave_trans.tx_buffer, len);
+                ESP_LOG_BUFFER_HEX("slave rx", slave_trans.rx_buffer, len);
+
+                //already failed, try to use the TEST_ASSERT to output the reason...
+                TEST_ASSERT_EQUAL_HEX8_ARRAY(slave_trans.tx_buffer, t->rx_buffer, (len + 7) / 8);
+                TEST_ASSERT_EQUAL_HEX8_ARRAY(t->tx_buffer, slave_trans.rx_buffer, (len + 7) / 8);
+                TEST_ASSERT(rcv_len >= len - 1 && rcv_len <= len + 4);
+            }
         }
         master_free_device_bus(spi);
         TEST_ASSERT(spi_slave_free(TEST_SLAVE_HOST) == ESP_OK);
@@ -175,83 +209,88 @@ static void local_test_loop(const void* arg1, void* arg2)
 }
 
 /************ Timing Test ***********************************************/
+//TODO: esp32s2beta has better timing performance
 static spitest_param_set_t timing_pgroup[] = {
-    { .pset_name = "FULL_DUP, MASTER IOMUX",
-      .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      .master_limit = SPI_MASTER_FREQ_13M,
-      .dup = FULL_DUPLEX,
-      .master_iomux = true,
-      .slave_iomux = false,
-      .slave_tv_ns = TV_INT_CONNECT_GPIO,
+//signals are not fed to peripherals through iomux if the functions are not selected to iomux
+#if !DISABLED_FOR_TARGETS(ESP32S2BETA)
+    {   .pset_name = "FULL_DUP, MASTER IOMUX",
+        .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        .master_limit = SPI_MASTER_FREQ_13M,
+        .dup = FULL_DUPLEX,
+        .master_iomux = true,
+        .slave_iomux = false,
+        .slave_tv_ns = TV_INT_CONNECT_GPIO,
     },
-    { .pset_name = "FULL_DUP, SLAVE IOMUX",
-      .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      .master_limit = SPI_MASTER_FREQ_13M,
-      .dup = FULL_DUPLEX,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
+    {   .pset_name = "FULL_DUP, SLAVE IOMUX",
+        .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        .master_limit = SPI_MASTER_FREQ_13M,
+        .dup = FULL_DUPLEX,
+        .master_iomux = false,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_INT_CONNECT,
     },
-    { .pset_name = "FULL_DUP, BOTH GPIO",
-      .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      .master_limit = SPI_MASTER_FREQ_10M,
-      .dup = FULL_DUPLEX,
-      .master_iomux = false,
-      .slave_iomux = false,
-      .slave_tv_ns = TV_INT_CONNECT_GPIO,
+#endif
+    {   .pset_name = "FULL_DUP, BOTH GPIO",
+        .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        .master_limit = SPI_MASTER_FREQ_10M,
+        .dup = FULL_DUPLEX,
+        .master_iomux = false,
+        .slave_iomux = false,
+        .slave_tv_ns = TV_INT_CONNECT_GPIO,
     },
-    { .pset_name = "MISO_DUP, MASTER IOMUX",
-      .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      .master_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      .dup = HALF_DUPLEX_MISO,
-      .master_iomux = true,
-      .slave_iomux = false,
-      .slave_tv_ns = TV_INT_CONNECT_GPIO+12.5,
-                    //for freq lower than 20M, the delay is 60(62.5)ns, however, the delay becomes 75ns over 26M
+//signals are not fed to peripherals through iomux if the functions are not selected to iomux
+#if !DISABLED_FOR_TARGETS(ESP32S2BETA)
+    {   .pset_name = "MISO_DUP, MASTER IOMUX",
+        .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        .master_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        .dup = HALF_DUPLEX_MISO,
+        .master_iomux = true,
+        .slave_iomux = false,
+        .slave_tv_ns = TV_INT_CONNECT_GPIO,
     },
-    { .pset_name = "MISO_DUP, SLAVE IOMUX",
-      .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      //.freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      .dup = HALF_DUPLEX_MISO,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT+12.5,
-                    //for freq lower than 20M, the delay is 60(62.5)ns, however, the delay becomes 75ns over 26M
-
+    {   .pset_name = "MISO_DUP, SLAVE IOMUX",
+        .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        //.freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        .dup = HALF_DUPLEX_MISO,
+        .master_iomux = false,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_INT_CONNECT,
     },
-    { .pset_name = "MISO_DUP, BOTH GPIO",
-      .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      //.freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      .dup = HALF_DUPLEX_MISO,
-      .master_iomux = false,
-      .slave_iomux = false,
-      .slave_tv_ns = TV_INT_CONNECT_GPIO+12.5,
-                    //for freq lower than 20M, the delay is 60(62.5)ns, however, the delay becomes 75ns over 26M
-
+#endif
+    {   .pset_name = "MISO_DUP, BOTH GPIO",
+        .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        //.freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        .dup = HALF_DUPLEX_MISO,
+        .master_iomux = false,
+        .slave_iomux = false,
+        .slave_tv_ns = TV_INT_CONNECT_GPIO,
     },
-    { .pset_name = "MOSI_DUP, MASTER IOMUX",
-      .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      //.freq_limit = ESP_SPI_SLAVE_MAX_READ_FREQ, //ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      .dup = HALF_DUPLEX_MOSI,
-      .master_iomux = true,
-      .slave_iomux = false,
-      .slave_tv_ns = TV_INT_CONNECT_GPIO,
+//signals are not fed to peripherals through iomux if the functions are not selected to iomux
+#if !DISABLED_FOR_TARGETS(ESP32S2BETA)
+    {   .pset_name = "MOSI_DUP, MASTER IOMUX",
+        .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        //.freq_limit = ESP_SPI_SLAVE_MAX_READ_FREQ, //ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        .dup = HALF_DUPLEX_MOSI,
+        .master_iomux = true,
+        .slave_iomux = false,
+        .slave_tv_ns = TV_INT_CONNECT_GPIO,
     },
-    { .pset_name = "MOSI_DUP, SLAVE IOMUX",
-      .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      //.freq_limit = ESP_SPI_SLAVE_MAX_READ_FREQ, //ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      .dup = HALF_DUPLEX_MOSI,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
+    {   .pset_name = "MOSI_DUP, SLAVE IOMUX",
+        .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        //.freq_limit = ESP_SPI_SLAVE_MAX_READ_FREQ, //ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        .dup = HALF_DUPLEX_MOSI,
+        .master_iomux = false,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_INT_CONNECT,
     },
-    { .pset_name = "MOSI_DUP, BOTH GPIO",
-      .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      //.freq_limit = ESP_SPI_SLAVE_MAX_READ_FREQ, //ESP_SPI_SLAVE_MAX_FREQ_SYNC,
-      .dup = HALF_DUPLEX_MOSI,
-      .master_iomux = false,
-      .slave_iomux = false,
-      .slave_tv_ns = TV_INT_CONNECT_GPIO,
+#endif
+    {   .pset_name = "MOSI_DUP, BOTH GPIO",
+        .freq_limit = ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        //.freq_limit = ESP_SPI_SLAVE_MAX_READ_FREQ, //ESP_SPI_SLAVE_MAX_FREQ_SYNC,
+        .dup = HALF_DUPLEX_MOSI,
+        .master_iomux = false,
+        .slave_iomux = false,
+        .slave_tv_ns = TV_INT_CONNECT_GPIO,
     },
 };
 TEST_SPI_LOCAL(TIMING, timing_pgroup)
@@ -269,167 +308,196 @@ static int test_freq_mode_local[]={
     0,
 };
 
+//signals are not fed to peripherals through iomux if the functions are not selected to iomux
+#ifdef CONFIG_IDF_TARGET_ESP32
+#define LOCAL_MODE_TEST_SLAVE_IOMUX     true
+
+/*
+ * When DMA is enabled in mode 0 and 2, an special workaround is used. The MISO (slave's output) is
+ * half an SPI clock ahead, but then delay 3 apb clocks.
+
+ * Compared to the normal timing, the MISO is not slower than when the frequency is below 13.3MHz,
+ * under which there's no need for the master to compensate the MISO signal. However compensation
+ * is required when the frequency is beyond 16MHz, at this time, an extra positive delay is added
+ * to the normal delay (3 apb clocks).
+ *
+ * It's is hard to tell the master driver that kind of delay logic. This magic delay value happens
+ * to compensate master timing beyond 16MHz.
+ *
+ * If the master or slave's timing is changed again, and the test no longer passes, above 16MHz,
+ * it's OK to use `master_limit` to disable master data check or skip the test above some
+ * frequencies above 10MHz (the design target value).
+ */
+#define SLAVE_EXTRA_DELAY_DMA           12.5
+#else
+#define LOCAL_MODE_TEST_SLAVE_IOMUX     false
+#define SLAVE_EXTRA_DELAY_DMA           0
+#endif
+
+
 static spitest_param_set_t mode_pgroup[] = {
-    { .pset_name = "Mode 0",
-      .freq_list = test_freq_mode_local,
-      .master_limit = SPI_MASTER_FREQ_13M,
-      .dup = FULL_DUPLEX,
-      .mode = 0,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
+    {   .pset_name = "Mode 0",
+        .freq_list = test_freq_mode_local,
+        .master_limit = SPI_MASTER_FREQ_13M,
+        .dup = FULL_DUPLEX,
+        .mode = 0,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
     },
-    { .pset_name = "Mode 1",
-      .freq_list = test_freq_mode_local,
-      .freq_limit = SPI_MASTER_FREQ_26M,
-      .master_limit = SPI_MASTER_FREQ_13M,
-      .dup = FULL_DUPLEX,
-      .mode = 1,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
+    {   .pset_name = "Mode 1",
+        .freq_list = test_freq_mode_local,
+        .freq_limit = SPI_MASTER_FREQ_26M,
+        .master_limit = SPI_MASTER_FREQ_13M,
+        .dup = FULL_DUPLEX,
+        .mode = 1,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
     },
-    { .pset_name = "Mode 2",
-      .freq_list = test_freq_mode_local,
-      .master_limit = SPI_MASTER_FREQ_13M,
-      .dup = FULL_DUPLEX,
-      .mode = 2,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
+    {   .pset_name = "Mode 2",
+        .freq_list = test_freq_mode_local,
+        .master_limit = SPI_MASTER_FREQ_13M,
+        .dup = FULL_DUPLEX,
+        .mode = 2,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
     },
-    { .pset_name = "Mode 3",
-      .freq_list = test_freq_mode_local,
-      .freq_limit = SPI_MASTER_FREQ_26M,
-      .master_limit = SPI_MASTER_FREQ_13M,
-      .dup = FULL_DUPLEX,
-      .mode = 3,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
+    {   .pset_name = "Mode 3",
+        .freq_list = test_freq_mode_local,
+        .freq_limit = SPI_MASTER_FREQ_26M,
+        .master_limit = SPI_MASTER_FREQ_13M,
+        .dup = FULL_DUPLEX,
+        .mode = 3,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
     },
-    { .pset_name = "Mode 0, DMA",
-      .freq_list = test_freq_mode_local,
-      .master_limit = SPI_MASTER_FREQ_13M,
-      .dup = FULL_DUPLEX,
-      .mode = 0,
-      .slave_dma_chan = 2,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT, //at 16M, the MISO delay (-0.5T+(3+2)apb) equals to non-DMA mode delay (3apb).
-      .length_aligned = true,
+    {   .pset_name = "Mode 0, DMA",
+        .freq_list = test_freq_mode_local,
+        .master_limit = SPI_MASTER_FREQ_13M,
+        .dup = FULL_DUPLEX,
+        .mode = 0,
+        .slave_dma_chan = 2,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
+        .length_aligned = true,
     },
-    { .pset_name = "Mode 1, DMA",
-      .freq_list = test_freq_mode_local,
-      .freq_limit = SPI_MASTER_FREQ_26M,
-      .master_limit = SPI_MASTER_FREQ_13M,
-      .dup = FULL_DUPLEX,
-      .mode = 1,
-      .slave_dma_chan = 2,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
-      .length_aligned = true,
+    {   .pset_name = "Mode 1, DMA",
+        .freq_list = test_freq_mode_local,
+        .freq_limit = SPI_MASTER_FREQ_26M,
+        .master_limit = SPI_MASTER_FREQ_13M,
+        .dup = FULL_DUPLEX,
+        .mode = 1,
+        .slave_dma_chan = 2,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
+        .length_aligned = true,
     },
-    { .pset_name = "Mode 2, DMA",
-      .freq_list = test_freq_mode_local,
-      .master_limit = SPI_MASTER_FREQ_13M,
-      .dup = FULL_DUPLEX,
-      .mode = 2,
-      .slave_dma_chan = 2,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT, //at 16M, the MISO delay (-0.5T+(3+2)apb) equals to non-DMA mode delay (3apb).
-      .length_aligned = true,
+    {   .pset_name = "Mode 2, DMA",
+        .freq_list = test_freq_mode_local,
+        .master_limit = SPI_MASTER_FREQ_13M,
+        .dup = FULL_DUPLEX,
+        .mode = 2,
+        .slave_dma_chan = 2,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
+        .length_aligned = true,
     },
-    { .pset_name = "Mode 3, DMA",
-      .freq_list = test_freq_mode_local,
-      .freq_limit = SPI_MASTER_FREQ_26M,
-      .master_limit = SPI_MASTER_FREQ_13M,
-      .dup = FULL_DUPLEX,
-      .mode = 3,
-      .slave_dma_chan = 2,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
-      .length_aligned = true,
+    {   .pset_name = "Mode 3, DMA",
+        .freq_list = test_freq_mode_local,
+        .freq_limit = SPI_MASTER_FREQ_26M,
+        .master_limit = SPI_MASTER_FREQ_13M,
+        .dup = FULL_DUPLEX,
+        .mode = 3,
+        .slave_dma_chan = 2,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
+        .length_aligned = true,
     },
-    // MISO ////////////////////////////////////
-    { .pset_name = "MISO, Mode 0",
-      .freq_list = test_freq_mode_local,
-      .dup = HALF_DUPLEX_MISO,
-      .mode = 0,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
+    /////////////////////////// MISO ////////////////////////////////////
+    {   .pset_name = "MISO, Mode 0",
+        .freq_list = test_freq_mode_local,
+        .dup = HALF_DUPLEX_MISO,
+        .mode = 0,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
     },
-    { .pset_name = "MISO, Mode 1",
-      .freq_list = test_freq_mode_local,
-      .dup = HALF_DUPLEX_MISO,
-      .mode = 1,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
+    {   .pset_name = "MISO, Mode 1",
+        .freq_list = test_freq_mode_local,
+        .dup = HALF_DUPLEX_MISO,
+        .mode = 1,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
     },
-    { .pset_name = "MISO, Mode 2",
-      .freq_list = test_freq_mode_local,
-      .dup = HALF_DUPLEX_MISO,
-      .mode = 2,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
+    {   .pset_name = "MISO, Mode 2",
+        .freq_list = test_freq_mode_local,
+        .dup = HALF_DUPLEX_MISO,
+        .mode = 2,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
     },
-    { .pset_name = "MISO, Mode 3",
-      .freq_list = test_freq_mode_local,
-      .dup = HALF_DUPLEX_MISO,
-      .mode = 3,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
+    {   .pset_name = "MISO, Mode 3",
+        .freq_list = test_freq_mode_local,
+        .dup = HALF_DUPLEX_MISO,
+        .mode = 3,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
     },
-    { .pset_name = "MISO, Mode 0, DMA",
-      .freq_list = test_freq_mode_local,
-      .dup = HALF_DUPLEX_MISO,
-      .mode = 0,
-      .slave_dma_chan = 2,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT+12.5, //at 16M, the MISO delay (-0.5T+(3+2)apb) equals to non-DMA mode delay (3apb).
-      .length_aligned = true,
+    {   .pset_name = "MISO, Mode 0, DMA",
+        .freq_list = test_freq_mode_local,
+        .dup = HALF_DUPLEX_MISO,
+        .mode = 0,
+        .slave_dma_chan = 2,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT+SLAVE_EXTRA_DELAY_DMA,
+        .length_aligned = true,
     },
-    { .pset_name = "MISO, Mode 1, DMA",
-      .freq_list = test_freq_mode_local,
-      .dup = HALF_DUPLEX_MISO,
-      .mode = 1,
-      .slave_dma_chan = 2,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
-      .length_aligned = true,
+    {   .pset_name = "MISO, Mode 1, DMA",
+        .freq_list = test_freq_mode_local,
+        .dup = HALF_DUPLEX_MISO,
+        .mode = 1,
+        .slave_dma_chan = 2,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
+        .length_aligned = true,
     },
-    { .pset_name = "MISO, Mode 2, DMA",
-      .freq_list = test_freq_mode_local,
-      .dup = HALF_DUPLEX_MISO,
-      .mode = 2,
-      .slave_dma_chan = 2,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT+12.5, //at 16M, the MISO delay (-0.5T+(3+2)apb) equals to non-DMA mode delay (3apb).
-      .length_aligned = true,
+    {   .pset_name = "MISO, Mode 2, DMA",
+        .freq_list = test_freq_mode_local,
+        .dup = HALF_DUPLEX_MISO,
+        .mode = 2,
+        .slave_dma_chan = 2,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT+SLAVE_EXTRA_DELAY_DMA,
+        .length_aligned = true,
     },
-    { .pset_name = "MISO, Mode 3, DMA",
-      .freq_list = test_freq_mode_local,
-      .dup = HALF_DUPLEX_MISO,
-      .mode = 3,
-      .slave_dma_chan = 2,
-      .master_iomux = false,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_INT_CONNECT,
-      .length_aligned = true,
+    {   .pset_name = "MISO, Mode 3, DMA",
+        .freq_list = test_freq_mode_local,
+        .dup = HALF_DUPLEX_MISO,
+        .mode = 3,
+        .slave_dma_chan = 2,
+        .master_iomux = false,
+        .slave_iomux = LOCAL_MODE_TEST_SLAVE_IOMUX,
+        .slave_tv_ns = TV_INT_CONNECT,
+        .length_aligned = true,
     },
 };
 TEST_SPI_LOCAL(MODE, mode_pgroup)
 
+#if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32S2BETA)
+//These tests are ESP32 only due to lack of runners
 /********************************************************************************
  *      Test By Master & Slave (2 boards)
  *
@@ -491,13 +559,13 @@ static void test_master_start(spi_device_handle_t *spi, int freq, const spitest_
 {
     //master config
     spi_bus_config_t buspset=SPI_BUS_TEST_DEFAULT_CONFIG();
-    buspset.miso_io_num = HSPI_IOMUX_PIN_NUM_MISO;
-    buspset.mosi_io_num = HSPI_IOMUX_PIN_NUM_MOSI;
-    buspset.sclk_io_num = HSPI_IOMUX_PIN_NUM_CLK;
+    buspset.miso_io_num = MASTER_IOMUX_PIN_MISO;
+    buspset.mosi_io_num = MASTER_IOMUX_PIN_MOSI;
+    buspset.sclk_io_num = MASTER_IOMUX_PIN_SCLK;
     //this does nothing, but avoid the driver from using native pins
-    if (!pset->master_iomux) buspset.quadhd_io_num = VSPI_IOMUX_PIN_NUM_MISO;
+    if (!pset->master_iomux) buspset.quadhd_io_num = UNCONNECTED_PIN;
     spi_device_interface_config_t devpset=SPI_DEVICE_TEST_DEFAULT_CONFIG();
-    devpset.spics_io_num = HSPI_IOMUX_PIN_NUM_CS;
+    devpset.spics_io_num = MASTER_IOMUX_PIN_CS;
     devpset.mode = pset->mode;
     const int cs_pretrans_max = 15;
     if (pset->dup==HALF_DUPLEX_MISO) {
@@ -623,13 +691,13 @@ static void timing_slave_start(int speed, const spitest_param_set_t* pset, spite
 {
     //slave config
     spi_bus_config_t slv_buscfg=SPI_BUS_TEST_DEFAULT_CONFIG();
-    slv_buscfg.miso_io_num = VSPI_IOMUX_PIN_NUM_MISO;
-    slv_buscfg.mosi_io_num = VSPI_IOMUX_PIN_NUM_MOSI;
-    slv_buscfg.sclk_io_num = VSPI_IOMUX_PIN_NUM_CLK;
+    slv_buscfg.miso_io_num = SLAVE_IOMUX_PIN_MISO;
+    slv_buscfg.mosi_io_num = SLAVE_IOMUX_PIN_MOSI;
+    slv_buscfg.sclk_io_num = SLAVE_IOMUX_PIN_SCLK;
     //this does nothing, but avoid the driver from using native pins
-    if (!pset->slave_iomux) slv_buscfg.quadhd_io_num = HSPI_IOMUX_PIN_NUM_CLK;
+    if (!pset->slave_iomux) slv_buscfg.quadhd_io_num = UNCONNECTED_PIN;
     spi_slave_interface_config_t slvcfg=SPI_SLAVE_TEST_DEFAULT_CONFIG();
-    slvcfg.spics_io_num = VSPI_IOMUX_PIN_NUM_CS;
+    slvcfg.spics_io_num = SLAVE_IOMUX_PIN_CS;
     slvcfg.mode = pset->mode;
     //Enable pull-ups on SPI lines so we don't detect rogue pulses when no master is connected.
     slave_pull_up(&slv_buscfg, slvcfg.spics_io_num);
@@ -816,164 +884,166 @@ static int test_freq_20M_only[]={
 
 spitest_param_set_t mode_conf[] = {
     //non-DMA tests
-    { .pset_name = "mode 0, no DMA",
-      .freq_list = test_freq_mode_ms,
-      .master_limit = FREQ_LIMIT_MODE,
-      .dup = FULL_DUPLEX,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 0,
+    {   .pset_name = "mode 0, no DMA",
+        .freq_list = test_freq_mode_ms,
+        .master_limit = FREQ_LIMIT_MODE,
+        .dup = FULL_DUPLEX,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 0,
     },
-    { .pset_name = "mode 1, no DMA",
-      .freq_list = test_freq_mode_ms,
-      .master_limit = FREQ_LIMIT_MODE,
-      .dup = FULL_DUPLEX,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 1,
+    {   .pset_name = "mode 1, no DMA",
+        .freq_list = test_freq_mode_ms,
+        .master_limit = FREQ_LIMIT_MODE,
+        .dup = FULL_DUPLEX,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 1,
     },
-    { .pset_name = "mode 2, no DMA",
-      .freq_list = test_freq_mode_ms,
-      .master_limit = FREQ_LIMIT_MODE,
-      .dup = FULL_DUPLEX,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 2,
+    {   .pset_name = "mode 2, no DMA",
+        .freq_list = test_freq_mode_ms,
+        .master_limit = FREQ_LIMIT_MODE,
+        .dup = FULL_DUPLEX,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 2,
     },
-    { .pset_name = "mode 3, no DMA",
-      .freq_list = test_freq_mode_ms,
-      .master_limit = FREQ_LIMIT_MODE,
-      .dup = FULL_DUPLEX,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 3,
+    {   .pset_name = "mode 3, no DMA",
+        .freq_list = test_freq_mode_ms,
+        .master_limit = FREQ_LIMIT_MODE,
+        .dup = FULL_DUPLEX,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 3,
     },
     //the master can only read to 16MHz, use half-duplex mode to read at 20.
-    { .pset_name = "mode 0, no DMA, 20M",
-      .freq_list = test_freq_20M_only,
-      .dup = HALF_DUPLEX_MISO,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 0,
+    {   .pset_name = "mode 0, no DMA, 20M",
+        .freq_list = test_freq_20M_only,
+        .dup = HALF_DUPLEX_MISO,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 0,
     },
-    { .pset_name = "mode 1, no DMA, 20M",
-      .freq_list = test_freq_20M_only,
-      .dup = HALF_DUPLEX_MISO,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 1,
+    {   .pset_name = "mode 1, no DMA, 20M",
+        .freq_list = test_freq_20M_only,
+        .dup = HALF_DUPLEX_MISO,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 1,
     },
-    { .pset_name = "mode 2, no DMA, 20M",
-      .freq_list = test_freq_20M_only,
-      .dup = HALF_DUPLEX_MISO,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 2,
+    {   .pset_name = "mode 2, no DMA, 20M",
+        .freq_list = test_freq_20M_only,
+        .dup = HALF_DUPLEX_MISO,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 2,
     },
-    { .pset_name = "mode 3, no DMA, 20M",
-      .freq_list = test_freq_20M_only,
-      .dup = HALF_DUPLEX_MISO,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 3,
+    {   .pset_name = "mode 3, no DMA, 20M",
+        .freq_list = test_freq_20M_only,
+        .dup = HALF_DUPLEX_MISO,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 3,
     },
     //DMA tests
-    { .pset_name = "mode 0, DMA",
-      .freq_list = test_freq_mode_ms,
-      .master_limit = FREQ_LIMIT_MODE,
-      .dup = FULL_DUPLEX,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = DELAY_HCLK_UNTIL_7M,
-      .mode = 0,
-      .master_dma_chan = 1,
-      .slave_dma_chan = 1,
-      .length_aligned = true,
+    {   .pset_name = "mode 0, DMA",
+        .freq_list = test_freq_mode_ms,
+        .master_limit = FREQ_LIMIT_MODE,
+        .dup = FULL_DUPLEX,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = DELAY_HCLK_UNTIL_7M,
+        .mode = 0,
+        .master_dma_chan = 1,
+        .slave_dma_chan = 1,
+        .length_aligned = true,
     },
-    { .pset_name = "mode 1, DMA",
-      .freq_list = test_freq_mode_ms,
-      .master_limit = FREQ_LIMIT_MODE,
-      .dup = FULL_DUPLEX,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 1,
-      .master_dma_chan = 1,
-      .slave_dma_chan = 1,
-      .length_aligned = true,
+    {   .pset_name = "mode 1, DMA",
+        .freq_list = test_freq_mode_ms,
+        .master_limit = FREQ_LIMIT_MODE,
+        .dup = FULL_DUPLEX,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 1,
+        .master_dma_chan = 1,
+        .slave_dma_chan = 1,
+        .length_aligned = true,
     },
-    { .pset_name = "mode 2, DMA",
-      .freq_list = test_freq_mode_ms,
-      .master_limit = FREQ_LIMIT_MODE,
-      .dup = FULL_DUPLEX,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = DELAY_HCLK_UNTIL_7M,
-      .mode = 2,
-      .master_dma_chan = 1,
-      .slave_dma_chan = 1,
-      .length_aligned = true,
+    {   .pset_name = "mode 2, DMA",
+        .freq_list = test_freq_mode_ms,
+        .master_limit = FREQ_LIMIT_MODE,
+        .dup = FULL_DUPLEX,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = DELAY_HCLK_UNTIL_7M,
+        .mode = 2,
+        .master_dma_chan = 1,
+        .slave_dma_chan = 1,
+        .length_aligned = true,
     },
-    { .pset_name = "mode 3, DMA",
-      .freq_list = test_freq_mode_ms,
-      .master_limit = FREQ_LIMIT_MODE,
-      .dup = FULL_DUPLEX,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 3,
-      .master_dma_chan = 1,
-      .slave_dma_chan = 1,
-      .length_aligned = true,
+    {   .pset_name = "mode 3, DMA",
+        .freq_list = test_freq_mode_ms,
+        .master_limit = FREQ_LIMIT_MODE,
+        .dup = FULL_DUPLEX,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 3,
+        .master_dma_chan = 1,
+        .slave_dma_chan = 1,
+        .length_aligned = true,
     },
     //the master can only read to 16MHz, use half-duplex mode to read at 20.
-    { .pset_name = "mode 0, DMA, 20M",
-      .freq_list = test_freq_20M_only,
-      .dup = HALF_DUPLEX_MISO,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 0,
-      .master_dma_chan = 1,
-      .slave_dma_chan = 1,
+    {   .pset_name = "mode 0, DMA, 20M",
+        .freq_list = test_freq_20M_only,
+        .dup = HALF_DUPLEX_MISO,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 0,
+        .master_dma_chan = 1,
+        .slave_dma_chan = 1,
     },
-    { .pset_name = "mode 1, DMA, 20M",
-      .freq_list = test_freq_20M_only,
-      .dup = HALF_DUPLEX_MISO,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 1,
-      .master_dma_chan = 1,
-      .slave_dma_chan = 1,
+    {   .pset_name = "mode 1, DMA, 20M",
+        .freq_list = test_freq_20M_only,
+        .dup = HALF_DUPLEX_MISO,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 1,
+        .master_dma_chan = 1,
+        .slave_dma_chan = 1,
     },
-    { .pset_name = "mode 2, DMA, 20M",
-      .freq_list = test_freq_20M_only,
-      .dup = HALF_DUPLEX_MISO,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 2,
-      .master_dma_chan = 1,
-      .slave_dma_chan = 1,
+    {   .pset_name = "mode 2, DMA, 20M",
+        .freq_list = test_freq_20M_only,
+        .dup = HALF_DUPLEX_MISO,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 2,
+        .master_dma_chan = 1,
+        .slave_dma_chan = 1,
     },
-    { .pset_name = "mode 3, DMA, 20M",
-      .freq_list = test_freq_20M_only,
-      .dup = HALF_DUPLEX_MISO,
-      .master_iomux= true,
-      .slave_iomux = true,
-      .slave_tv_ns = TV_WITH_ESP_SLAVE,
-      .mode = 3,
-      .master_dma_chan = 1,
-      .slave_dma_chan = 1,
+    {   .pset_name = "mode 3, DMA, 20M",
+        .freq_list = test_freq_20M_only,
+        .dup = HALF_DUPLEX_MISO,
+        .master_iomux= true,
+        .slave_iomux = true,
+        .slave_tv_ns = TV_WITH_ESP_SLAVE,
+        .mode = 3,
+        .master_dma_chan = 1,
+        .slave_dma_chan = 1,
     },
 };
-TEST_SPI_MASTER_SLAVE(MODE, mode_conf, "[ignore]")
+TEST_SPI_MASTER_SLAVE(MODE, mode_conf, "")
+
+#endif

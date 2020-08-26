@@ -76,7 +76,7 @@
 /* ESP31 and ESP32 are dualcore processors. */
 #ifndef CONFIG_FREERTOS_UNICORE
 #define portNUM_PROCESSORS 2
-#else 
+#else
 #define portNUM_PROCESSORS 1
 #endif
 
@@ -117,17 +117,21 @@ int xt_clock_freq(void) __attribute__((deprecated));
 /* configASSERT behaviour */
 #ifndef __ASSEMBLER__
 #include <stdlib.h> /* for abort() */
+#if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/ets_sys.h"
+#elif CONFIG_IDF_TARGET_ESP32S2BETA
+#include "esp32s2beta/rom/ets_sys.h"
+#endif
 
 #if defined(CONFIG_FREERTOS_ASSERT_DISABLE)
 #define configASSERT(a) /* assertions disabled */
 #elif defined(CONFIG_FREERTOS_ASSERT_FAIL_PRINT_CONTINUE)
-#define configASSERT(a) if (!(a)) {                                     \
+#define configASSERT(a) if (unlikely(!(a))) {                                     \
         ets_printf("%s:%d (%s)- assert failed!\n", __FILE__, __LINE__,  \
                    __FUNCTION__);                                       \
     }
 #else /* CONFIG_FREERTOS_ASSERT_FAIL_ABORT */
-#define configASSERT(a) if (!(a)) {                                     \
+#define configASSERT(a) if (unlikely(!(a))) {                                     \
         ets_printf("%s:%d (%s)- assert failed!\n", __FILE__, __LINE__,  \
                    __FUNCTION__);                                       \
         abort();                                                        \
@@ -155,7 +159,7 @@ int xt_clock_freq(void) __attribute__((deprecated));
  * memory.
  *
  * THESE PARAMETERS ARE DESCRIBED WITHIN THE 'CONFIGURATION' SECTION OF THE
- * FreeRTOS API DOCUMENTATION AVAILABLE ON THE FreeRTOS.org WEB SITE. 
+ * FreeRTOS API DOCUMENTATION AVAILABLE ON THE FreeRTOS.org WEB SITE.
  *----------------------------------------------------------*/
 
 #define configUSE_PREEMPTION			1
@@ -174,7 +178,7 @@ int xt_clock_freq(void) __attribute__((deprecated));
 #define configMAX_PRIORITIES			( 25 )
 #endif
 
-#ifndef CONFIG_ESP32_APPTRACE_ENABLE
+#ifndef CONFIG_APPTRACE_ENABLE
 #define configMINIMAL_STACK_SIZE		768
 #else
 /* apptrace module requires at least 2KB of stack per task */
@@ -257,7 +261,6 @@ int xt_clock_freq(void) __attribute__((deprecated));
 #define INCLUDE_pcTaskGetTaskName			1
 #define INCLUDE_xTaskGetIdleTaskHandle      1
 #define INCLUDE_pxTaskGetStackStart			1
-#define INCLUDE_xTimerGetTimerDaemonTaskHandle 1
 
 #define INCLUDE_xSemaphoreGetMutexHolder    1
 

@@ -16,9 +16,10 @@
 #include <string.h>
 #include <assert.h>
 #include <sys/param.h>
+
 #include "esp32/rom/sha.h"
+#include "soc/dport_reg.h"
 #include "soc/hwcrypto_periph.h"
-#include "esp32/rom/ets_sys.h" // TO REMOVE
 
 static uint32_t words_hashed;
 
@@ -27,7 +28,7 @@ static const size_t BLOCK_WORDS = (64 / sizeof(uint32_t));
 // Words in final SHA256 digest
 static const size_t DIGEST_WORDS = (32 / sizeof(uint32_t));
 
-bootloader_sha256_handle_t bootloader_sha256_start()
+bootloader_sha256_handle_t bootloader_sha256_start(void)
 {
     // Enable SHA hardware
     ets_sha_enable();

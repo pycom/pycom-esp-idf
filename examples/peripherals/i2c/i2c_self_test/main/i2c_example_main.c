@@ -141,7 +141,7 @@ static esp_err_t i2c_master_sensor_test(i2c_port_t i2c_num, uint8_t *data_h, uin
 /**
  * @brief i2c master initialization
  */
-static esp_err_t i2c_master_init()
+static esp_err_t i2c_master_init(void)
 {
     int i2c_master_port = I2C_MASTER_NUM;
     i2c_config_t conf;
@@ -152,15 +152,13 @@ static esp_err_t i2c_master_init()
     conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
     conf.master.clk_speed = I2C_MASTER_FREQ_HZ;
     i2c_param_config(i2c_master_port, &conf);
-    return i2c_driver_install(i2c_master_port, conf.mode,
-                              I2C_MASTER_RX_BUF_DISABLE,
-                              I2C_MASTER_TX_BUF_DISABLE, 0);
+    return i2c_driver_install(i2c_master_port, conf.mode, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
 }
 
 /**
  * @brief i2c slave initialization
  */
-static esp_err_t i2c_slave_init()
+static esp_err_t i2c_slave_init(void)
 {
     int i2c_slave_port = I2C_SLAVE_NUM;
     i2c_config_t conf_slave;
@@ -172,9 +170,7 @@ static esp_err_t i2c_slave_init()
     conf_slave.slave.addr_10bit_en = 0;
     conf_slave.slave.slave_addr = ESP_SLAVE_ADDR;
     i2c_param_config(i2c_slave_port, &conf_slave);
-    return i2c_driver_install(i2c_slave_port, conf_slave.mode,
-                              I2C_SLAVE_RX_BUF_LEN,
-                              I2C_SLAVE_TX_BUF_LEN, 0);
+    return i2c_driver_install(i2c_slave_port, conf_slave.mode, I2C_SLAVE_RX_BUF_LEN, I2C_SLAVE_TX_BUF_LEN, 0);
 }
 
 /**
@@ -281,7 +277,7 @@ static void i2c_test_task(void *arg)
     vTaskDelete(NULL);
 }
 
-void app_main()
+void app_main(void)
 {
     print_mux = xSemaphoreCreateMutex();
     ESP_ERROR_CHECK(i2c_slave_init());

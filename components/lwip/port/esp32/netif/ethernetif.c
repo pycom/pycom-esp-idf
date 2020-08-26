@@ -49,7 +49,9 @@
 #include <string.h>
 
 #include "esp_eth.h"
-#include "tcpip_adapter.h"
+#include "esp_netif.h"
+#include "esp_netif_net_stack.h"
+#include "esp_compiler.h"
 
 /* Define those to better describe your network interface. */
 #define IFNAME0 'e'
@@ -105,17 +107,15 @@ static void ethernet_low_level_init(struct netif *netif)
 static err_t ethernet_low_level_output(struct netif *netif, struct pbuf *p)
 {
     struct pbuf *q = p;
-    esp_interface_t eth_if = tcpip_adapter_get_esp_if(netif);
+    esp_netif_t *esp_netif = esp_netif_get_handle_from_netif_impl(netif);
     esp_err_t ret = ESP_FAIL;
-    esp_eth_handle_t eth_handle = (esp_eth_handle_t)netif->state;
-
-    if (eth_if != ESP_IF_ETH) {
-        LWIP_DEBUGF(NETIF_DEBUG, ("eth_if=%d netif=%p pbuf=%p len=%d\n", eth_if, netif, p, p->len));
+    if (!esp_netif) {
+        LWIP_DEBUGF(NETIF_DEBUG, ("corresponding esp-netif is NULL: netif=%p pbuf=%p len=%d\n", netif, p, p->len));
         return ERR_IF;
     }
 
     if (q->next == NULL) {
-        ret = esp_eth_transmit(eth_handle, q->payload, q->len);
+        ret = esp_netif_transmit(esp_netif, q->payload, q->len);
     } else {
         LWIP_DEBUGF(PBUF_DEBUG, ("low_level_output: pbuf is a list, application may has bug"));
         q = pbuf_alloc(PBUF_RAW_TX, p->tot_len, PBUF_RAM);
@@ -129,12 +129,12 @@ static err_t ethernet_low_level_output(struct netif *netif, struct pbuf *p)
         } else {
             return ERR_MEM;
         }
-        ret = esp_eth_transmit(eth_handle, q->payload, q->len);
+        ret = esp_netif_transmit(esp_netif, q->payload, q->len);
         /* content in payload has been copied to DMA buffer, it's safe to free pbuf now */
         pbuf_free(q);
     }
     /* Check error */
-    if (ret != ESP_OK) {
+    if (unlikely(ret != ESP_OK)) {
         return ERR_ABRT;
     } else {
         return ERR_OK;
@@ -152,11 +152,12 @@ static err_t ethernet_low_level_output(struct netif *netif, struct pbuf *p)
  * @param buffer ethernet buffer
  * @param len length of buffer
  */
-void ethernetif_input(struct netif *netif, void *buffer, uint16_t len)
+void ethernetif_input(void *h, void *buffer, size_t len, void *eb)
 {
+    struct netif *netif = h;
     struct pbuf *p;
 
-    if (buffer == NULL || !netif_is_up(netif)) {
+    if (unlikely(buffer == NULL || !netif_is_up(netif))) {
         if (buffer) {
             ethernet_free_rx_buf_l2(netif, buffer);
         }
@@ -175,7 +176,7 @@ void ethernetif_input(struct netif *netif, void *buffer, uint16_t len)
     p->l2_buf = buffer;
 #endif
     /* full packet send to tcpip_thread to process */
-    if (netif->input(p, netif) != ERR_OK) {
+    if (unlikely(netif->input(p, netif) != ERR_OK)) {
         LWIP_DEBUGF(NETIF_DEBUG, ("ethernetif_input: IP input error\n"));
         pbuf_free(p);
     }
@@ -194,7 +195,8 @@ void ethernetif_input(struct netif *netif, void *buffer, uint16_t len)
 err_t ethernetif_init(struct netif *netif)
 {
     LWIP_ASSERT("netif != NULL", (netif != NULL));
-    esp_eth_handle_t eth_handle = (esp_eth_handle_t)netif->state;
+    /* Have to get the esp-netif handle from netif first and then driver==ethernet handle from there */
+    esp_eth_handle_t eth_handle = esp_netif_get_io_driver(esp_netif_get_handle_from_netif_impl(netif));
     /* Initialize interface hostname */
 #if LWIP_NETIF_HOSTNAME
 #if ESP_LWIP
@@ -207,6 +209,7 @@ err_t ethernetif_init(struct netif *netif)
 
     /* Initialize the snmp variables and counters inside the struct netif. */
     eth_speed_t speed;
+
     esp_eth_ioctl(eth_handle, ETH_CMD_G_SPEED, &speed);
     if (speed == ETH_SPEED_100M) {
         NETIF_INIT_SNMP(netif, snmp_ifType_ethernet_csmacd, 100000000);

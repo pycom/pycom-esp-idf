@@ -9,6 +9,12 @@
 #ifndef _MESH_H_
 #define _MESH_H_
 
+#include "net.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define BLE_MESH_KEY_PRIMARY 0x0000
 #define BLE_MESH_KEY_ANY     0xffff
 
@@ -18,5 +24,9 @@
 #define BLE_MESH_ADDR_IS_RFU(addr) ((addr) >= 0xff00 && (addr) <= 0xfffb)
 
 struct bt_mesh_net;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _MESH_H_ */

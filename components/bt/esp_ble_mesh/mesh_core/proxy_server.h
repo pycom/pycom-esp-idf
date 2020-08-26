@@ -11,8 +11,11 @@
 #define _PROXY_H_
 
 #include "net.h"
-#include "mesh_buf.h"
 #include "mesh_bearer_adapt.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define BLE_MESH_PROXY_NET_PDU   0x00
 #define BLE_MESH_PROXY_BEACON    0x01
@@ -61,5 +64,10 @@ bool bt_mesh_proxy_relay(struct net_buf_simple *buf, u16_t dst);
 void bt_mesh_proxy_addr_add(struct net_buf_simple *buf, u16_t addr);
 
 int bt_mesh_proxy_init(void);
+int bt_mesh_proxy_deinit(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _PROXY_H_ */

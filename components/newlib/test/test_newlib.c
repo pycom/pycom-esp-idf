@@ -125,14 +125,14 @@ static bool fn_in_rom(void *fn, const char *name)
 
 TEST_CASE("check if ROM or Flash is used for functions", "[newlib]")
 {
-#if defined(CONFIG_NEWLIB_NANO_FORMAT) && !defined(CONFIG_ESP32_SPIRAM_SUPPORT)
+#if defined(CONFIG_NEWLIB_NANO_FORMAT) && !defined(CONFIG_SPIRAM)
     TEST_ASSERT(fn_in_rom(printf, "printf"));
     TEST_ASSERT(fn_in_rom(sscanf, "sscanf"));
 #else
     TEST_ASSERT_FALSE(fn_in_rom(printf, "printf"));
     TEST_ASSERT_FALSE(fn_in_rom(sscanf, "sscanf"));
 #endif
-#if !defined(CONFIG_ESP32_SPIRAM_SUPPORT)
+#if !defined(CONFIG_SPIRAM)
     TEST_ASSERT(fn_in_rom(atoi,   "atoi"));
     TEST_ASSERT(fn_in_rom(strtol, "strtol"));
 #else
@@ -186,4 +186,22 @@ TEST_CASE("fmod and fmodf work as expected", "[newlib]")
 TEST_CASE("newlib: can link 'system', 'raise'", "[newlib]")
 {
     printf("system: %p, raise: %p\n", &system, &raise);
+}
+
+
+TEST_CASE("newlib: rom and toolchain localtime func gives the same result", "[newlib]")
+{
+    // This UNIX time represents 2020-03-12 15:00:00 EDT (19:00 GMT)
+    // as can be verified with 'date --date @1584039600'
+    const time_t seconds = 1584039600;
+    setenv("TZ", "EST5EDT,M3.2.0,M11.1.0", 1); // America/New_York
+    tzset();
+    struct tm *tm = localtime(&seconds);
+    tm->tm_isdst = 1;
+    static char buf[32];
+    strftime(buf, sizeof(buf), "%F %T %Z", tm);
+    static char test_result[64];
+    sprintf(test_result, "%s (tm_isdst = %d)", buf, tm->tm_isdst);
+    printf("%s\n", test_result);
+    TEST_ASSERT_EQUAL_STRING("2020-03-12 15:00:00 EDT (tm_isdst = 1)", test_result);
 }

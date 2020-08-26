@@ -12,7 +12,7 @@
 #include "freertos/event_groups.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
-#include "esp_event_loop.h"
+#include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_bt.h"
@@ -183,7 +183,7 @@ void hid_demo_task(void *pvParameters)
 }
 
 
-void app_main()
+void app_main(void)
 {
     esp_err_t ret;
 

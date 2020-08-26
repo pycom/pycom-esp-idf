@@ -334,6 +334,9 @@ void bta_dm_deinit_cb(void)
     }
 #endif
     memset(&bta_dm_cb, 0, sizeof(bta_dm_cb));
+#if BTA_DYNAMIC_MEMORY
+    xSemaphoreGive(deinit_semaphore);
+#endif /* #if BTA_DYNAMIC_MEMORY */
 }
 
 /*******************************************************************************
@@ -663,6 +666,94 @@ void bta_dm_set_dev_name (tBTA_DM_MSG *p_data)
 #endif /// CLASSIC_BT_INCLUDED
 }
 
+/*******************************************************************************
+**
+** Function         bta_dm_set_afh_channels
+**
+** Description      Sets AFH channels
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+void bta_dm_set_afh_channels (tBTA_DM_MSG *p_data)
+{
+#if CLASSIC_BT_INCLUDED
+    BTM_SetAfhChannels (p_data->set_afh_channels.channels, p_data->set_afh_channels.set_afh_cb);
+#endif /// CLASSIC_BT_INCLUDED
+}
+
+#if (SDP_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         bta_dm_read_remote_device_name
+**
+** Description      Initiate to get remote device name
+**
+** Returns          TRUE if started to get remote name
+**
+*******************************************************************************/
+static BOOLEAN bta_dm_read_remote_device_name (BD_ADDR bd_addr, tBT_TRANSPORT transport)
+{
+    tBTM_STATUS  btm_status;
+
+    APPL_TRACE_DEBUG("bta_dm_read_remote_device_name");
+
+    bdcpy(bta_dm_search_cb.peer_bdaddr, bd_addr);
+    bta_dm_search_cb.peer_name[0] = 0;
+
+    btm_status = BTM_ReadRemoteDeviceName (bta_dm_search_cb.peer_bdaddr,
+                                           (tBTM_CMPL_CB *) bta_dm_remname_cback,
+                                           transport);
+
+    if ( btm_status == BTM_CMD_STARTED ) {
+        APPL_TRACE_DEBUG("bta_dm_read_remote_device_name: BTM_ReadRemoteDeviceName is started");
+
+        return (TRUE);
+    } else if ( btm_status == BTM_BUSY ) {
+        APPL_TRACE_DEBUG("bta_dm_read_remote_device_name: BTM_ReadRemoteDeviceName is busy");
+
+        /* Remote name discovery is on going now so BTM cannot notify through "bta_dm_remname_cback" */
+        /* adding callback to get notified that current reading remore name done */
+        BTM_SecAddRmtNameNotifyCallback(&bta_dm_service_search_remname_cback);
+
+        return (TRUE);
+    } else {
+        APPL_TRACE_WARNING("bta_dm_read_remote_device_name: BTM_ReadRemoteDeviceName returns 0x%02X", btm_status);
+
+        return (FALSE);
+    }
+}
+
+/*******************************************************************************
+**
+** Function         bta_dm_read_rmt_name
+**
+** Description      Initiate to get remote device name
+**
+** Returns          TRUE if started to get remote name
+**
+*******************************************************************************/
+void bta_dm_read_rmt_name(tBTA_DM_MSG *p_data)
+{
+    APPL_TRACE_DEBUG("%s",__func__);
+    bdcpy(bta_dm_search_cb.peer_bdaddr, p_data->get_rmt_name.rmt_addr);
+    bta_dm_search_cb.peer_name[0] = 0;
+
+    tBTM_STATUS  btm_status = BTM_ReadRemoteDeviceName(bta_dm_search_cb.peer_bdaddr,
+                                                       (tBTM_CMPL_CB *) p_data->get_rmt_name.rmt_name_cb,
+                                                       bta_dm_search_cb.transport);
+
+    if (btm_status == BTM_CMD_STARTED) {
+        BTM_TRACE_DEBUG("%s: BTM_ReadRemoteDeviceName is started",__func__);
+    } else if (btm_status == BTM_BUSY) {
+        BTM_TRACE_DEBUG("%s: BTM_ReadRemoteDeviceName is busy",__func__);
+    } else {
+        BTM_TRACE_WARNING("%s: BTM_ReadRemoteDeviceName returns 0x%02X",__func__, btm_status);
+    }
+}
+#endif  ///SDP_INCLUDED == TRUE
+
 void bta_dm_config_eir (tBTA_DM_MSG *p_data)
 {
     tBTA_DM_API_CONFIG_EIR *config_eir = &p_data->config_eir;
@@ -678,7 +769,7 @@ void bta_dm_config_eir (tBTA_DM_MSG *p_data)
         osi_free(p_bta_dm_eir_cfg->bta_dm_eir_manufac_spec);
         p_bta_dm_eir_cfg->bta_dm_eir_manufac_spec = NULL;
     }
-    if (config_eir->eir_manufac_spec) {
+    if (config_eir->eir_manufac_spec_len > 0) {
         p_bta_dm_eir_cfg->bta_dm_eir_manufac_spec = osi_malloc(config_eir->eir_manufac_spec_len);
         if (p_bta_dm_eir_cfg->bta_dm_eir_manufac_spec) {
             memcpy(p_bta_dm_eir_cfg->bta_dm_eir_manufac_spec, config_eir->eir_manufac_spec, config_eir->eir_manufac_spec_len);
@@ -692,7 +783,7 @@ void bta_dm_config_eir (tBTA_DM_MSG *p_data)
         osi_free(p_bta_dm_eir_cfg->bta_dm_eir_url);
         p_bta_dm_eir_cfg->bta_dm_eir_url = NULL;
     }
-    if (config_eir->eir_url) {
+    if (config_eir->eir_url_len > 0) {
         p_bta_dm_eir_cfg->bta_dm_eir_url = osi_malloc(config_eir->eir_url_len);
         if (p_bta_dm_eir_cfg->bta_dm_eir_url) {
             memcpy(p_bta_dm_eir_cfg->bta_dm_eir_url, config_eir->eir_url, config_eir->eir_url_len);
@@ -703,6 +794,23 @@ void bta_dm_config_eir (tBTA_DM_MSG *p_data)
     }
 
     bta_dm_set_eir(NULL);
+}
+
+/*******************************************************************************
+**
+** Function         bta_dm_ble_set_channels
+**
+** Description      Sets AFH channels
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+void bta_dm_ble_set_channels (tBTA_DM_MSG *p_data)
+{
+#if (BLE_INCLUDED == TRUE)
+    BTM_BleSetChannels (p_data->ble_set_channels.channels, p_data->ble_set_channels.set_channels_cb);
+#endif /// BLE_INCLUDED == TRUE
 }
 
 void bta_dm_update_white_list(tBTA_DM_MSG *p_data)
@@ -1630,49 +1738,6 @@ void bta_dm_di_disc (tBTA_DM_MSG *p_data)
 
 /*******************************************************************************
 **
-** Function         bta_dm_read_remote_device_name
-**
-** Description      Initiate to get remote device name
-**
-** Returns          TRUE if started to get remote name
-**
-*******************************************************************************/
-#if (SDP_INCLUDED == TRUE)
-static BOOLEAN bta_dm_read_remote_device_name (BD_ADDR bd_addr, tBT_TRANSPORT transport)
-{
-    tBTM_STATUS  btm_status;
-
-    APPL_TRACE_DEBUG("bta_dm_read_remote_device_name");
-
-    bdcpy(bta_dm_search_cb.peer_bdaddr, bd_addr);
-    bta_dm_search_cb.peer_name[0] = 0;
-
-    btm_status = BTM_ReadRemoteDeviceName (bta_dm_search_cb.peer_bdaddr,
-                                           (tBTM_CMPL_CB *) bta_dm_remname_cback,
-                                           transport);
-
-    if ( btm_status == BTM_CMD_STARTED ) {
-        APPL_TRACE_DEBUG("bta_dm_read_remote_device_name: BTM_ReadRemoteDeviceName is started");
-
-        return (TRUE);
-    } else if ( btm_status == BTM_BUSY ) {
-        APPL_TRACE_DEBUG("bta_dm_read_remote_device_name: BTM_ReadRemoteDeviceName is busy");
-
-        /* Remote name discovery is on going now so BTM cannot notify through "bta_dm_remname_cback" */
-        /* adding callback to get notified that current reading remore name done */
-        BTM_SecAddRmtNameNotifyCallback(&bta_dm_service_search_remname_cback);
-
-        return (TRUE);
-    } else {
-        APPL_TRACE_WARNING("bta_dm_read_remote_device_name: BTM_ReadRemoteDeviceName returns 0x%02X", btm_status);
-
-        return (FALSE);
-    }
-}
-#endif  ///SDP_INCLUDED == TRUE
-
-/*******************************************************************************
-**
 ** Function         bta_dm_inq_cmpl
 **
 ** Description      Process the inquiry complete event from BTM
@@ -1817,7 +1882,7 @@ void bta_dm_sdp_result (tBTA_DM_MSG *p_data)
                         if (SDP_FindServiceUUIDInRec(p_sdp_rec, &service_uuid)) {
                             /* send result back to app now, one by one */
                             bdcpy (result.disc_ble_res.bd_addr, bta_dm_search_cb.peer_bdaddr);
-                            BCM_STRNCPY_S((char *)result.disc_ble_res.bd_name, sizeof(BD_NAME), bta_dm_get_remname(), (BD_NAME_LEN));
+                            BCM_STRNCPY_S((char *)result.disc_ble_res.bd_name, bta_dm_get_remname(), (BD_NAME_LEN));
                             result.disc_ble_res.bd_name[BD_NAME_LEN] = 0;
                             result.disc_ble_res.service.len = service_uuid.len;
                             result.disc_ble_res.service.uu.uuid16 = service_uuid.uu.uuid16;
@@ -1958,8 +2023,7 @@ void bta_dm_sdp_result (tBTA_DM_MSG *p_data)
 
                 }
                 bdcpy (p_msg->disc_result.result.disc_res.bd_addr, bta_dm_search_cb.peer_bdaddr);
-                BCM_STRNCPY_S((char *)p_msg->disc_result.result.disc_res.bd_name, sizeof(BD_NAME),
-                              bta_dm_get_remname(), (BD_NAME_LEN - 1));
+                BCM_STRNCPY_S((char *)p_msg->disc_result.result.disc_res.bd_name, bta_dm_get_remname(), (BD_NAME_LEN - 1));
 
                 /* make sure the string is null terminated */
                 p_msg->disc_result.result.disc_res.bd_name[BD_NAME_LEN - 1] = 0;
@@ -1985,8 +2049,7 @@ void bta_dm_sdp_result (tBTA_DM_MSG *p_data)
             p_msg->disc_result.result.disc_res.result = BTA_FAILURE;
             p_msg->disc_result.result.disc_res.services = bta_dm_search_cb.services_found;
             bdcpy (p_msg->disc_result.result.disc_res.bd_addr, bta_dm_search_cb.peer_bdaddr);
-            BCM_STRNCPY_S((char *)p_msg->disc_result.result.disc_res.bd_name, sizeof(BD_NAME),
-                          bta_dm_get_remname(), (BD_NAME_LEN - 1));
+            BCM_STRNCPY_S((char *)p_msg->disc_result.result.disc_res.bd_name,bta_dm_get_remname(), (BD_NAME_LEN - 1));
 
             /* make sure the string is null terminated */
             p_msg->disc_result.result.disc_res.bd_name[BD_NAME_LEN - 1] = 0;
@@ -2370,8 +2433,7 @@ static void bta_dm_find_services ( BD_ADDR bd_addr)
             p_msg->hdr.event = BTA_DM_DISCOVERY_RESULT_EVT;
             p_msg->disc_result.result.disc_res.services = bta_dm_search_cb.services_found;
             bdcpy (p_msg->disc_result.result.disc_res.bd_addr, bta_dm_search_cb.peer_bdaddr);
-            BCM_STRNCPY_S((char *)p_msg->disc_result.result.disc_res.bd_name, sizeof(BD_NAME),
-                          bta_dm_get_remname(), (BD_NAME_LEN - 1));
+            BCM_STRNCPY_S((char *)p_msg->disc_result.result.disc_res.bd_name,bta_dm_get_remname(), (BD_NAME_LEN - 1));
 
             /* make sure the string is terminated */
             p_msg->disc_result.result.disc_res.bd_name[BD_NAME_LEN - 1] = 0;
@@ -2556,8 +2618,7 @@ static void bta_dm_discover_device(BD_ADDR remote_bd_addr)
         p_msg->disc_result.result.disc_res.result = BTA_SUCCESS;
         p_msg->disc_result.result.disc_res.services = bta_dm_search_cb.services_found;
         bdcpy (p_msg->disc_result.result.disc_res.bd_addr, bta_dm_search_cb.peer_bdaddr);
-        BCM_STRNCPY_S((char *)p_msg->disc_result.result.disc_res.bd_name,  sizeof(BD_NAME),
-                      (char *)bta_dm_search_cb.peer_name, (BD_NAME_LEN - 1));
+        BCM_STRNCPY_S((char *)p_msg->disc_result.result.disc_res.bd_name,(char *)bta_dm_search_cb.peer_name, (BD_NAME_LEN - 1));
 
         /* make sure the string is terminated */
         p_msg->disc_result.result.disc_res.bd_name[BD_NAME_LEN - 1] = 0;
@@ -2701,7 +2762,7 @@ static void bta_dm_service_search_remname_cback (BD_ADDR bd_addr, DEV_CLASS dc, 
             rem_name.length = (BD_NAME_LEN - 1);
             rem_name.remote_bd_name[(BD_NAME_LEN - 1)] = 0;
         }
-        BCM_STRNCPY_S((char *)rem_name.remote_bd_name,  sizeof(BD_NAME), (char *)bd_name, (BD_NAME_LEN - 1));
+        BCM_STRNCPY_S((char *)rem_name.remote_bd_name, (char *)bd_name, (BD_NAME_LEN - 1));
         rem_name.status = BTM_SUCCESS;
 
         bta_dm_remname_cback(&rem_name);
@@ -2741,10 +2802,9 @@ static void bta_dm_remname_cback (tBTM_REMOTE_DEV_NAME *p_remote_name)
 
     APPL_TRACE_DEBUG("bta_dm_remname_cback len = %d name=<%s>", p_remote_name->length,
                      p_remote_name->remote_bd_name);
-
     /* remote name discovery is done but it could be failed */
     bta_dm_search_cb.name_discover_done = TRUE;
-    BCM_STRNCPY_S((char *)bta_dm_search_cb.peer_name, sizeof(BD_NAME), (char *)p_remote_name->remote_bd_name, (BD_NAME_LEN));
+    BCM_STRNCPY_S((char *)bta_dm_search_cb.peer_name, (char *)p_remote_name->remote_bd_name, (BD_NAME_LEN));
     bta_dm_search_cb.peer_name[BD_NAME_LEN] = 0;
 
     BTM_SecDeleteRmtNameNotifyCallback(&bta_dm_service_search_remname_cback);
@@ -2757,14 +2817,13 @@ static void bta_dm_remname_cback (tBTM_REMOTE_DEV_NAME *p_remote_name)
 
     if ((p_msg = (tBTA_DM_REM_NAME *) osi_malloc(sizeof(tBTA_DM_REM_NAME))) != NULL) {
         bdcpy (p_msg->result.disc_res.bd_addr, bta_dm_search_cb.peer_bdaddr);
-        BCM_STRNCPY_S((char *)p_msg->result.disc_res.bd_name, sizeof(BD_NAME), (char *)p_remote_name->remote_bd_name, (BD_NAME_LEN));
+        BCM_STRNCPY_S((char *)p_msg->result.disc_res.bd_name, (char *)p_remote_name->remote_bd_name, (BD_NAME_LEN));
 
         /* make sure the string is null terminated */
         p_msg->result.disc_res.bd_name[BD_NAME_LEN] = 0;
 
         p_msg->hdr.event = BTA_DM_REMT_NAME_EVT;
         bta_sys_sendmsg(p_msg);
-
     }
 }
 
@@ -2789,7 +2848,7 @@ static UINT8 bta_dm_authorize_cback (BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NA
     bdcpy(sec_event.authorize.bd_addr, bd_addr);
     memcpy(sec_event.authorize.dev_class, dev_class, DEV_CLASS_LEN);
 
-    BCM_STRNCPY_S((char *)sec_event.authorize.bd_name, sizeof(BD_NAME), (char *)bd_name, (BD_NAME_LEN - 1));
+    BCM_STRNCPY_S((char *)sec_event.authorize.bd_name, (char *)bd_name, (BD_NAME_LEN - 1));
 
     /* make sure the string is null terminated */
     sec_event.authorize.bd_name[BD_NAME_LEN - 1] = 0;
@@ -2903,7 +2962,7 @@ static UINT8 bta_dm_pin_cback (BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NAME bd_
 
     bdcpy(sec_event.pin_req.bd_addr, bd_addr);
     BTA_COPY_DEVICE_CLASS(sec_event.pin_req.dev_class, dev_class);
-    BCM_STRNCPY_S((char *)sec_event.pin_req.bd_name, sizeof(BD_NAME), (char *)bd_name, (BD_NAME_LEN - 1));
+    BCM_STRNCPY_S((char *)sec_event.pin_req.bd_name, (char *)bd_name, (BD_NAME_LEN - 1));
     sec_event.pin_req.bd_name[BD_NAME_LEN - 1] = 0;
     sec_event.pin_req.min_16_digit = min_16_digit;
 
@@ -3074,8 +3133,7 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
                    copy these values into key_notif from cfm_req */
                 bdcpy(sec_event.key_notif.bd_addr, p_data->cfm_req.bd_addr);
                 BTA_COPY_DEVICE_CLASS(sec_event.key_notif.dev_class, p_data->cfm_req.dev_class);
-                BCM_STRNCPY_S((char *)sec_event.key_notif.bd_name, sizeof(BD_NAME),
-                              (char *)p_data->cfm_req.bd_name, (BD_NAME_LEN - 1));
+                BCM_STRNCPY_S((char *)sec_event.key_notif.bd_name, (char *)p_data->cfm_req.bd_name, (BD_NAME_LEN - 1));
                 sec_event.key_notif.bd_name[BD_NAME_LEN - 1] = 0;
             }
         }
@@ -3096,8 +3154,7 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
             } else {
                 bdcpy(sec_event.key_notif.bd_addr, p_data->key_notif.bd_addr);
                 BTA_COPY_DEVICE_CLASS(sec_event.key_notif.dev_class, p_data->key_notif.dev_class);
-                BCM_STRNCPY_S((char *)sec_event.key_notif.bd_name, sizeof(BD_NAME),
-                              (char *)p_data->key_notif.bd_name, (BD_NAME_LEN - 1));
+                BCM_STRNCPY_S((char *)sec_event.key_notif.bd_name, (char *)p_data->key_notif.bd_name, (BD_NAME_LEN - 1));
                 sec_event.key_notif.bd_name[BD_NAME_LEN - 1] = 0;
             }
         }
@@ -3118,8 +3175,7 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
             } else {
                 bdcpy(sec_event.key_notif.bd_addr, p_data->key_notif.bd_addr);
                 BTA_COPY_DEVICE_CLASS(sec_event.key_notif.dev_class, p_data->key_notif.dev_class);
-                BCM_STRNCPY_S((char *)sec_event.key_notif.bd_name, sizeof(BD_NAME),
-                              (char *)p_data->key_notif.bd_name, (BD_NAME_LEN - 1));
+                BCM_STRNCPY_S((char *)sec_event.key_notif.bd_name,(char *)p_data->key_notif.bd_name, (BD_NAME_LEN - 1));
                 sec_event.key_notif.bd_name[BD_NAME_LEN - 1] = 0;
             }
         }
@@ -3148,7 +3204,7 @@ static UINT8 bta_dm_sp_cback (tBTM_SP_EVT event, tBTM_SP_EVT_DATA *p_data)
 
         bdcpy(sec_event.rmt_oob.bd_addr, p_data->rmt_oob.bd_addr);
         BTA_COPY_DEVICE_CLASS(sec_event.rmt_oob.dev_class, p_data->rmt_oob.dev_class);
-        BCM_STRNCPY_S((char *)sec_event.rmt_oob.bd_name, sizeof(BD_NAME), (char *)p_data->rmt_oob.bd_name, (BD_NAME_LEN - 1));
+        BCM_STRNCPY_S((char *)sec_event.rmt_oob.bd_name, (char *)p_data->rmt_oob.bd_name, (BD_NAME_LEN - 1));
         sec_event.rmt_oob.bd_name[BD_NAME_LEN - 1] = 0;
 
         bta_dm_cb.p_sec_cback(BTA_DM_SP_RMT_OOB_EVT, &sec_event);
@@ -4556,8 +4612,7 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
         bdcpy(sec_event.ble_req.bd_addr, bda);
         p_name = BTM_SecReadDevName(bda);
         if (p_name != NULL) {
-            BCM_STRNCPY_S((char *)sec_event.ble_req.bd_name,
-                          sizeof(BD_NAME), p_name, (BD_NAME_LEN));
+            BCM_STRNCPY_S((char *)sec_event.ble_req.bd_name,p_name, (BD_NAME_LEN));
         } else {
             sec_event.ble_req.bd_name[0] = 0;
         }
@@ -4569,8 +4624,7 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
         bdcpy(sec_event.key_notif.bd_addr, bda);
         p_name = BTM_SecReadDevName(bda);
         if (p_name != NULL) {
-            BCM_STRNCPY_S((char *)sec_event.key_notif.bd_name,
-                          sizeof(BD_NAME), p_name, (BD_NAME_LEN));
+            BCM_STRNCPY_S((char *)sec_event.key_notif.bd_name, p_name, (BD_NAME_LEN));
         } else {
             sec_event.key_notif.bd_name[0] = 0;
         }
@@ -4591,7 +4645,7 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
 
     case BTM_LE_NC_REQ_EVT:
         bdcpy(sec_event.key_notif.bd_addr, bda);
-        BCM_STRNCPY_S((char *)sec_event.key_notif.bd_name, sizeof(BD_NAME), bta_dm_get_remname(), (BD_NAME_LEN));
+        BCM_STRNCPY_S((char *)sec_event.key_notif.bd_name,bta_dm_get_remname(), (BD_NAME_LEN));
         sec_event.ble_req.bd_name[BD_NAME_LEN] = 0;
         sec_event.key_notif.passkey = p_data->key_notif;
         bta_dm_cb.p_sec_cback(BTA_DM_BLE_NC_REQ_EVT, &sec_event);
@@ -4611,8 +4665,7 @@ static UINT8 bta_dm_ble_smp_cback (tBTM_LE_EVT event, BD_ADDR bda, tBTM_LE_EVT_D
 #endif
         p_name = BTM_SecReadDevName(bda);
         if (p_name != NULL) {
-            BCM_STRNCPY_S((char *)sec_event.auth_cmpl.bd_name,
-                          sizeof(BD_NAME), p_name, (BD_NAME_LEN));
+            BCM_STRNCPY_S((char *)sec_event.auth_cmpl.bd_name, p_name, (BD_NAME_LEN));
         } else {
             sec_event.auth_cmpl.bd_name[0] = 0;
         }
@@ -4814,6 +4867,9 @@ void bta_dm_ble_set_conn_params (tBTA_DM_MSG *p_data)
                              p_data->ble_set_conn_params.conn_int_max,
                              p_data->ble_set_conn_params.slave_latency,
                              p_data->ble_set_conn_params.supervision_tout);
+
+    BTM_BleConfigConnParams(p_data->ble_set_conn_params.conn_int_min, p_data->ble_set_conn_params.conn_int_max,
+            p_data->ble_set_conn_params.slave_latency, p_data->ble_set_conn_params.supervision_tout);
 }
 
 /*******************************************************************************
@@ -4898,6 +4954,9 @@ void bta_dm_ble_update_conn_params (tBTA_DM_MSG *p_data)
                                   p_data->ble_update_conn_params.latency,
                                   p_data->ble_update_conn_params.timeout)) {
         APPL_TRACE_ERROR("Update connection parameters failed!");
+    } else {
+        BTM_BleConfigConnParams(p_data->ble_update_conn_params.min_int, p_data->ble_update_conn_params.max_int,
+            p_data->ble_update_conn_params.latency, p_data->ble_update_conn_params.timeout);
     }
 }
 /*******************************************************************************
@@ -5896,7 +5955,7 @@ static void bta_dm_gatt_disc_result(tBTA_GATT_ID service_id)
 
         /* send result back to app now, one by one */
         bdcpy (result.disc_ble_res.bd_addr, bta_dm_search_cb.peer_bdaddr);
-        BCM_STRNCPY_S((char *)result.disc_ble_res.bd_name, sizeof(BD_NAME), bta_dm_get_remname(), (BD_NAME_LEN - 1));
+        BCM_STRNCPY_S((char *)result.disc_ble_res.bd_name, bta_dm_get_remname(), (BD_NAME_LEN - 1));
         result.disc_ble_res.bd_name[BD_NAME_LEN] = 0;
         memcpy(&result.disc_ble_res.service, &service_id.uuid, sizeof(tBT_UUID));
 
@@ -5939,8 +5998,7 @@ static void bta_dm_gatt_disc_complete(UINT16 conn_id, tBTA_GATT_STATUS status)
             p_msg->disc_result.result.disc_res.num_uuids = 0;
             p_msg->disc_result.result.disc_res.p_uuid_list = NULL;
             bdcpy (p_msg->disc_result.result.disc_res.bd_addr, bta_dm_search_cb.peer_bdaddr);
-            BCM_STRNCPY_S((char *)p_msg->disc_result.result.disc_res.bd_name, sizeof(BD_NAME),
-                          bta_dm_get_remname(), (BD_NAME_LEN - 1));
+            BCM_STRNCPY_S((char *)p_msg->disc_result.result.disc_res.bd_name,bta_dm_get_remname(), (BD_NAME_LEN - 1));
 
             /* make sure the string is terminated */
             p_msg->disc_result.result.disc_res.bd_name[BD_NAME_LEN - 1] = 0;

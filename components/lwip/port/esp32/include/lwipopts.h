@@ -43,6 +43,7 @@
 #include "esp_task.h"
 #include "esp_system.h"
 #include "sdkconfig.h"
+#include "sntp.h"
 #include "netif/dhcp_state.h"
 
 /* Enable all Espressif-only options */
@@ -230,7 +231,7 @@
 
 #define LWIP_DHCP_IP_ADDR_RESTORE()     dhcp_ip_addr_restore(netif)
 #define LWIP_DHCP_IP_ADDR_STORE()       dhcp_ip_addr_store(netif)
-#define LWIP_DHCP_IP_ADDR_ERASE()       dhcp_ip_addr_erase(esp_netif[tcpip_if])
+#define LWIP_DHCP_IP_ADDR_ERASE(esp_netif)       dhcp_ip_addr_erase(esp_netif)
 
 #endif
 
@@ -311,6 +312,11 @@
 #define TCP_QUEUE_OOSEQ                 CONFIG_LWIP_TCP_QUEUE_OOSEQ
 
 /**
+ * LWIP_TCP_SACK_OUT==1: TCP will support sending selective acknowledgements (SACKs).
+ */
+#define LWIP_TCP_SACK_OUT               CONFIG_LWIP_TCP_SACK_OUT
+
+/**
  * ESP_TCP_KEEP_CONNECTION_WHEN_IP_CHANGES==1: Keep TCP connection when IP changed
  * scenario happens: 192.168.0.2 -> 0.0.0.0 -> 192.168.0.2 or 192.168.0.2 -> 0.0.0.0
  */
@@ -323,6 +329,11 @@
  *         for the event. This is the default.
 */
 #define TCP_MSS                         CONFIG_LWIP_TCP_MSS
+
+/**
+ * TCP_TMR_INTERVAL: TCP timer interval
+ */
+#define TCP_TMR_INTERVAL                CONFIG_LWIP_TCP_TMR_INTERVAL
 
 /**
  * TCP_MSL: The maximum segment lifetime in milliseconds
@@ -538,6 +549,11 @@
 #define LWIP_TCP_KEEPALIVE              1
 
 /**
+ * LWIP_SO_LINGER==1: Enable SO_LINGER processing.
+ */
+#define LWIP_SO_LINGER                  CONFIG_LWIP_SO_LINGER
+
+/**
  * LWIP_SO_RCVBUF==1: Enable SO_RCVBUF processing.
  */
 #define LWIP_SO_RCVBUF                  CONFIG_LWIP_SO_RCVBUF
@@ -548,12 +564,24 @@
  */
 #define SO_REUSE                        CONFIG_LWIP_SO_REUSE
 
+
+/**
+ * LWIP_DNS_SUPPORT_MDNS_QUERIES==1: Enable mDNS queries in hostname resolution.
+ * This option is set via menuconfig.
+ */
+#define LWIP_DNS_SUPPORT_MDNS_QUERIES   CONFIG_LWIP_DNS_SUPPORT_MDNS_QUERIES
 /**
  * SO_REUSE_RXTOALL==1: Pass a copy of incoming broadcast/multicast packets
  * to all local matches if SO_REUSEADDR is turned on.
  * WARNING: Adds a memcpy for every packet if passing to more than one pcb!
  */
 #define SO_REUSE_RXTOALL                CONFIG_LWIP_SO_REUSE_RXTOALL
+
+/**
+ * LWIP_NETBUF_RECVINFO==1: Enable IP_PKTINFO option.
+ * This option is set via menuconfig.
+ */
+#define LWIP_NETBUF_RECVINFO            CONFIG_LWIP_NETBUF_RECVINFO
 
 /*
    ----------------------------------------
@@ -587,6 +615,14 @@
 #define PPP_SUPPORT                     CONFIG_LWIP_PPP_SUPPORT
 
 #if PPP_SUPPORT
+
+/**
+ * PPP_IPV6_SUPPORT == 1: Enable IPV6 support for local link
+ * between modem and lwIP stack.
+ * Some modems do not support IPV6 addressing in local link and
+ * the only option available is to disable IPV6 address negotiation.
+ */
+#define PPP_IPV6_SUPPORT				CONFIG_LWIP_PPP_ENABLE_IPV6
 
 /**
  * PPP_NOTIFY_PHASE==1: Support PPP notify phase.
@@ -756,7 +792,6 @@
 #define ESP_THREAD_SAFE_DEBUG           LWIP_DBG_OFF
 #define ESP_DHCP                        1
 #define ESP_DNS                         1
-#define ESP_IPV6_AUTOCONFIG             1
 #define ESP_PERF                        0
 #define ESP_RANDOM_TCP_PORT             1
 #define ESP_IP4_ATON                    1
@@ -779,6 +814,10 @@
 #define ESP_SOCKET                      1
 #define ESP_LWIP_SELECT                 1
 #define ESP_LWIP_LOCK                   1
+
+#ifdef CONFIG_LWIP_IPV6_AUTOCONFIG
+#define ESP_IPV6_AUTOCONFIG             CONFIG_LWIP_IPV6_AUTOCONFIG
+#endif
 
 #ifdef ESP_IRAM_ATTR
 #undef ESP_IRAM_ATTR
@@ -812,31 +851,38 @@
 #define LWIP_DHCP_MAX_NTP_SERVERS       CONFIG_LWIP_DHCP_MAX_NTP_SERVERS
 #define LWIP_TIMEVAL_PRIVATE            0
 
-
+/*
+   --------------------------------------
+   ------------ SNTP options ------------
+   --------------------------------------
+*/
+/*
+ * SNTP update delay - in milliseconds
+ */
 /** Set this to 1 to support DNS names (or IP address strings) to set sntp servers
  * One server address/name can be defined as default if SNTP_SERVER_DNS == 1:
  * \#define SNTP_SERVER_ADDRESS "pool.ntp.org"
  */
 #define SNTP_SERVER_DNS            1
 
-extern void mach_rtc_set_us_since_epoch (uint64_t nowus);
-extern uint64_t mach_rtc_get_us_since_epoch (void);
-extern void mach_rtc_synced (void);
-extern uint32_t sntp_update_period;
-
+// It disables a check of SNTP_UPDATE_DELAY it is done in sntp_set_sync_interval
 #define SNTP_SUPPRESS_DELAY_CHECK
-#define SNTP_UPDATE_DELAY               sntp_update_period
+
+#define SNTP_UPDATE_DELAY              (sntp_get_sync_interval())
 
 #define SNTP_SET_SYSTEM_TIME_US(sec, us)  \
     do { \
-        mach_rtc_set_us_since_epoch((1000000ull * (sec)) + (us)); \
-        mach_rtc_synced(); \
+        struct timeval tv = { .tv_sec = sec, .tv_usec = us }; \
+        sntp_sync_time(&tv); \
     } while (0);
 
 #define SNTP_GET_SYSTEM_TIME(sec, us) \
     do { \
-        (us) = mach_rtc_get_us_since_epoch() % 1000000ull; \
-        (sec) = mach_rtc_get_us_since_epoch() / 1000000ull; \
+        struct timeval tv = { .tv_sec = 0, .tv_usec = 0 }; \
+        gettimeofday(&tv, NULL); \
+        (sec) = tv.tv_sec;  \
+        (us) = tv.tv_usec; \
+        sntp_set_sync_status(SNTP_SYNC_STATUS_RESET); \
     } while (0);
 
 #define SOC_SEND_LOG //printf

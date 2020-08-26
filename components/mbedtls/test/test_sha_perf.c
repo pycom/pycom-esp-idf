@@ -36,8 +36,8 @@ TEST_CASE("mbedtls SHA performance", "[aes]")
     free(buf);
     mbedtls_sha256_free(&sha256_ctx);
 
-    /* Check the result. Reference value can be calculated using:    
-     * dd if=/dev/zero bs=$((16*1024)) count=256 | tr '\000' '\125' | sha256sum 
+    /* Check the result. Reference value can be calculated using:
+     * dd if=/dev/zero bs=$((16*1024)) count=256 | tr '\000' '\125' | sha256sum
      */
     const char* expected_hash = "c88df2638fb9699abaad05780fa5e0fdb6058f477069040eac8bed3231286275";
     char hash_str[sizeof(sha256) * 2 + 1];

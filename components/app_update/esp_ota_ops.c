@@ -157,7 +157,8 @@ esp_err_t esp_ota_begin(const esp_partition_t *partition, size_t image_size, esp
     if ((image_size == 0) || (image_size == OTA_SIZE_UNKNOWN)) {
         ret = esp_partition_erase_range(partition, 0, partition->size);
     } else {
-        ret = esp_partition_erase_range(partition, 0, (image_size / SPI_FLASH_SEC_SIZE + 1) * SPI_FLASH_SEC_SIZE);
+        const int aligned_erase_size = (image_size + SPI_FLASH_SEC_SIZE - 1) & ~(SPI_FLASH_SEC_SIZE - 1);
+        ret = esp_partition_erase_range(partition, 0, aligned_erase_size);
     }
 
     if (ret != ESP_OK) {
@@ -687,12 +688,12 @@ static esp_err_t esp_ota_current_ota_is_workable(bool valid)
     return ESP_OK;
 }
 
-esp_err_t esp_ota_mark_app_valid_cancel_rollback()
+esp_err_t esp_ota_mark_app_valid_cancel_rollback(void)
 {
     return esp_ota_current_ota_is_workable(true);
 }
 
-esp_err_t esp_ota_mark_app_invalid_rollback_and_reboot()
+esp_err_t esp_ota_mark_app_invalid_rollback_and_reboot(void)
 {
     return esp_ota_current_ota_is_workable(false);
 }
@@ -715,7 +716,7 @@ static int get_last_invalid_otadata(const esp_ota_select_entry_t *two_otadata)
     return num_invalid_otadata;
 }
 
-const esp_partition_t* esp_ota_get_last_invalid_partition()
+const esp_partition_t* esp_ota_get_last_invalid_partition(void)
 {
     esp_ota_select_entry_t otadata[2];
     if (read_otadata(otadata) == NULL) {

@@ -60,7 +60,7 @@ static portMUX_TYPE s_event_loops_spinlock = portMUX_INITIALIZER_UNLOCKED;
 #ifdef CONFIG_ESP_EVENT_LOOP_PROFILING
 
 
-static int esp_event_dump_prepare()
+static int esp_event_dump_prepare(void)
 {
     esp_event_loop_instance_t* loop_it;
     esp_event_loop_node_t *loop_node_it;
@@ -526,30 +526,30 @@ esp_err_t esp_event_loop_run(esp_event_loop_handle_t event_loop, TickType_t tick
 
         bool exec = false;
 
-        esp_event_handler_instance_t *handler;
-        esp_event_loop_node_t *loop_node;
-        esp_event_base_node_t *base_node;
-        esp_event_id_node_t *id_node;
+        esp_event_handler_instance_t *handler, *temp_handler;
+        esp_event_loop_node_t *loop_node, *temp_node;
+        esp_event_base_node_t *base_node, *temp_base;
+        esp_event_id_node_t *id_node, *temp_id_node;
 
-        SLIST_FOREACH(loop_node, &(loop->loop_nodes), next) {
+        SLIST_FOREACH_SAFE(loop_node, &(loop->loop_nodes), next, temp_node) {
             // Execute loop level handlers
-            SLIST_FOREACH(handler, &(loop_node->handlers), next) {
+            SLIST_FOREACH_SAFE(handler, &(loop_node->handlers), next, temp_handler) {
                 handler_execute(loop, handler, post);
                 exec |= true;
             }
 
-            SLIST_FOREACH(base_node, &(loop_node->base_nodes), next) {
+            SLIST_FOREACH_SAFE(base_node, &(loop_node->base_nodes), next, temp_base) {
                 if (base_node->base == post.base) {
                     // Execute base level handlers
-                    SLIST_FOREACH(handler, &(base_node->handlers), next) {
+                    SLIST_FOREACH_SAFE(handler, &(base_node->handlers), next, temp_handler) {
                         handler_execute(loop, handler, post);
                         exec |= true;
                     }
 
-                    SLIST_FOREACH(id_node, &(base_node->id_nodes), next) {
+                    SLIST_FOREACH_SAFE(id_node, &(base_node->id_nodes), next, temp_id_node) {
                         if (id_node->id == post.id) {
                             // Execute id level handlers
-                            SLIST_FOREACH(handler, &(id_node->handlers), next) {
+                            SLIST_FOREACH_SAFE(handler, &(id_node->handlers), next, temp_handler) {
                                 handler_execute(loop, handler, post);
                                 exec |= true;
                             }
@@ -678,14 +678,14 @@ esp_err_t esp_event_handler_register_with(esp_event_loop_handle_t event_loop, es
        (last_loop_node && !SLIST_EMPTY(&(last_loop_node->base_nodes)) && is_loop_level_handler)) {
         loop_node = (esp_event_loop_node_t*) calloc(1, sizeof(*loop_node));
 
-        SLIST_INIT(&(loop_node->handlers));
-        SLIST_INIT(&(loop_node->base_nodes));
-
         if (!loop_node) {
             ESP_LOGE(TAG, "alloc for new loop node failed");
             err = ESP_ERR_NO_MEM;
             goto on_err;
         }
+
+        SLIST_INIT(&(loop_node->handlers));
+        SLIST_INIT(&(loop_node->base_nodes));
 
         err = loop_node_add_handler(loop_node, event_base, event_id, event_handler, event_handler_arg);
 

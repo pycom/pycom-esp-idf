@@ -41,11 +41,14 @@ struct wpa_sm {
     u8 rx_replay_counter[WPA_REPLAY_COUNTER_LEN];
     int rx_replay_counter_set;
     u8 request_counter[WPA_REPLAY_COUNTER_LEN];
+    struct rsn_pmksa_cache *pmksa; /* PMKSA cache */
+    struct rsn_pmksa_cache_entry *cur_pmksa; /* current PMKSA entry */
 
     unsigned int pairwise_cipher;
     unsigned int group_cipher;
     unsigned int key_mgmt;
     unsigned int mgmt_group_cipher;
+    void *network_ctx;
 
     int rsn_enabled; /* Whether RSN is enabled in configuration */
 
@@ -81,11 +84,12 @@ struct wpa_sm {
     int (*get_ppkey) (uint8_t *ifx, int *alg, uint8_t *addr, int *key_idx,
                uint8_t *key, size_t key_len, int key_entry_valid);
     void (*wpa_deauthenticate)(u8 reason_code);
-    void (*wpa_neg_complete)();
+    void (*wpa_neg_complete)(void);
     struct wpa_gtk_data gd; //used for calllback save param
     u16 key_info;       //used for txcallback param
     u16 txcb_flags;
     bool   ap_notify_completed_rsne;
+    wifi_pmf_config_t pmf_cfg;
 };
 
 /**
@@ -145,20 +149,22 @@ typedef int (*WPA_GET_KEY) (u8 *ifx, int *alg, u8 *addt, int *keyidx, u8 *key, s
 
 typedef void (*WPA_DEAUTH_FUNC)(u8 reason_code);
 
-typedef void (*WPA_NEG_COMPLETE)();
+typedef void (*WPA_NEG_COMPLETE)(void);
 
-void wpa_register(char * payload, WPA_SEND_FUNC snd_func, \
-                                                      WPA_SET_ASSOC_IE set_assoc_ie_func, \
-                                                      WPA_INSTALL_KEY ppinstallkey, \
-                                                      WPA_GET_KEY ppgetkey, \
-                                                      WPA_DEAUTH_FUNC wpa_deauth, \
-                                                      WPA_NEG_COMPLETE wpa_neg_complete);
+bool wpa_sm_init(char * payload, WPA_SEND_FUNC snd_func, \
+        WPA_SET_ASSOC_IE set_assoc_ie_func, \
+        WPA_INSTALL_KEY ppinstallkey, \
+        WPA_GET_KEY ppgetkey, \
+        WPA_DEAUTH_FUNC wpa_deauth, \
+        WPA_NEG_COMPLETE wpa_neg_complete);
+
+void wpa_sm_deinit(void);
 
 void eapol_txcb(void *eb);
 
 void wpa_set_profile(u32 wpa_proto, u8 auth_mode);
 
-void wpa_set_bss(char *macddr, char * bssid, u8 pairwise_cipher, u8 group_cipher, char *passphrase, u8 *ssid, size_t ssid_len);
+int wpa_set_bss(char *macddr, char * bssid, u8 pairwise_cipher, u8 group_cipher, char *passphrase, u8 *ssid, size_t ssid_len);
 
 int wpa_sm_rx_eapol(u8 *src_addr, u8 *buf, u32 len);
 #endif /* WPA_I_H */

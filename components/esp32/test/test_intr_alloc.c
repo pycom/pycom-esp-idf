@@ -4,8 +4,11 @@
 
 #include <esp_types.h>
 #include <stdio.h>
+#if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/ets_sys.h"
-
+#elif CONFIG_IDF_TARGET_ESP32S2BETA
+#include "esp32s2beta/rom/ets_sys.h"
+#endif
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -55,24 +58,20 @@ static void timer_isr(void *arg)
     int timer_idx = (int)arg;
     count[timer_idx]++;
     if (timer_idx==0) {
-        TIMERG0.int_clr_timers.t0 = 1;
-        TIMERG0.hw_timer[0].update=1;
-        TIMERG0.hw_timer[0].config.alarm_en = 1;
+        timer_group_clr_intr_status_in_isr(TIMER_GROUP_0, TIMER_0);
+        timer_group_enable_alarm_in_isr(TIMER_GROUP_0, TIMER_0);
     }
     if (timer_idx==1) {
-        TIMERG0.int_clr_timers.t1 = 1;
-        TIMERG0.hw_timer[1].update=1;
-        TIMERG0.hw_timer[1].config.alarm_en = 1;
+        timer_group_clr_intr_status_in_isr(TIMER_GROUP_0, TIMER_1);
+        timer_group_enable_alarm_in_isr(TIMER_GROUP_0, TIMER_1);
     }
     if (timer_idx==2) {
-        TIMERG1.int_clr_timers.t0 = 1;
-        TIMERG1.hw_timer[0].update=1;
-        TIMERG1.hw_timer[0].config.alarm_en = 1;
+        timer_group_clr_intr_status_in_isr(TIMER_GROUP_1, TIMER_0);
+        timer_group_enable_alarm_in_isr(TIMER_GROUP_1, TIMER_0);
     }
     if (timer_idx==3) {
-        TIMERG1.int_clr_timers.t1 = 1;
-        TIMERG1.hw_timer[1].update=1;
-        TIMERG1.hw_timer[1].config.alarm_en = 1;
+        timer_group_clr_intr_status_in_isr(TIMER_GROUP_1, TIMER_1);
+        timer_group_enable_alarm_in_isr(TIMER_GROUP_1, TIMER_1);
     }
 //  ets_printf("int %d\n", timer_idx);
 }
@@ -144,7 +143,7 @@ void int_timer_handler(void *arg) {
     int_timer_ctr++;
 }
 
-void local_timer_test()
+void local_timer_test(void)
 {
     intr_handle_t ih;
     esp_err_t r;
@@ -215,15 +214,15 @@ TEST_CASE("Can allocate IRAM int only with an IRAM handler", "[esp32]")
     {
     }
     intr_handle_t ih;
-    esp_err_t err = esp_intr_alloc(ETS_INTERNAL_PROFILING_INTR_SOURCE,
+    esp_err_t err = esp_intr_alloc(ETS_INTERNAL_SW0_INTR_SOURCE,
             ESP_INTR_FLAG_IRAM, &dummy, NULL, &ih);
     TEST_ASSERT_EQUAL_INT(ESP_ERR_INVALID_ARG, err);
-    err = esp_intr_alloc(ETS_INTERNAL_PROFILING_INTR_SOURCE,
+    err = esp_intr_alloc(ETS_INTERNAL_SW0_INTR_SOURCE,
             ESP_INTR_FLAG_IRAM, &dummy_iram, NULL, &ih);
     TEST_ESP_OK(err);
     err = esp_intr_free(ih);
     TEST_ESP_OK(err);
-    err = esp_intr_alloc(ETS_INTERNAL_PROFILING_INTR_SOURCE,
+    err = esp_intr_alloc(ETS_INTERNAL_SW0_INTR_SOURCE,
             ESP_INTR_FLAG_IRAM, &dummy_rtc, NULL, &ih);
     TEST_ESP_OK(err);
     err = esp_intr_free(ih);
@@ -280,7 +279,7 @@ TEST_CASE("allocate 2 handlers for a same source and remove the later one","[esp
     r=esp_intr_alloc(ETS_SPI2_INTR_SOURCE, ESP_INTR_FLAG_SHARED, int_handler2, &ctx, &handle2);
     TEST_ESP_OK(r);
     SPI2.slave.trans_inten = 1;
-    
+
     printf("trigger first time.\n");
     SPI2.slave.trans_done = 1;
 

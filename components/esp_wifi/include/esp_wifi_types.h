@@ -56,6 +56,8 @@ typedef enum {
     WIFI_AUTH_WPA2_PSK,         /**< authenticate mode : WPA2_PSK */
     WIFI_AUTH_WPA_WPA2_PSK,     /**< authenticate mode : WPA_WPA2_PSK */
     WIFI_AUTH_WPA2_ENTERPRISE,  /**< authenticate mode : WPA2_ENTERPRISE */
+    WIFI_AUTH_WPA3_PSK,         /**< authenticate mode : WPA3_PSK */
+    WIFI_AUTH_WPA2_WPA3_PSK,    /**< authenticate mode : WPA2_WPA3_PSK */
     WIFI_AUTH_MAX
 } wifi_auth_mode_t;
 
@@ -84,6 +86,8 @@ typedef enum {
     WIFI_REASON_802_1X_AUTH_FAILED       = 23,
     WIFI_REASON_CIPHER_SUITE_REJECTED    = 24,
 
+    WIFI_REASON_INVALID_PMKID            = 53,
+
     WIFI_REASON_BEACON_TIMEOUT           = 200,
     WIFI_REASON_NO_AP_FOUND              = 201,
     WIFI_REASON_AUTH_FAIL                = 202,
@@ -111,7 +115,7 @@ typedef struct {
 } wifi_active_scan_time_t;
 
 /** @brief Aggregate of active & passive scan time per channel */
-typedef union {
+typedef struct {
     wifi_active_scan_time_t active;  /**< active scan time per channel, units: millisecond. */
     uint32_t passive;                /**< passive scan time per channel, units: millisecond, values above 1500ms may
                                           cause station to disconnect from AP and are not recommended. */
@@ -134,6 +138,7 @@ typedef enum {
     WIFI_CIPHER_TYPE_TKIP,       /**< the cipher type is TKIP */
     WIFI_CIPHER_TYPE_CCMP,       /**< the cipher type is CCMP */
     WIFI_CIPHER_TYPE_TKIP_CCMP,  /**< the cipher type is TKIP and CCMP */
+    WIFI_CIPHER_TYPE_AES_CMAC128,/**< the cipher type is AES-CMAC-128 */
     WIFI_CIPHER_TYPE_UNKNOWN,    /**< the cipher type is unknown */
 } wifi_cipher_type_t;
 
@@ -199,6 +204,12 @@ typedef enum {
     WIFI_BW_HT40,     /* Bandwidth is HT40 */
 } wifi_bandwidth_t;
 
+/** Configuration structure for Protected Management Frame */
+typedef struct {
+    bool capable;            /**< Advertizes support for Protected Management Frame. Device will prefer to connect in PMF mode if other device also advertizes PMF capability. */
+    bool required;           /**< Advertizes that Protected Management Frame is required. Device will not associate to non-PMF capable devices. */
+} wifi_pmf_config_t;
+
 /** @brief Soft-AP configuration settings for the ESP32 */
 typedef struct {
     uint8_t ssid[32];           /**< SSID of ESP32 soft-AP. If ssid_len field is 0, this must be a Null terminated string. Otherwise, length is set according to ssid_len. */
@@ -207,7 +218,7 @@ typedef struct {
     uint8_t channel;            /**< Channel of ESP32 soft-AP */
     wifi_auth_mode_t authmode;  /**< Auth mode of ESP32 soft-AP. Do not support AUTH_WEP in soft-AP mode */
     uint8_t ssid_hidden;        /**< Broadcast SSID or not, default 0, broadcast the SSID */
-    uint8_t max_connection;     /**< Max number of stations allowed to connect in, default 4, max 4 */
+    uint8_t max_connection;     /**< Max number of stations allowed to connect in, default 4, max 10 */
     uint16_t beacon_interval;   /**< Beacon interval, 100 ~ 60000 ms, default 100 ms */
 } wifi_ap_config_t;
 
@@ -222,6 +233,7 @@ typedef struct {
     uint16_t listen_interval;   /**< Listen interval for ESP32 station to receive beacon when WIFI_PS_MAX_MODEM is set. Units: AP beacon intervals. Defaults to 3 if set to 0. */
     wifi_sort_method_t sort_method;    /**< sort the connect AP in the list by rssi or security mode */
     wifi_scan_threshold_t  threshold;     /**< When sort_method is set, only APs which have an auth mode that is more secure than the selected auth mode and a signal stronger than the minimum RSSI will be used. */
+    wifi_pmf_config_t pmf_cfg;    /**< Configuration for Protected Management Frame. Will be advertized in RSN Capabilities in RSN IE. */
 } wifi_sta_config_t;
 
 /** @brief Configuration data for ESP32 AP or STA.
@@ -314,7 +326,11 @@ typedef struct {
     unsigned stbc:2;              /**< Space Time Block Code(STBC). 0: non STBC packet; 1: STBC packet */
     unsigned fec_coding:1;        /**< Flag is set for 11n packets which are LDPC */
     unsigned sgi:1;               /**< Short Guide Interval(SGI). 0: Long GI; 1: Short GI */
+#if CONFIG_IDF_TARGET_ESP32
     signed noise_floor:8;         /**< noise floor of Radio Frequency Module(RF). unit: 0.25dBm*/
+#elif CONFIG_IDF_TARGET_ESP32S2BETA
+    unsigned :8;
+#endif
     unsigned ampdu_cnt:8;         /**< ampdu cnt */
     unsigned channel:4;           /**< primary channel on which this packet is received */
     unsigned secondary_channel:4; /**< secondary channel on which this packet is received. 0: none; 1: above; 2: below */
@@ -323,6 +339,10 @@ typedef struct {
     unsigned :32;                 /**< reserve */
     unsigned :31;                 /**< reserve */
     unsigned ant:1;               /**< antenna number from which this packet is received. 0: WiFi antenna 0; 1: WiFi antenna 1 */
+#if CONFIG_IDF_TARGET_ESP32S2BETA
+    signed noise_floor:8;         /**< noise floor of Radio Frequency Module(RF). unit: 0.25dBm*/
+    unsigned :24;
+#endif
     unsigned sig_len:12;          /**< length of packet including Frame Check Sequence(FCS) */
     unsigned :12;                 /**< reserve */
     unsigned rx_state:8;          /**< state of the packet. 0: no error; others: error numbers which are not public */
@@ -505,8 +525,9 @@ typedef enum {
     WIFI_EVENT_AP_STOP,                  /**< ESP32 soft-AP stop */
     WIFI_EVENT_AP_STACONNECTED,          /**< a station connected to ESP32 soft-AP */
     WIFI_EVENT_AP_STADISCONNECTED,       /**< a station disconnected from ESP32 soft-AP */
-
     WIFI_EVENT_AP_PROBEREQRECVED,        /**< Receive probe request packet in soft-AP interface */
+
+    WIFI_EVENT_MAX,                      /**< Invalid WiFi event ID */
 } wifi_event_t;
 
 /** @cond **/

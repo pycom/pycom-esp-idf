@@ -187,9 +187,9 @@ class Parser(object):
         test_case_list = []
         for _config in configs["CaseConfig"]:
             _filter = configs["Filter"].copy()
+            _overwrite = cls.handle_overwrite_args(_config.pop("overwrite", dict()))
+            _extra_data = _config.pop("extra_data", None)
             _filter.update(_config)
-            _overwrite = cls.handle_overwrite_args(_filter.pop("overwrite", dict()))
-            _extra_data = _filter.pop("extra_data", None)
             for test_method in test_methods:
                 if _filter_one_case(test_method, _filter):
                     test_case_list.append(TestCase.TestCase(test_method, _extra_data, **_overwrite))

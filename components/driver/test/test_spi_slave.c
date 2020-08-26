@@ -11,7 +11,7 @@
 #include "sdkconfig.h"
 #include "test/test_common_spi.h"
 
-#ifndef CONFIG_ESP32_SPIRAM_SUPPORT
+#ifndef CONFIG_SPIRAM
 //This test should be removed once the timing test is merged.
 
 
@@ -31,7 +31,7 @@ static void master_init_nodma( spi_device_handle_t* spi)
         .miso_io_num=PIN_NUM_MISO,
         .mosi_io_num=PIN_NUM_MOSI,
         .sclk_io_num=PIN_NUM_CLK,
-        .quadwp_io_num=-1,
+        .quadwp_io_num=UNCONNECTED_PIN,
         .quadhd_io_num=-1
     };
     spi_device_interface_config_t devcfg={
@@ -51,7 +51,7 @@ static void master_init_nodma( spi_device_handle_t* spi)
     TEST_ASSERT(ret==ESP_OK);
 }
 
-static void slave_init()
+static void slave_init(void)
 {
     //Configuration for the SPI bus
     spi_bus_config_t buscfg={
@@ -88,10 +88,10 @@ TEST_CASE("test slave send unaligned","[spi]")
     slave_init();
 
     //do internal connection
-    int_connect( PIN_NUM_MOSI,  HSPID_OUT_IDX,   VSPIQ_IN_IDX );
-    int_connect( PIN_NUM_MISO,  VSPIQ_OUT_IDX,   HSPID_IN_IDX );
-    int_connect( PIN_NUM_CS,    HSPICS0_OUT_IDX, VSPICS0_IN_IDX );
-    int_connect( PIN_NUM_CLK,   HSPICLK_OUT_IDX, VSPICLK_IN_IDX );
+    int_connect( PIN_NUM_MOSI,  spi_periph_signal[TEST_SPI_HOST].spid_out,      spi_periph_signal[TEST_SLAVE_HOST].spiq_in );
+    int_connect( PIN_NUM_MISO,  spi_periph_signal[TEST_SLAVE_HOST].spiq_out,      spi_periph_signal[TEST_SPI_HOST].spid_in );
+    int_connect( PIN_NUM_CS,    spi_periph_signal[TEST_SPI_HOST].spics_out[0],  spi_periph_signal[TEST_SLAVE_HOST].spics_in );
+    int_connect( PIN_NUM_CLK,   spi_periph_signal[TEST_SPI_HOST].spiclk_out,    spi_periph_signal[TEST_SLAVE_HOST].spiclk_in );
 
     for ( int i = 0; i < 4; i ++ ) {
         //slave send
@@ -140,4 +140,4 @@ TEST_CASE("test slave send unaligned","[spi]")
     ESP_LOGI(MASTER_TAG, "test passed.");
 }
 
-#endif // !CONFIG_ESP32_SPIRAM_SUPPORT
+#endif // !CONFIG_SPIRAM

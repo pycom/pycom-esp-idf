@@ -17,8 +17,6 @@ In this example, we generate a 100Hz triangle and sine wave and send it out from
 idf.py menuconfig
 ```
 
-* Set serial port under Serial Flasher Options.
-
 ### Build and Flash
 
 Build the project and flash it to the board, then run monitor tool to view serial output:
@@ -53,9 +51,9 @@ If you have a logic analyzer, you can use a logic analyzer to grab online data. 
 
 | pin name| function | gpio_num |
 |:---:|:---:|:---:|
-| WS  |word select| GPIO_NUM_25 |
-| SCK |continuous serial clock| GPIO_NUM_26 |
-| SD  |serial data| GPIO_NUM_22 |
+| WS  |word select| GPIO_NUM_15 |
+| SCK |continuous serial clock| GPIO_NUM_13 |
+| SD  |serial data| GPIO_NUM_21 |
 
 ## Troubleshooting
 

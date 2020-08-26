@@ -50,7 +50,7 @@ def test_examples_protocol_mqtt_ws(env, extra_data):
       3. Test evaluates it received correct qos0 message
       4. Test ESP32 client received correct qos0 message
     """
-    dut1 = env.get_dut("mqtt_websocket", "examples/protocols/mqtt/ws")
+    dut1 = env.get_dut("mqtt_websocket", "examples/protocols/mqtt/ws", dut_class=ttfw_idf.ESP32DUT)
     # check and log bin size
     binary_file = os.path.join(dut1.app.binary_path, "mqtt_websocket.bin")
     bin_size = os.path.getsize(binary_file)

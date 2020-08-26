@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 from __future__ import print_function
-import os
-import json
 import argparse
+import json
+import os
+import re
 import tempfile
 
 import pexpect
@@ -13,7 +14,7 @@ PROTOCOL_VERSIONS = [1, 2]
 
 def parse_testcases(version):
     with open("testcases_v%d.txt" % version, "r") as f:
-        cases = [l for l in f.readlines() if len(l.strip()) > 0]
+        cases = [line for line in f.readlines() if len(line.strip()) > 0]
     # Each 3 lines in the file should be formatted as:
     # * Description of the test change
     # * JSON "changes" to send to the server
@@ -49,7 +50,25 @@ def main():
             with open("sdkconfig") as orig:
                 temp_sdkconfig.write(orig.read())
 
-        cmdline = "../confserver.py --kconfig Kconfig --config %s" % temp_sdkconfig_path
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            temp_kconfigs_source_file = os.path.join(tempfile.gettempdir(), f.name)
+
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            temp_kconfig_projbuilds_source_file = os.path.join(tempfile.gettempdir(), f.name)
+
+        cmdline = '''../confserver.py --env "COMPONENT_KCONFIGS_SOURCE_FILE=%s" \
+                                      --env "COMPONENT_KCONFIGS_PROJBUILD_SOURCE_FILE=%s" \
+                                      --env "COMPONENT_KCONFIGS=" \
+                                      --env "COMPONENT_KCONFIGS_PROJBUILD=" \
+                                      --kconfig Kconfig \
+                                      --config %s \
+                  ''' % (temp_kconfigs_source_file, temp_kconfig_projbuilds_source_file, temp_sdkconfig_path)
+
+        cmdline = re.sub(r' +', ' ', cmdline)
+
+        # prepare_kconfig_files.py doesn't have to be called because COMPONENT_KCONFIGS and
+        # COMPONENT_KCONFIGS_PROJBUILD are empty
+
         print("Running: %s" % cmdline)
         p = pexpect.spawn(cmdline, timeout=30, logfile=args.logfile, echo=False, use_poll=True, maxread=1)
 
@@ -69,6 +88,8 @@ def main():
     finally:
         try:
             os.remove(temp_sdkconfig_path)
+            os.remove(temp_kconfigs_source_file)
+            os.remove(temp_kconfig_projbuilds_source_file)
         except OSError:
             pass
 

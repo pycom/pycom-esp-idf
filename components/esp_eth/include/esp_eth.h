@@ -62,7 +62,7 @@ typedef struct {
     *      - ESP_FAIL: error occurred when inputting buffer to upper stack
     *
     */
-    esp_err_t (*stack_input)(esp_eth_handle_t eth_handle, uint8_t *buffer, uint32_t length);
+    esp_err_t (*stack_input)(esp_eth_handle_t eth_handle, uint8_t *buffer, uint32_t length, void *priv);
 
     /**
     * @brief Callback function invoked when lowlevel initialization is finished
@@ -85,6 +85,7 @@ typedef struct {
     *       - ESP_FAIL: error occurred when processing extra lowlevel deinitialization
     */
     esp_err_t (*on_lowlevel_deinit_done)(esp_eth_handle_t eth_handle);
+
 } esp_eth_config_t;
 
 /**
@@ -132,7 +133,7 @@ esp_err_t esp_eth_driver_install(const esp_eth_config_t *config, esp_eth_handle_
 esp_err_t esp_eth_driver_uninstall(esp_eth_handle_t hdl);
 
 /**
-* @brief Start Ethernet driver
+* @brief Start Ethernet driver **ONLY** in standalone mode (i.e. without TCP/IP stack)
 *
 * @note This API will start driver state machine and internal software timer (for checking link status).
 *
@@ -161,6 +162,25 @@ esp_err_t esp_eth_start(esp_eth_handle_t hdl);
 esp_err_t esp_eth_stop(esp_eth_handle_t hdl);
 
 /**
+* @brief Update Ethernet data input path (i.e. specify where to pass the input buffer)
+*
+* @note After install driver, Ethernet still don't know where to deliver the input buffer.
+*       In fact, this API registers a callback function which get invoked when Ethernet received new packets.
+*
+* @param[in] hdl handle of Ethernet driver
+* @param[in] stack_input function pointer, which does the actual process on incoming packets
+* @param[in] priv private resource, which gets passed to `stack_input` callback without any modification
+* @return
+*       - ESP_OK: update input path successfully
+*       - ESP_ERR_INVALID_ARG: update input path failed because of some invalid argument
+*       - ESP_FAIL: update input path failed because some other error occurred
+*/
+esp_err_t esp_eth_update_input_path(
+    esp_eth_handle_t hdl,
+    esp_err_t (*stack_input)(esp_eth_handle_t hdl, uint8_t *buffer, uint32_t length, void *priv),
+    void *priv);
+
+/**
 * @brief General Transmit
 *
 * @param[in] hdl: handle of Ethernet driver
@@ -172,7 +192,7 @@ esp_err_t esp_eth_stop(esp_eth_handle_t hdl);
 *       - ESP_ERR_INVALID_ARG: transmit frame buffer failed because of some invalid argument
 *       - ESP_FAIL: transmit frame buffer failed because some other error occurred
 */
-esp_err_t esp_eth_transmit(esp_eth_handle_t hdl, uint8_t *buf, uint32_t length);
+esp_err_t esp_eth_transmit(esp_eth_handle_t hdl, void *buf, uint32_t length);
 
 /**
 * @brief General Receive
@@ -181,9 +201,14 @@ esp_err_t esp_eth_transmit(esp_eth_handle_t hdl, uint8_t *buf, uint32_t length);
 * @param[out] buf: buffer to preserve the received packet
 * @param[out] length: length of the received packet
 *
+* @note Before this function got invoked, the value of "length" should set by user, equals the size of buffer.
+*       After the function returned, the value of "length" means the real length of received data.
+*
 * @return
 *       - ESP_OK: receive frame buffer successfully
 *       - ESP_ERR_INVALID_ARG: receive frame buffer failed because of some invalid argument
+*       - ESP_ERR_INVALID_SIZE: input buffer size is not enough to hold the incoming data.
+*                               in this case, value of returned "length" indicates the real size of incoming data.
 *       - ESP_FAIL: receive frame buffer failed because some other error occurred
 */
 esp_err_t esp_eth_receive(esp_eth_handle_t hdl, uint8_t *buf, uint32_t *length);

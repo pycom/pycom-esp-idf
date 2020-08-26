@@ -6,8 +6,8 @@
 
 static const char TAG[] = "test_psram";
 
-#ifdef CONFIG_ESP32_SPIRAM_SUPPORT
-static void test_psram_content()
+#ifdef CONFIG_SPIRAM
+static void test_psram_content(void)
 {
     const int test_size = 2048;
     uint32_t *test_area = heap_caps_malloc(test_size, MALLOC_CAP_SPIRAM);
@@ -57,7 +57,7 @@ static void test_spi_bus_occupy(spi_host_device_t expected_occupied_host)
         TEST_ASSERT(claim_vspi);
     }
 
-#ifdef CONFIG_ESP32_SPIRAM_SUPPORT
+#ifdef CONFIG_SPIRAM
     test_psram_content();
 #endif
 }
@@ -67,7 +67,7 @@ TEST_CASE("some spi bus occpied by psram", "[psram_4m][test_env=UT_T1_PSRAMV0]")
 {
 // NOTE: this unit test rely on the config that PSRAM of 8MB is used only when CONFIG_SPIRAM_BNKSWITCH_ENABLE is set
 //currently all 8M psram don't need more SPI peripherals
-#if !CONFIG_ESP32_SPIRAM_SUPPORT || !CONFIG_SPIRAM_SPEED_80M || CONFIG_SPIRAM_BANKSWITCH_ENABLE
+#if !CONFIG_SPIRAM || !CONFIG_SPIRAM_SPEED_80M || CONFIG_SPIRAM_BANKSWITCH_ENABLE
 #error unexpected test config, only psram 32MBit ver 0 at 80MHz will trigger the workaround
 #endif
 
@@ -86,7 +86,7 @@ TEST_CASE("some spi bus occpied by psram", "[psram_4m][test_env=UT_T1_PSRAMV0]")
 #else
 TEST_CASE("can use spi when not being used by psram", "[psram_4m]")
 {
-#if CONFIG_ESP32_SPIRAM_SUPPORT && CONFIG_SPIRAM_SPEED_80M
+#if CONFIG_SPIRAM && CONFIG_SPIRAM_SPEED_80M
 #error unexpected test config, some runners using the UT_T1_PSRAMV0 but still perform this test.\
 they will not pass this test at 80MHz.
 #endif

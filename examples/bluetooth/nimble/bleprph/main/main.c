@@ -93,7 +93,7 @@ bleprph_advertise(void)
                    BLE_HS_ADV_F_BREDR_UNSUP;
 
     /* Indicate that the TX power level field should be included; have the
-     * stack fill this value automatically.  This is done by assiging the
+     * stack fill this value automatically.  This is done by assigning the
      * special value BLE_HS_ADV_TX_PWR_LVL_AUTO.
      */
     fields.tx_pwr_lvl_is_present = 1;
@@ -135,7 +135,7 @@ bleprph_advertise(void)
  *
  * @param event                 The type of event being signalled.
  * @param ctxt                  Various information pertaining to the event.
- * @param arg                   Application-specified argument; unuesd by
+ * @param arg                   Application-specified argument; unused by
  *                                  bleprph.
  *
  * @return                      0 if the application successfully handled the
@@ -181,7 +181,7 @@ bleprph_gap_event(struct ble_gap_event *event, void *arg)
         /* The central has updated the connection parameters. */
         MODLOG_DFLT(INFO, "connection updated; status=%d ",
                     event->conn_update.status);
-        rc = ble_gap_conn_find(event->connect.conn_handle, &desc);
+        rc = ble_gap_conn_find(event->conn_update.conn_handle, &desc);
         assert(rc == 0);
         bleprph_print_conn_desc(&desc);
         MODLOG_DFLT(INFO, "\n");
@@ -197,7 +197,7 @@ bleprph_gap_event(struct ble_gap_event *event, void *arg)
         /* Encryption has been enabled or disabled for this connection. */
         MODLOG_DFLT(INFO, "encryption change event; status=%d ",
                     event->enc_change.status);
-        rc = ble_gap_conn_find(event->connect.conn_handle, &desc);
+        rc = ble_gap_conn_find(event->enc_change.conn_handle, &desc);
         assert(rc == 0);
         bleprph_print_conn_desc(&desc);
         MODLOG_DFLT(INFO, "\n");

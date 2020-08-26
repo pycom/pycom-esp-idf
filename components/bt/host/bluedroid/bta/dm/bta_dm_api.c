@@ -174,13 +174,11 @@ void BTA_DmSetDeviceName(const char *p_name)
     if ((p_msg = (tBTA_DM_API_SET_NAME *) osi_malloc(sizeof(tBTA_DM_API_SET_NAME))) != NULL) {
         p_msg->hdr.event = BTA_DM_API_SET_NAME_EVT;
         /* truncate the name if needed */
-        BCM_STRNCPY_S((char *)p_msg->name, sizeof(p_msg->name), p_name, BD_NAME_LEN - 1);
+        BCM_STRNCPY_S((char *)p_msg->name, p_name, BD_NAME_LEN - 1);
         p_msg->name[BD_NAME_LEN - 1] = 0;
 
         bta_sys_sendmsg(p_msg);
     }
-
-
 }
 
 void BTA_DmConfigEir(tBTA_DM_EIR_CONF *eir_config)
@@ -225,7 +223,84 @@ void BTA_DmConfigEir(tBTA_DM_EIR_CONF *eir_config)
     }
 }
 
+#if (CLASSIC_BT_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         BTA_DmSetAfhChannels
+**
+** Description      This function sets the AFH channels
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+void BTA_DmSetAfhChannels(const uint8_t *channels, tBTA_CMPL_CB  *set_afh_cb)
+{
+    tBTA_DM_API_SET_AFH_CHANNELS *p_msg;
+
+    if ((p_msg = (tBTA_DM_API_SET_AFH_CHANNELS *) osi_malloc(sizeof(tBTA_DM_API_SET_AFH_CHANNELS))) != NULL) {
+        p_msg->hdr.event = BTA_DM_API_SET_AFH_CHANNELS_EVT;
+
+        p_msg->set_afh_cb = set_afh_cb;
+        memcpy(p_msg->channels, channels, AFH_CHANNELS_LEN);
+
+        bta_sys_sendmsg(p_msg);
+    }
+}
+#endif /// CLASSIC_BT_INCLUDED == TRUE
+
+#if (SDP_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         BTA_DmGetRemoteName
+**
+** Description      This function gets the peer device's Bluetooth name.
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+void BTA_DmGetRemoteName(BD_ADDR remote_addr, tBTA_CMPL_CB *rmt_name_cb)
+{
+    tBTA_DM_API_GET_REMOTE_NAME *p_msg;
+
+    if ((p_msg = (tBTA_DM_API_GET_REMOTE_NAME *) osi_malloc(sizeof(tBTA_DM_API_GET_REMOTE_NAME))) != NULL) {
+        p_msg->hdr.event = BTA_DM_API_GET_REMOTE_NAME_EVT;
+        p_msg->rmt_name_cb = rmt_name_cb;
+        bdcpy(p_msg->rmt_addr, remote_addr);
+        bta_sys_sendmsg(p_msg);
+    }
+}
+#endif
+
 #if (BLE_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         BTA_DmBleSetChannels
+**
+** Description      This function sets BLE channels
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+void BTA_DmBleSetChannels(const uint8_t *channels, tBTA_CMPL_CB  *set_channels_cb)
+{
+
+    tBTA_DM_API_BLE_SET_CHANNELS *p_msg;
+
+    if ((p_msg = (tBTA_DM_API_BLE_SET_CHANNELS *) osi_malloc(sizeof(tBTA_DM_API_BLE_SET_CHANNELS))) != NULL) {
+        p_msg->hdr.event = BTA_DM_API_BLE_SET_CHANNELS_EVT;
+
+        p_msg->set_channels_cb = set_channels_cb;
+        memcpy(p_msg->channels, channels, BLE_CHANNELS_LEN);
+
+        bta_sys_sendmsg(p_msg);
+    }
+
+
+}
+
 void BTA_DmUpdateWhiteList(BOOLEAN add_remove,  BD_ADDR remote_addr, tBLE_ADDR_TYPE addr_type, tBTA_ADD_WHITELIST_CBACK *add_wl_cb)
 {
     tBTA_DM_API_UPDATE_WHITE_LIST *p_msg;
@@ -345,6 +420,7 @@ void BTA_DmSearchCancel(void)
 
 }
 
+#if (SDP_INCLUDED == TRUE)
 /*******************************************************************************
 **
 ** Function         BTA_DmDiscover
@@ -356,7 +432,6 @@ void BTA_DmSearchCancel(void)
 ** Returns          void
 **
 *******************************************************************************/
-#if (SDP_INCLUDED == TRUE)
 void BTA_DmDiscover(BD_ADDR bd_addr, tBTA_SERVICE_MASK services,
                     tBTA_DM_SEARCH_CBACK *p_cback, BOOLEAN sdp_search)
 {
@@ -784,7 +859,7 @@ UINT16 BTA_DmGetConnectionState( BD_ADDR bd_addr )
 **
 ** Description      This function adds a DI record to the local SDP database.
 **
-** Returns          BTA_SUCCESS if record set sucessfully, otherwise error code.
+** Returns          BTA_SUCCESS if record set successfully, otherwise error code.
 **
 *******************************************************************************/
 tBTA_STATUS BTA_DmSetLocalDiRecord( tBTA_DI_RECORD *p_device_info,
@@ -1867,7 +1942,7 @@ void BTA_DmBleConfigLocalIcon(uint16_t icon)
 **                  p_cback: callback function associated to this adv instance.
 **                  p_ref: reference data pointer to this adv instance.
 **
-** Returns          BTA_SUCCESS if command started sucessfully; otherwise failure.
+** Returns          BTA_SUCCESS if command started successfully; otherwise failure.
 **
 *******************************************************************************/
 void BTA_BleEnableAdvInstance (tBTA_BLE_ADV_PARAMS *p_params,
@@ -1905,7 +1980,7 @@ void BTA_BleEnableAdvInstance (tBTA_BLE_ADV_PARAMS *p_params,
 ** Parameters       inst_id: Adv instance to update the parameter.
 **                  p_params: pointer to the adv parameter structure.
 **
-** Returns          BTA_SUCCESS if command started sucessfully; otherwise failure.
+** Returns          BTA_SUCCESS if command started successfully; otherwise failure.
 **
 *******************************************************************************/
 void BTA_BleUpdateAdvInstParam (UINT8 inst_id, tBTA_BLE_ADV_PARAMS *p_params)
@@ -1940,7 +2015,7 @@ void BTA_BleUpdateAdvInstParam (UINT8 inst_id, tBTA_BLE_ADV_PARAMS *p_params)
 **                  memory space can not be freed until BTA_BLE_MULTI_ADV_DATA_EVT
 **                  is sent to application.
 **
-** Returns          BTA_SUCCESS if command started sucessfully; otherwise failure.
+** Returns          BTA_SUCCESS if command started successfully; otherwise failure.
 **
 *******************************************************************************/
 void BTA_BleCfgAdvInstData (UINT8 inst_id, BOOLEAN is_scan_rsp,
@@ -1973,7 +2048,7 @@ void BTA_BleCfgAdvInstData (UINT8 inst_id, BOOLEAN is_scan_rsp,
 **
 ** Parameter        inst_id: instance ID to disable.
 **
-** Returns          BTA_SUCCESS if command started sucessfully; otherwise failure.
+** Returns          BTA_SUCCESS if command started successfully; otherwise failure.
 **
 *******************************************************************************/
 void BTA_BleDisableAdvInstance (UINT8  inst_id)     //this function just used for vendor debug

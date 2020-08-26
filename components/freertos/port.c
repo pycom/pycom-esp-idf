@@ -90,14 +90,12 @@
 // SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 --------------------------------------------------------------------------------
 */
-
 #include <stdlib.h>
 #include <string.h>
 #include <xtensa/config/core.h>
 
 #include "xtensa_rtos.h"
 
-#include "esp32/rom/ets_sys.h"
 #include "soc/cpu.h"
 
 #include "FreeRTOS.h"
@@ -109,6 +107,8 @@
 
 #include "esp_intr_alloc.h"
 #include "esp_log.h"
+#include "sdkconfig.h"
+#include "esp_compiler.h"
 
 /* Defined in portasm.h */
 extern void _frxt_tick_timer_init(void);
@@ -331,7 +331,7 @@ void vPortReleaseTaskMPUSettings( xMPU_SETTINGS *xMPUSettings )
  * Returns true if the current core is in ISR context; low prio ISR, med prio ISR or timer tick ISR. High prio ISRs
  * aren't detected here, but they normally cannot call C code, so that should not be an issue anyway.
  */
-BaseType_t xPortInIsrContext()
+BaseType_t xPortInIsrContext(void)
 {
 	unsigned int irqStatus;
 	BaseType_t ret;
@@ -345,12 +345,12 @@ BaseType_t xPortInIsrContext()
  * This function will be called in High prio ISRs. Returns true if the current core was in ISR context
  * before calling into high prio ISR context.
  */
-BaseType_t IRAM_ATTR xPortInterruptedFromISRContext()
+BaseType_t IRAM_ATTR xPortInterruptedFromISRContext(void)
 {
 	return (port_interruptNesting[xPortGetCoreID()] != 0);
 }
 
-void vPortAssertIfInISR()
+void vPortAssertIfInISR(void)
 {
 	configASSERT(xPortInIsrContext());
 }
@@ -435,7 +435,7 @@ void vPortSetStackWatchpoint( void* pxStackStart ) {
 	esp_set_watchpoint(1, (char*)addr, 32, ESP_WATCHPOINT_STORE);
 }
 
-#if defined(CONFIG_ESP32_SPIRAM_SUPPORT)
+#if defined(CONFIG_SPIRAM)
 /*
  * Compare & set (S32C1) does not work in external RAM. Instead, this routine uses a mux (in internal memory) to fake it.
  */
@@ -443,6 +443,9 @@ static portMUX_TYPE extram_mux = portMUX_INITIALIZER_UNLOCKED;
 
 void uxPortCompareSetExtram(volatile uint32_t *addr, uint32_t compare, uint32_t *set) {
 	uint32_t prev;
+
+	uint32_t oldlevel = portENTER_CRITICAL_NESTED();
+
 #ifdef CONFIG_FREERTOS_PORTMUX_DEBUG
 	vPortCPUAcquireMutexIntsDisabled(&extram_mux, portMUX_NO_TIMEOUT, __FUNCTION__, __LINE__);
 #else
@@ -458,8 +461,10 @@ void uxPortCompareSetExtram(volatile uint32_t *addr, uint32_t compare, uint32_t 
 #else
 	vPortCPUReleaseMutexIntsDisabled(&extram_mux);
 #endif
+
+	portEXIT_CRITICAL_NESTED(oldlevel);
 }
-#endif //defined(CONFIG_ESP32_SPIRAM_SUPPORT)
+#endif //defined(CONFIG_SPIRAM)
 
 
 

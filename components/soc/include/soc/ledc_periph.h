@@ -15,3 +15,17 @@
 #pragma once
 #include "soc/ledc_reg.h"
 #include "soc/ledc_struct.h"
+#include "soc/ledc_caps.h"
+
+/*
+ Stores a bunch of per-ledc-peripheral data.
+*/
+typedef struct {
+    const uint8_t sig_out0_idx;
+} ledc_signal_conn_t;
+
+#ifdef SOC_LEDC_SUPPORT_HS_MODE
+extern const ledc_signal_conn_t ledc_periph_signal[2];
+#else
+extern const ledc_signal_conn_t ledc_periph_signal[1];
+#endif

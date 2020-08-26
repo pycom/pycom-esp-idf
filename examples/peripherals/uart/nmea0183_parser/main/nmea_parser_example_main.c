@@ -36,7 +36,7 @@ static void gps_event_handler(void *event_handler_arg, esp_event_base_t event_ba
         /* print information parsed from GPS statements */
         ESP_LOGI(TAG, "%d/%d/%d %d:%d:%d => \r\n"
                  "\t\t\t\t\t\tlatitude   = %.05f°N\r\n"
-                 "\t\t\t\t\t\tlongtitude = %.05f°E\r\n"
+                 "\t\t\t\t\t\tlongitude = %.05f°E\r\n"
                  "\t\t\t\t\t\taltitude   = %.02fm\r\n"
                  "\t\t\t\t\t\tspeed      = %fm/s",
                  gps->date.year + YEAR_BASE, gps->date.month, gps->date.day,
@@ -52,7 +52,7 @@ static void gps_event_handler(void *event_handler_arg, esp_event_base_t event_ba
     }
 }
 
-void app_main()
+void app_main(void)
 {
     /* NMEA parser configuration */
     nmea_parser_config_t config = NMEA_PARSER_CONFIG_DEFAULT();

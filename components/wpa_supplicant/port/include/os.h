@@ -19,9 +19,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "esp_err.h"
-#include "esp32/rom/ets_sys.h"
+// #include "esp32/rom/ets_sys.h"
 
-typedef long os_time_t;
+typedef time_t os_time_t;
 
 /**
  * os_sleep - Sleep (sec, usec)
@@ -32,7 +32,7 @@ void os_sleep(os_time_t sec, os_time_t usec);
 
 struct os_time {
 	os_time_t sec;
-	os_time_t usec;
+	suseconds_t usec;
 };
 
 /**
@@ -188,7 +188,7 @@ char * os_readfile(const char *name, size_t *len);
  * OS_NO_C_LIB_DEFINES can be defined to skip all defines here in which case
  * these functions need to be implemented in os_*.c file for the target system.
  */
- 
+
 #ifndef os_malloc
 #define os_malloc(s) malloc((s))
 #endif
@@ -204,7 +204,7 @@ char * os_readfile(const char *name, size_t *len);
 
 #ifndef os_bzero
 #define os_bzero(s, n) bzero(s, n)
-#endif 
+#endif
 
 
 #ifndef os_strdup
@@ -228,6 +228,10 @@ char * ets_strdup(const char *s);
 #ifndef os_memcmp
 #define os_memcmp(s1, s2, n) memcmp((s1), (s2), (n))
 #endif
+#ifndef os_memcmp_const
+#define os_memcmp_const(s1, s2, n) memcmp((s1), (s2), (n))
+#endif
+
 
 #ifndef os_strlen
 #define os_strlen(s) strlen(s)
@@ -259,8 +263,7 @@ char * ets_strdup(const char *s);
 #define os_strncpy(d, s, n) strncpy((d), (s), (n))
 #endif
 #ifndef os_strrchr
-//hard cold
-#define os_strrchr(s, c)  NULL
+#define os_strrchr(s, c)  strrchr((s), (c))
 #endif
 #ifndef os_strstr
 #define os_strstr(h, n) strstr((h), (n))
@@ -273,6 +276,11 @@ char * ets_strdup(const char *s);
 #define os_snprintf snprintf
 #endif
 #endif
+
+static inline int os_snprintf_error(size_t size, int res)
+{
+        return res < 0 || (unsigned int) res >= size;
+}
 
 /**
  * os_strlcpy - Copy a string with size bound and NUL-termination

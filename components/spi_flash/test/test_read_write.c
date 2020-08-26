@@ -32,7 +32,7 @@
 /* Base offset in flash for tests. */
 static size_t start;
 
-static void setup_tests()
+static void setup_tests(void)
 {
     if (start == 0) {
         const esp_partition_t *part = get_test_data_partition();
@@ -139,6 +139,7 @@ TEST_CASE("Test spi_flash_read", "[spi_flash][esp_flash]")
 #endif
 }
 
+#if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32S2BETA)
 static void IRAM_ATTR test_write(int dst_off, int src_off, int len)
 {
     char src_buf[64], dst_gold[64];
@@ -215,13 +216,33 @@ TEST_CASE("Test spi_flash_write", "[spi_flash][esp_flash]")
      * NB: At the moment these only support aligned addresses, because memcpy
      * is not aware of the 32-but load requirements for these regions.
      */
+#ifdef CONFIG_IDF_TARGET_ESP32S2BETA
+#define TEST_SOC_IROM_ADDR              (SOC_IROM_LOW)
+#define TEST_SOC_CACHE_RAM_BANK0_ADDR   (SOC_IRAM_LOW)
+#define TEST_SOC_CACHE_RAM_BANK1_ADDR   (SOC_IRAM_LOW + 0x2000)
+#define TEST_SOC_CACHE_RAM_BANK2_ADDR   (SOC_IRAM_LOW + 0x4000)
+#define TEST_SOC_CACHE_RAM_BANK3_ADDR   (SOC_IRAM_LOW + 0x6000)
+#define TEST_SOC_IRAM_ADDR              (SOC_IRAM_LOW + 0x8000)
+#define TEST_SOC_RTC_IRAM_ADDR          (SOC_RTC_IRAM_LOW)
+#define TEST_SOC_RTC_DRAM_ADDR          (SOC_RTC_DRAM_LOW)
+    ESP_ERROR_CHECK(spi_flash_write(start, (char *) TEST_SOC_IROM_ADDR, 16));
+    ESP_ERROR_CHECK(spi_flash_write(start, (char *) TEST_SOC_IRAM_ADDR, 16));
+    ESP_ERROR_CHECK(spi_flash_write(start, (char *) TEST_SOC_CACHE_RAM_BANK0_ADDR, 16));
+    ESP_ERROR_CHECK(spi_flash_write(start, (char *) TEST_SOC_CACHE_RAM_BANK1_ADDR, 16));
+    ESP_ERROR_CHECK(spi_flash_write(start, (char *) TEST_SOC_CACHE_RAM_BANK2_ADDR, 16));
+    ESP_ERROR_CHECK(spi_flash_write(start, (char *) TEST_SOC_CACHE_RAM_BANK3_ADDR, 16));
+    ESP_ERROR_CHECK(spi_flash_write(start, (char *) TEST_SOC_RTC_IRAM_ADDR, 16));
+    ESP_ERROR_CHECK(spi_flash_write(start, (char *) TEST_SOC_RTC_DRAM_ADDR, 16));
+#else
     ESP_ERROR_CHECK(spi_flash_write(start, (char *) 0x40000000, 16));
     ESP_ERROR_CHECK(spi_flash_write(start, (char *) 0x40070000, 16));
     ESP_ERROR_CHECK(spi_flash_write(start, (char *) 0x40078000, 16));
     ESP_ERROR_CHECK(spi_flash_write(start, (char *) 0x40080000, 16));
+#endif
 }
+#endif
 
-#ifdef CONFIG_ESP32_SPIRAM_SUPPORT
+#ifdef CONFIG_SPIRAM
 
 TEST_CASE("spi_flash_read can read into buffer in external RAM", "[spi_flash]")
 {
@@ -299,4 +320,5 @@ TEST_CASE("spi_flash_read less than 16 bytes into buffer in external RAM", "[spi
     }
 }
 
-#endif // CONFIG_ESP32_SPIRAM_SUPPORT
+#endif // CONFIG_SPIRAM
+

@@ -60,12 +60,12 @@ struct esp_timer {
     LIST_ENTRY(esp_timer) list_entry;
 };
 
-static bool is_initialized();
+static bool is_initialized(void);
 static esp_err_t timer_insert(esp_timer_handle_t timer);
 static esp_err_t timer_remove(esp_timer_handle_t timer);
 static bool timer_armed(esp_timer_handle_t timer);
-static void timer_list_lock();
-static void timer_list_unlock();
+static void timer_list_lock(void);
+static void timer_list_unlock(void);
 
 #if WITH_PROFILING
 static void timer_insert_inactive(esp_timer_handle_t timer);
@@ -104,7 +104,7 @@ esp_err_t esp_timer_create(const esp_timer_create_args_t* args,
     if (!is_initialized()) {
         return ESP_ERR_INVALID_STATE;
     }
-    if (args->callback == NULL) {
+    if (args == NULL || args->callback == NULL || out_handle == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
     esp_timer_handle_t result = (esp_timer_handle_t) calloc(1, sizeof(*result));
@@ -123,6 +123,9 @@ esp_err_t esp_timer_create(const esp_timer_create_args_t* args,
 
 esp_err_t IRAM_ATTR esp_timer_start_once(esp_timer_handle_t timer, uint64_t timeout_us)
 {
+    if (timer == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
     if (!is_initialized() || timer_armed(timer)) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -139,6 +142,9 @@ esp_err_t IRAM_ATTR esp_timer_start_once(esp_timer_handle_t timer, uint64_t time
 
 esp_err_t IRAM_ATTR esp_timer_start_periodic(esp_timer_handle_t timer, uint64_t period_us)
 {
+    if (timer == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
     if (!is_initialized() || timer_armed(timer)) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -156,6 +162,9 @@ esp_err_t IRAM_ATTR esp_timer_start_periodic(esp_timer_handle_t timer, uint64_t 
 
 esp_err_t IRAM_ATTR esp_timer_stop(esp_timer_handle_t timer)
 {
+    if (timer == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
     if (!is_initialized() || !timer_armed(timer)) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -253,14 +262,14 @@ static IRAM_ATTR bool timer_armed(esp_timer_handle_t timer)
     return timer->alarm > 0;
 }
 
-static IRAM_ATTR void timer_list_lock()
+static IRAM_ATTR void timer_list_lock(void)
 {
-    portENTER_CRITICAL(&s_timer_lock);
+    portENTER_CRITICAL_SAFE(&s_timer_lock);
 }
 
-static IRAM_ATTR void timer_list_unlock()
+static IRAM_ATTR void timer_list_unlock(void)
 {
-    portEXIT_CRITICAL(&s_timer_lock);
+    portEXIT_CRITICAL_SAFE(&s_timer_lock);
 }
 
 static void timer_process_alarm(esp_timer_dispatch_t dispatch_method)
@@ -331,7 +340,7 @@ static void IRAM_ATTR timer_alarm_handler(void* arg)
     }
 }
 
-static IRAM_ATTR bool is_initialized()
+static IRAM_ATTR bool is_initialized(void)
 {
     return s_timer_task != NULL;
 }
@@ -482,7 +491,7 @@ esp_err_t esp_timer_dump(FILE* stream)
     return ESP_OK;
 }
 
-int64_t IRAM_ATTR esp_timer_get_next_alarm()
+int64_t IRAM_ATTR esp_timer_get_next_alarm(void)
 {
     int64_t next_alarm = INT64_MAX;
     timer_list_lock();
@@ -494,7 +503,7 @@ int64_t IRAM_ATTR esp_timer_get_next_alarm()
     return next_alarm;
 }
 
-int64_t IRAM_ATTR esp_timer_get_time()
+int64_t IRAM_ATTR esp_timer_get_time(void)
 {
     return (int64_t) esp_timer_impl_get_time();
 }

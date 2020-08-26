@@ -855,7 +855,7 @@ int esp_vfs_select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds
 
     ESP_LOGD(TAG, "esp_vfs_select starts with nfds = %d", nfds);
     if (timeout) {
-        ESP_LOGD(TAG, "timeout is %lds + %ldus", timeout->tv_sec, timeout->tv_usec);
+        ESP_LOGD(TAG, "timeout is %lds + %ldus", (long)timeout->tv_sec, timeout->tv_usec);
     }
     esp_vfs_log_fd_set("readfds", readfds);
     esp_vfs_log_fd_set("writefds", writefds);
@@ -1264,7 +1264,7 @@ int esp_vfs_poll(struct pollfd *fds, nfds_t nfds, int timeout)
     return ret;
 }
 
-void vfs_include_syscalls_impl()
+void vfs_include_syscalls_impl(void)
 {
     // Linker hook function, exists to make the linker examine this fine
 }

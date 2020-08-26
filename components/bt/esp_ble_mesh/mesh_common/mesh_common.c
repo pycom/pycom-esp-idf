@@ -15,6 +15,7 @@
 #include <string.h>
 #include <errno.h>
 
+#include "mesh_main.h"
 #include "client_common.h"
 #include "mesh_common.h"
 
@@ -23,7 +24,7 @@ struct net_buf_simple *bt_mesh_alloc_buf(u16_t size)
     struct net_buf_simple *buf = NULL;
     u8_t *data = NULL;
 
-    buf = (struct net_buf_simple *)osi_calloc(sizeof(struct net_buf_simple) + size);
+    buf = (struct net_buf_simple *)bt_mesh_calloc(sizeof(struct net_buf_simple) + size);
     if (!buf) {
         BT_ERR("%s, Failed to allocate memory", __func__);
         return NULL;
@@ -42,7 +43,7 @@ struct net_buf_simple *bt_mesh_alloc_buf(u16_t size)
 void bt_mesh_free_buf(struct net_buf_simple *buf)
 {
     if (buf) {
-        osi_free(buf);
+        bt_mesh_free(buf);
     }
 }
 

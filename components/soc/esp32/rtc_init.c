@@ -24,7 +24,8 @@
 
 void rtc_init(rtc_config_t cfg)
 {
-    CLEAR_PERI_REG_MASK(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PVTMON_PU);
+    CLEAR_PERI_REG_MASK(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PVTMON_PU | RTC_CNTL_TXRF_I2C_PU |
+            RTC_CNTL_RFRX_PBUS_PU | RTC_CNTL_CKGEN_I2C_PU | RTC_CNTL_PLL_I2C_PU);
 
     REG_SET_FIELD(RTC_CNTL_TIMER1_REG, RTC_CNTL_PLL_BUF_WAIT, cfg.pll_wait);
     REG_SET_FIELD(RTC_CNTL_TIMER1_REG, RTC_CNTL_XTL_BUF_WAIT, cfg.xtal_wait);
@@ -97,7 +98,7 @@ void rtc_init(rtc_config_t cfg)
     }
 }
 
-rtc_vddsdio_config_t rtc_vddsdio_get_config()
+rtc_vddsdio_config_t rtc_vddsdio_get_config(void)
 {
     rtc_vddsdio_config_t result;
     uint32_t sdio_conf_reg = REG_READ(RTC_CNTL_SDIO_CONF_REG);

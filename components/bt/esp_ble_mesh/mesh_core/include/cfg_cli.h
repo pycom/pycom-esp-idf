@@ -11,8 +11,6 @@
 #ifndef _BLE_MESH_CFG_CLI_H_
 #define _BLE_MESH_CFG_CLI_H_
 
-#include "mesh_access.h"
-#include "mesh_kernel.h"
 #include "client_common.h"
 
 /**
@@ -21,6 +19,10 @@
  * @ingroup bt_mesh
  * @{
  */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Config client model common structure */
 typedef bt_mesh_client_user_data_t      bt_mesh_config_client_t;
@@ -289,6 +291,10 @@ int bt_mesh_cfg_lpn_timeout_get(struct bt_mesh_msg_ctx *ctx, u16_t lpn_addr);
 int bt_mesh_cfg_net_transmit_get(struct bt_mesh_msg_ctx *ctx);
 
 int bt_mesh_cfg_net_transmit_set(struct bt_mesh_msg_ctx *ctx, u8_t transmit);
+
+#ifdef __cplusplus
+}
+#endif
 
 /**
  * @}

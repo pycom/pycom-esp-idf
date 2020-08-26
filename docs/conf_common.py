@@ -95,6 +95,23 @@ kconfigs = find_component_files("../../components", "Kconfig")
 kconfig_projbuilds = find_component_files("../../components", "Kconfig.projbuild")
 sdkconfig_renames = find_component_files("../../components", "sdkconfig.rename")
 
+# trim the esp32s2beta component, until we have proper multi-target support
+kconfigs = [k for k in kconfigs if "esp32s2beta" not in k]
+kconfig_projbuilds = [k for k in kconfig_projbuilds if "esp32s2beta" not in k]
+sdkconfig_renames = [r for r in sdkconfig_renames if "esp32s2beta" not in r]
+
+kconfigs_source_path = '{}/inc/kconfigs_source.in'.format(builddir)
+kconfig_projbuilds_source_path = '{}/inc/kconfig_projbuilds_source.in'.format(builddir)
+
+prepare_kconfig_files_args = [sys.executable,
+                              "../../tools/kconfig_new/prepare_kconfig_files.py",
+                              "--env", "COMPONENT_KCONFIGS={}".format(" ".join(kconfigs)),
+                              "--env", "COMPONENT_KCONFIGS_PROJBUILD={}".format(" ".join(kconfig_projbuilds)),
+                              "--env", "COMPONENT_KCONFIGS_SOURCE_FILE={}".format(kconfigs_source_path),
+                              "--env", "COMPONENT_KCONFIGS_PROJBUILD_SOURCE_FILE={}".format(kconfig_projbuilds_source_path),
+                              ]
+subprocess.check_call(prepare_kconfig_files_args)
+
 confgen_args = [sys.executable,
                 "../../tools/kconfig_new/confgen.py",
                 "--kconfig", "../../Kconfig",
@@ -103,6 +120,8 @@ confgen_args = [sys.executable,
                 "--env", "COMPONENT_KCONFIGS={}".format(" ".join(kconfigs)),
                 "--env", "COMPONENT_KCONFIGS_PROJBUILD={}".format(" ".join(kconfig_projbuilds)),
                 "--env", "COMPONENT_SDKCONFIG_RENAMES={}".format(" ".join(sdkconfig_renames)),
+                "--env", "COMPONENT_KCONFIGS_SOURCE_FILE={}".format(kconfigs_source_path),
+                "--env", "COMPONENT_KCONFIGS_PROJBUILD_SOURCE_FILE={}".format(kconfig_projbuilds_source_path),
                 "--env", "IDF_PATH={}".format(idf_path),
                 "--output", "docs", kconfig_inc_path + '.in'
                 ]
@@ -154,7 +173,13 @@ extensions = ['breathe',
               'sphinxcontrib.rackdiag',
               'sphinxcontrib.packetdiag',
               'html_redirects',
+              'sphinx.ext.todo',
               ]
+
+# sphinx.ext.todo extension parameters
+# If the below parameter is True, the extension
+# produces output, else it produces nothing.
+todo_include_todos = False
 
 # Enabling this fixes cropping of blockdiag edge labels
 seqdiag_antialias = True
@@ -242,11 +267,11 @@ pygments_style = 'sphinx'
 # Redirects should be listed in page_redirects.xt
 #
 with open("../page_redirects.txt") as f:
-    lines = [re.sub(" +", " ", l.strip()) for l in f.readlines() if l.strip() != "" and not l.startswith("#")]
+    lines = [re.sub(" +", " ", line.strip()) for line in f.readlines() if line.strip() != "" and not line.startswith("#")]
     for line in lines:  # check for well-formed entries
         if len(line.split(' ')) != 2:
             raise RuntimeError("Invalid line in page_redirects.txt: %s" % line)
-html_redirect_pages = [tuple(l.split(' ')) for l in lines]
+html_redirect_pages = [tuple(line.split(' ')) for line in lines]
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.

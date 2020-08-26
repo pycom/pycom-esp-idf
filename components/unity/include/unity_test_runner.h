@@ -84,7 +84,7 @@ void unity_testcase_register(test_desc_t* desc);
 
 #define TEST_CASE(name_, desc_) \
     static void UNITY_TEST_UID(test_func_) (void); \
-    static void __attribute__((constructor)) UNITY_TEST_UID(test_reg_helper_) () \
+    static void __attribute__((constructor)) UNITY_TEST_UID(test_reg_helper_) (void) \
     { \
         static test_func test_fn_[] = {&UNITY_TEST_UID(test_func_)}; \
         static test_desc_t UNITY_TEST_UID(test_desc_) = { \
@@ -115,7 +115,7 @@ void unity_testcase_register(test_desc_t* desc);
 
 #define TEST_CASE_MULTIPLE_STAGES(name_, desc_, ...) \
     UNITY_TEST_FN_SET(__VA_ARGS__); \
-    static void __attribute__((constructor)) UNITY_TEST_UID(test_reg_helper_) () \
+    static void __attribute__((constructor)) UNITY_TEST_UID(test_reg_helper_) (void) \
     { \
         static test_desc_t UNITY_TEST_UID(test_desc_) = { \
             .name = name_, \
@@ -130,6 +130,8 @@ void unity_testcase_register(test_desc_t* desc);
         unity_testcase_register( & UNITY_TEST_UID(test_desc_) ); \
     }
 
+
+
 /*
  * First argument is a free-form description,
  * second argument is (by convention) a list of identifiers, each one in square brackets.
@@ -140,7 +142,7 @@ void unity_testcase_register(test_desc_t* desc);
 
 #define TEST_CASE_MULTIPLE_DEVICES(name_, desc_, ...) \
     UNITY_TEST_FN_SET(__VA_ARGS__); \
-    static void __attribute__((constructor)) UNITY_TEST_UID(test_reg_helper_) () \
+    static void __attribute__((constructor)) UNITY_TEST_UID(test_reg_helper_) (void) \
     { \
         static test_desc_t UNITY_TEST_UID(test_desc_) = { \
             .name = name_, \
@@ -168,7 +170,42 @@ void unity_run_test_by_name(const char *name);
 
 void unity_run_tests_by_tag(const char *tag, bool invert);
 
-void unity_run_all_tests();
+void unity_run_all_tests(void);
 
-void unity_run_menu();
+void unity_run_menu(void);
 
+#include "sdkconfig.h" //to get IDF_TARGET_xxx
+
+#define CONFIG_IDF_TARGET_NA   0
+
+/*
+ * This macro is to disable those tests and their callees that cannot be built or run temporarily
+ * (needs update or runners).
+ *
+ * Usage:
+ * ```
+ * #if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32S2BETA, ESP32S2)
+ * TEST_CASE("only for esp32", "")
+ * {
+ * }
+ * #endif
+ * ```
+ */
+#define TEMPORARY_DISABLED_FOR_TARGETS(...)    (_UNITY_DFT_10(__VA_ARGS__, NA, NA, NA, NA, NA, NA, NA, NA, NA))
+
+/*
+ * This macro is to disable those tests and their callees that is totally impossible to run on the
+ * specific targets. Usage same as TEMPORARY_DISABLED_FOR_TARGETS.
+ */
+#define DISABLED_FOR_TARGETS(...)    TEMPORARY_DISABLED_FOR_TARGETS(__VA_ARGS__)
+
+#define _UNITY_DFT_10(TARGET, ...)  (CONFIG_IDF_TARGET_##TARGET || _UNITY_DFT_9(__VA_ARGS__))
+#define _UNITY_DFT_9(TARGET, ...)   (CONFIG_IDF_TARGET_##TARGET || _UNITY_DFT_8(__VA_ARGS__))
+#define _UNITY_DFT_8(TARGET, ...)   (CONFIG_IDF_TARGET_##TARGET || _UNITY_DFT_7(__VA_ARGS__))
+#define _UNITY_DFT_7(TARGET, ...)   (CONFIG_IDF_TARGET_##TARGET || _UNITY_DFT_6(__VA_ARGS__))
+#define _UNITY_DFT_6(TARGET, ...)   (CONFIG_IDF_TARGET_##TARGET || _UNITY_DFT_5(__VA_ARGS__))
+#define _UNITY_DFT_5(TARGET, ...)   (CONFIG_IDF_TARGET_##TARGET || _UNITY_DFT_4(__VA_ARGS__))
+#define _UNITY_DFT_4(TARGET, ...)   (CONFIG_IDF_TARGET_##TARGET || _UNITY_DFT_3(__VA_ARGS__))
+#define _UNITY_DFT_3(TARGET, ...)   (CONFIG_IDF_TARGET_##TARGET || _UNITY_DFT_2(__VA_ARGS__))
+#define _UNITY_DFT_2(TARGET, ...)   (CONFIG_IDF_TARGET_##TARGET || _UNITY_DFT_1(__VA_ARGS__))
+#define _UNITY_DFT_1(TARGET, ...)   (CONFIG_IDF_TARGET_##TARGET)

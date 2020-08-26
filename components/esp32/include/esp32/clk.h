@@ -15,6 +15,10 @@
 #pragma once
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @file esp32/clk.h
  *
@@ -29,7 +33,7 @@
  *
  * @return the calibration value obtained using rtc_clk_cal, at startup time
  */
-uint32_t esp_clk_slowclk_cal_get();
+uint32_t esp_clk_slowclk_cal_get(void);
 
 /**
  * @brief Update the calibration value of RTC slow clock
@@ -84,4 +88,8 @@ int esp_clk_xtal_freq(void);
  *
  * @return Value or RTC counter, expressed in microseconds
  */
-uint64_t esp_clk_rtc_time();
+uint64_t esp_clk_rtc_time(void);
+
+#ifdef __cplusplus
+}
+#endif

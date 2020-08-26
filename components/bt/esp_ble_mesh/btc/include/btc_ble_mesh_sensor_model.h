@@ -15,9 +15,12 @@
 #ifndef _BTC_BLE_MESH_SENSOR_MODEL_H_
 #define _BTC_BLE_MESH_SENSOR_MODEL_H_
 
-#include <stdint.h>
-#include "btc/btc_task.h"
+#include "btc/btc_manage.h"
 #include "esp_ble_mesh_sensor_model_api.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef enum {
     BTC_BLE_MESH_ACT_SENSOR_CLIENT_GET_STATE,
@@ -73,6 +76,10 @@ void bt_mesh_sensor_server_cb_evt_to_btc(u8_t evt_type,
         const u8_t *val, size_t len);
 
 void btc_ble_mesh_sensor_server_cb_handler(btc_msg_t *msg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _BTC_BLE_MESH_SENSOR_MODEL_H_ */
 

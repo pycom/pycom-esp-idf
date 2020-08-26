@@ -185,7 +185,7 @@ typedef struct xTASK_STATUS
 	StackType_t *pxStackBase;		/*!< Points to the lowest address of the task's stack area. */
 	uint32_t usStackHighWaterMark;	/*!< The minimum amount of stack space that has remained for the task since the task was created.  The closer this value is to zero the closer the task has come to overflowing its stack. */
 #if configTASKLIST_INCLUDE_COREID
-	BaseType_t xCoreID;				/*!< Core this task is pinned to. This field is present if CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID is set. */
+	BaseType_t xCoreID;				/*!< Core this task is pinned to (0, 1, or -1 for tskNO_AFFINITY). This field is present if CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID is set. */
 #endif
 } TaskStatus_t;
 
@@ -324,7 +324,7 @@ is used in assert() statements. */
  *
  * @param xCoreID If the value is tskNO_AFFINITY, the created task is not
  * pinned to any CPU, and the scheduler can run it on any core available.
- * Other values indicate the index number of the CPU which the task should
+ * Values 0 or 1 indicate the index number of the CPU which the task should
  * be pinned to. Specifying values larger than (portNUM_PROCESSORS - 1) will
  * cause the function to fail.
  *
@@ -476,14 +476,14 @@ is used in assert() statements. */
  *
  * @param xCoreID If the value is tskNO_AFFINITY, the created task is not
  * pinned to any CPU, and the scheduler can run it on any core available.
- * Other values indicate the index number of the CPU which the task should
+ * Values 0 or 1 indicate the index number of the CPU which the task should
  * be pinned to. Specifying values larger than (portNUM_PROCESSORS - 1) will
  * cause the function to fail.
  *
  * @return If neither pxStackBuffer or pxTaskBuffer are NULL, then the task will
- * be created and pdPASS is returned.  If either pxStackBuffer or pxTaskBuffer
- * are NULL then the task will not be created and
- * errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY is returned.
+ * be created and a task handle will be returned by which the created task
+ * can be referenced.  If either pxStackBuffer or pxTaskBuffer
+ * are NULL then the task will not be created and NULL is returned.
  *
  * \ingroup Tasks
  */
@@ -535,9 +535,9 @@ is used in assert() statements. */
  * memory to be allocated dynamically.
  *
  * @return If neither pxStackBuffer or pxTaskBuffer are NULL, then the task will
- * be created and pdPASS is returned.  If either pxStackBuffer or pxTaskBuffer
- * are NULL then the task will not be created and
- * errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY is returned.
+ * be created and a task handle will be returned by which the created task
+ * can be referenced.  If either pxStackBuffer or pxTaskBuffer
+ * are NULL then the task will not be created and NULL is returned.
  *
  * @note If program uses thread local variables (ones specified with "__thread" keyword)
  * then storage for them will be allocated on the task's stack.

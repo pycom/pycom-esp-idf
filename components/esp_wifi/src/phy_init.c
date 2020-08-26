@@ -16,13 +16,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-
 #include <sys/lock.h>
 
-#include "esp32/rom/ets_sys.h"
-#include "esp32/rom/rtc.h"
 #include "soc/rtc.h"
-
+#include "soc/dport_reg.h"
 #include "esp_err.h"
 #include "esp_phy_init.h"
 #include "esp_system.h"
@@ -30,7 +27,6 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/portmacro.h"
 #include "phy.h"
@@ -39,7 +35,17 @@
 #include "driver/periph_ctrl.h"
 #include "esp_private/wifi.h"
 
+#if CONFIG_IDF_TARGET_ESP32
+#include "esp32/rom/ets_sys.h"
+#include "esp32/rom/rtc.h"
+#elif CONFIG_IDF_TARGET_ESP32S2BETA
+#include "esp32s2beta/rom/ets_sys.h"
+#include "esp32s2beta/rom/rtc.h"
+#endif
+
+#if CONFIG_IDF_TARGET_ESP32
 extern wifi_mac_time_update_cb_t s_wifi_mac_time_update_cb;
+#endif
 
 static const char* TAG = "phy_init";
 
@@ -51,11 +57,13 @@ static uint32_t s_module_phy_rf_init = 0;
 /* Whether modem sleep is turned on */
 static volatile bool s_is_phy_rf_en = false;
 
+#if CONFIG_IDF_TARGET_ESP32
 /* Whether WiFi/BT common clock enabled reference */
 static volatile int32_t s_common_clock_enable_ref = 0;
 
 /* PHY spinlock mux */
 static portMUX_TYPE s_phy_spin_lock = portMUX_INITIALIZER_UNLOCKED;
+#endif
 
 /* Bit mask of modules needing to enter modem sleep mode */
 static uint32_t s_modem_sleep_module_enter = 0;
@@ -70,8 +78,10 @@ static volatile bool s_is_modem_sleep_en = false;
 
 static _lock_t s_modem_sleep_lock;
 
+#if CONFIG_IDF_TARGET_ESP32
 /* time stamp updated when the PHY/RF is turned on */
 static int64_t s_phy_rf_en_ts = 0;
+#endif
 
 static DRAM_ATTR portMUX_TYPE s_phy_int_mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -97,6 +107,7 @@ void IRAM_ATTR phy_exit_critical(uint32_t level)
     }
 }
 
+#if CONFIG_IDF_TARGET_ESP32
 int64_t esp_phy_rf_get_on_ts(void)
 {
     return s_phy_rf_en_ts;
@@ -137,9 +148,11 @@ IRAM_ATTR static inline void phy_spin_unlock(void)
         portEXIT_CRITICAL(&s_phy_spin_lock);
     }
 }
+#endif
 
 IRAM_ATTR void esp_phy_common_clock_enable(void)
 {
+#if CONFIG_IDF_TARGET_ESP32
     phy_spin_lock();
 
     if (s_common_clock_enable_ref == 0) {
@@ -149,10 +162,14 @@ IRAM_ATTR void esp_phy_common_clock_enable(void)
 
     s_common_clock_enable_ref++;
     phy_spin_unlock();
+#else
+    periph_module_enable(PERIPH_WIFI_BT_COMMON_MODULE);
+#endif
 }
 
 IRAM_ATTR void esp_phy_common_clock_disable(void)
 {
+#if CONFIG_IDF_TARGET_ESP32
     phy_spin_lock();
 
     if (s_common_clock_enable_ref > 0) {
@@ -167,6 +184,9 @@ IRAM_ATTR void esp_phy_common_clock_disable(void)
     }
 
     phy_spin_unlock();
+#else
+    periph_module_disable(PERIPH_WIFI_BT_COMMON_MODULE);
+#endif
 }
 
 esp_err_t esp_phy_rf_init(const esp_phy_init_data_t* init_data, esp_phy_calibration_mode_t mode,
@@ -192,9 +212,9 @@ esp_err_t esp_phy_rf_init(const esp_phy_init_data_t* init_data, esp_phy_calibrat
     }
     else {
         /* If Wi-Fi, BT all disabled, modem sleep should not take effect;
-         * If either Wi-Fi or BT is enabled, should allow modem sleep requires 
+         * If either Wi-Fi or BT is enabled, should allow modem sleep requires
          * to enter sleep;
-         * If Wi-Fi, BT co-exist, it is disallowed that only one module 
+         * If Wi-Fi, BT co-exist, it is disallowed that only one module
          * support modem sleep, E,g. BT support modem sleep but Wi-Fi not
          * support modem sleep;
          */
@@ -212,13 +232,21 @@ esp_err_t esp_phy_rf_init(const esp_phy_init_data_t* init_data, esp_phy_calibrat
             }
         }
         if (s_is_phy_rf_en == true){
+#if CONFIG_IDF_TARGET_ESP32
             // Update time stamp
             s_phy_rf_en_ts = esp_timer_get_time();
             // Update WiFi MAC time before WiFi/BT common clock is enabled
             phy_update_wifi_mac_time(false, s_phy_rf_en_ts);
+#endif
             esp_phy_common_clock_enable();
             phy_set_wifi_mode_only(0);
 
+#if CONFIG_IDF_TARGET_ESP32S2BETA
+            if (module == PHY_MODEM_MODULE) {
+                phy_wakeup_init();
+            }
+            else
+#endif
             if (ESP_CAL_DATA_CHECK_FAIL == register_chipv7_phy(init_data, calibration_data, mode)) {
                 ESP_LOGW(TAG, "saving new calibration data because of checksum failure, mode(%d)", mode);
 #ifdef CONFIG_ESP32_PHY_CALIBRATION_AND_DATA_STORAGE
@@ -228,7 +256,9 @@ esp_err_t esp_phy_rf_init(const esp_phy_init_data_t* init_data, esp_phy_calibrat
 #endif
             }
 
+#if CONFIG_IDF_TARGET_ESP32
             coex_bt_high_prio();
+#endif
         }
     }
 
@@ -237,7 +267,6 @@ esp_err_t esp_phy_rf_init(const esp_phy_init_data_t* init_data, esp_phy_calibrat
         uint32_t phy_bt_wifi_mask = BIT(PHY_BT_MODULE) | BIT(PHY_WIFI_MODULE);
         if ((s_module_phy_rf_init & phy_bt_wifi_mask) == phy_bt_wifi_mask) { //both wifi & bt enabled
             coex_init();
-            coex_preference_set(CONFIG_ESP32_WIFI_SW_COEXIST_PREFERENCE_VALUE);
             coex_resume();
         }
     }
@@ -298,8 +327,10 @@ esp_err_t esp_phy_rf_deinit(phy_rf_module_t module)
         if (s_is_phy_rf_en == false) {
             // Disable PHY and RF.
             phy_close_rf();
+#if CONFIG_IDF_TARGET_ESP32
             // Update WiFi MAC time before disalbe WiFi/BT common peripheral clock
             phy_update_wifi_mac_time(true, esp_timer_get_time());
+#endif
             // Disable WiFi/BT common peripheral clock. Do not disable clock for hardware RNG
             esp_phy_common_clock_disable();
         }
@@ -444,7 +475,7 @@ esp_err_t esp_modem_sleep_deregister(modem_sleep_module_t module)
 #if CONFIG_ESP32_PHY_INIT_DATA_IN_PARTITION
 #include "esp_partition.h"
 
-const esp_phy_init_data_t* esp_phy_get_init_data()
+const esp_phy_init_data_t* esp_phy_get_init_data(void)
 {
     const esp_partition_t* partition = esp_partition_find_first(
             ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_PHY, NULL);
@@ -484,7 +515,7 @@ void esp_phy_release_init_data(const esp_phy_init_data_t* init_data)
 
 // phy_init_data.h will declare static 'phy_init_data' variable initialized with default init data
 
-const esp_phy_init_data_t* esp_phy_get_init_data()
+const esp_phy_init_data_t* esp_phy_get_init_data(void)
 {
     ESP_LOGD(TAG, "loading PHY init data from application binary");
     return &phy_init_data;
@@ -645,18 +676,19 @@ static esp_err_t store_cal_data_to_nvs_handle(nvs_handle_t handle,
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "%s: store calibration nvs commit failed(0x%x)\n", __func__, err);
     }
-    
+
     return err;
 }
 
 #if CONFIG_ESP32_REDUCE_PHY_TX_POWER
-static void esp_phy_reduce_tx_power(esp_phy_init_data_t* init_data)
+// TODO: fix the esp_phy_reduce_tx_power unused warning for esp32s2beta - IDF-759
+static void __attribute((unused)) esp_phy_reduce_tx_power(esp_phy_init_data_t* init_data)
 {
     uint8_t i;
-                                         
+
     for(i = 0; i < PHY_TX_POWER_NUM; i++) {
         // LOWEST_PHY_TX_POWER is the lowest tx power
-        init_data->params[PHY_TX_POWER_OFFSET+i] = PHY_TX_POWER_LOWEST;   
+        init_data->params[PHY_TX_POWER_OFFSET+i] = PHY_TX_POWER_LOWEST;
     }
 }
 #endif
@@ -684,9 +716,12 @@ void esp_phy_load_cal_and_init(phy_rf_module_t module)
     }
 
     memcpy(init_data, phy_init_data, sizeof(esp_phy_init_data_t));
+#if CONFIG_IDF_TARGET_ESP32
+    // ToDo: remove once esp_reset_reason is supported on esp32s2
     if (esp_reset_reason() == ESP_RST_BROWNOUT) {
         esp_phy_reduce_tx_power(init_data);
     }
+#endif
 #else
     const esp_phy_init_data_t* init_data = esp_phy_get_init_data();
     if (init_data == NULL) {

@@ -47,7 +47,7 @@ FAILED_TO_SCAN_RSSI = -97
 INVALID_HEAP_SIZE = 0xFFFFFFFF
 
 PC_IPERF_TEMP_LOG_FILE = ".tmp_iperf.log"
-CONFIG_NAME_PATTERN = re.compile(r"sdkconfig\.defaults\.(.+)")
+CONFIG_NAME_PATTERN = re.compile(r"sdkconfig\.ci\.(.+)")
 
 # We need to auto compare the difference between adjacent configs (01 -> 00, 02 -> 01, ...) and put them to reports.
 # Using numbers for config will make this easy.
@@ -461,17 +461,21 @@ def test_wifi_throughput_with_different_configs(env, extra_data):
     }
 
     config_names_raw = subprocess.check_output(["ls", os.path.dirname(os.path.abspath(__file__))])
+    config_names = CONFIG_NAME_PATTERN.findall(config_names_raw)
+    if not config_names:
+        raise ValueError("no configs found in {}".format(os.path.dirname(__file__)))
 
     test_result = dict()
     sdkconfig_files = dict()
 
-    for config_name in CONFIG_NAME_PATTERN.findall(config_names_raw):
+    for config_name in config_names:
         # 1. get the config
         sdkconfig_files[config_name] = os.path.join(os.path.dirname(__file__),
                                                     "sdkconfig.ci.{}".format(config_name))
 
         # 2. get DUT and download
-        dut = env.get_dut("iperf", "examples/wifi/iperf", app_config_name=config_name)
+        dut = env.get_dut("iperf", "examples/wifi/iperf", dut_class=ttfw_idf.ESP32DUT,
+                          app_config_name=config_name)
         dut.start_app()
         dut.expect("esp32>")
 
@@ -526,7 +530,8 @@ def test_wifi_throughput_vs_rssi(env, extra_data):
     }
 
     # 1. get DUT and download
-    dut = env.get_dut("iperf", "examples/wifi/iperf", app_config_name=BEST_PERFORMANCE_CONFIG)
+    dut = env.get_dut("iperf", "examples/wifi/iperf", dut_class=ttfw_idf.ESP32DUT,
+                      app_config_name=BEST_PERFORMANCE_CONFIG)
     dut.start_app()
     dut.expect("esp32>")
 
@@ -572,7 +577,8 @@ def test_wifi_throughput_basic(env, extra_data):
     }
 
     # 1. get DUT
-    dut = env.get_dut("iperf", "examples/wifi/iperf", app_config_name=BEST_PERFORMANCE_CONFIG)
+    dut = env.get_dut("iperf", "examples/wifi/iperf", dut_class=ttfw_idf.ESP32DUT,
+                      app_config_name=BEST_PERFORMANCE_CONFIG)
     dut.start_app()
     dut.expect("esp32>")
 

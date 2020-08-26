@@ -18,11 +18,12 @@ API 指南
    Thread Local Storage <thread-local-storage>
    High Level Interrupts <hlinterrupts>
    JTAG 调试 <jtag-debugging/index>
-   Bootloader <bootloader>
+   引导加载程序 <bootloader>
    分区表 <partition-tables>
-   Secure Boot <../security/secure-boot>
+   Secure Boot <../security/secure-boot-v1>
+   Secure Boot V2 <../security/secure-boot-v2>
    ULP 协处理器 <ulp>
-   ULP ( CMake) <ulp-legacy>
+   ULP ( Legacy GNU Make) <ulp-legacy>
    单元测试 <unit-tests>
    单元测试 (传统 GNU Make) <unit-tests-legacy>
    应用层跟踪 <app_trace>
@@ -35,4 +36,5 @@ API 指南
    BluFi <blufi>
    External SPI-connected RAM <external-ram>
    链接脚本生成机制 <linker-script-generation>
+   LwIP <lwip>
    Tools <tools/index>
