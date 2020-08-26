@@ -676,6 +676,8 @@ static int UART_ISR_ATTR uart_find_pattern_from_last(uint8_t* buf, int length, u
     return len;
 }
 
+static uart_rx_callback_t uart_rx_callback[UART_NUM_MAX] = { NULL };
+
 //internal isr handler for default driver code.
 static void UART_ISR_ATTR uart_rx_intr_handler_default(void *param)
 {
@@ -805,6 +807,14 @@ static void UART_ISR_ATTR uart_rx_intr_handler_default(void *param)
                 pat_flg = 0;
             }
             if (p_uart->rx_buffer_full_flg == false) {
+                //We have to read out all data in RX FIFO to clear the interrupt signal
+                for(buf_idx = 0; buf_idx < rx_fifo_len; buf_idx++) {
+                    uint8_t rx_data = uart_reg->fifo.rw_byte;
+                    p_uart->rx_data_buf[buf_idx] = rx_data;
+                    if (uart_rx_callback[uart_num]) {
+                        uart_rx_callback[uart_num](uart_num, rx_data);
+                    }
+                }
                 uart_hal_read_rxfifo(&(uart_context[uart_num].hal), p_uart->rx_data_buf, &rx_fifo_len);
                 uint8_t pat_chr = 0;
                 uint8_t pat_num = 0;
@@ -1031,6 +1041,7 @@ int uart_tx_chars(uart_port_t uart_num, const char* buffer, uint32_t len)
     }
     int tx_len = 0;
     xSemaphoreTake(p_uart_obj[uart_num]->tx_mux, (portTickType)portMAX_DELAY);
+    xSemaphoreTake(p_uart_obj[uart_num]->tx_done_sem, 0);
     if (UART_IS_MODE_SET(uart_num, UART_MODE_RS485_HALF_DUPLEX)) {
         UART_ENTER_CRITICAL(&(uart_context[uart_num].spinlock));
         uart_hal_set_rts(&(uart_context[uart_num].hal), 0);
@@ -1266,7 +1277,7 @@ esp_err_t uart_flush_input(uart_port_t uart_num)
     return ESP_OK;
 }
 
-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags)
+esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t *uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback)
 {
     esp_err_t r;
     UART_CHECK((uart_num < UART_NUM_MAX), "uart_num error", ESP_FAIL);
@@ -1335,6 +1346,7 @@ esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_b
         return ESP_FAIL;
     }
 
+    uart_rx_callback[uart_num] = rx_callback;
     uart_intr_config_t uart_intr = {
         .intr_enable_mask = UART_INTR_CONFIG_FLAG,
         .rxfifo_full_thresh = UART_FULL_THRESH_DEFAULT,
