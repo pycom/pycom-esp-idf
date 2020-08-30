@@ -91,12 +91,14 @@ typedef intr_handle_t uart_isr_handle_t;
  * @param intr_alloc_flags Flags used to allocate the interrupt. One or multiple (ORred)
  *        ESP_INTR_FLAG_* values. See esp_intr_alloc.h for more info. Do not set ESP_INTR_FLAG_IRAM here
  *        (the driver's ISR handler is not located in IRAM)
+ * @param rx_callback callback to be called when data is received
  *
  * @return
  *     - ESP_OK   Success
  *     - ESP_FAIL Parameter error
  */
-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags);
+typedef void (*uart_rx_callback_t)(int uart_id, int rx_byte);
+esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback);
 
 /**
  * @brief Uninstall UART driver.

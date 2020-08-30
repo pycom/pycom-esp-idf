@@ -807,15 +807,16 @@ static void UART_ISR_ATTR uart_rx_intr_handler_default(void *param)
                 pat_flg = 0;
             }
             if (p_uart->rx_buffer_full_flg == false) {
-                //We have to read out all data in RX FIFO to clear the interrupt signal
-                for(buf_idx = 0; buf_idx < rx_fifo_len; buf_idx++) {
-                    uint8_t rx_data = uart_reg->fifo.rw_byte;
-                    p_uart->rx_data_buf[buf_idx] = rx_data;
+
+                uart_hal_read_rxfifo(&(uart_context[uart_num].hal), p_uart->rx_data_buf, &rx_fifo_len);
+
+                //Pycom addition: call the registered handler with the received data
+                for(int i = 0; i < rx_fifo_len; i++) {
                     if (uart_rx_callback[uart_num]) {
-                        uart_rx_callback[uart_num](uart_num, rx_data);
+                        uart_rx_callback[uart_num](uart_num, p_uart->rx_data_buf[i]);
                     }
                 }
-                uart_hal_read_rxfifo(&(uart_context[uart_num].hal), p_uart->rx_data_buf, &rx_fifo_len);
+
                 uint8_t pat_chr = 0;
                 uint8_t pat_num = 0;
                 int pat_idx = -1;
@@ -1346,7 +1347,9 @@ esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_b
         return ESP_FAIL;
     }
 
+    // Register Pycom specific callback to be called when data received
     uart_rx_callback[uart_num] = rx_callback;
+
     uart_intr_config_t uart_intr = {
         .intr_enable_mask = UART_INTR_CONFIG_FLAG,
         .rxfifo_full_thresh = UART_FULL_THRESH_DEFAULT,
