@@ -124,6 +124,30 @@ esp_err_t esp_https_ota_perform(esp_https_ota_handle_t https_ota_handle);
 bool esp_https_ota_is_complete_data_received(esp_https_ota_handle_t https_ota_handle);
 
 /**
+ * @brief    Read image data from HTTP stream and write it to a buffer
+ *
+ * This function reads image data from HTTP stream and writes it a provided buffer.
+ * This function must be called only if esp_https_ota_begin() returns successfully.
+ * This function must be called in a loop since it returns after every HTTP read operation thus 
+ * giving you the flexibility to stop OTA operation midway.
+ * This function is used during Differential OTA Update procedure by Pycom.
+ * 
+ * @param[in]  https_ota_handle  pointer to esp_https_ota_handle_t structure
+ * @param[in]  buffer            a buffer to write the data received from the HTTP stream
+ *
+ * @return
+ *    - ESP_ERR_HTTPS_OTA_IN_PROGRESS: OTA update is in progress, call this API again to continue.
+ *    - ESP_OK: OTA update was successful
+ *    - ESP_FAIL: OTA update failed
+ *    - ESP_ERR_INVALID_ARG: Invalid argument
+ *    - ESP_ERR_OTA_VALIDATE_FAILED: Invalid app image
+ *    - ESP_ERR_NO_MEM: Cannot allocate memory for OTA operation.
+ *    - ESP_ERR_FLASH_OP_TIMEOUT or ESP_ERR_FLASH_OP_FAIL: Flash write failed.
+ *    - For other return codes, refer OTA documentation in esp-idf's app_update component.
+ */
+esp_err_t esp_https_diff_ota_perform(esp_https_ota_handle_t https_ota_handle, void **buffer);
+
+/**
  * @brief    Clean-up HTTPS OTA Firmware upgrade and close HTTPS connection
  *
  * This function closes the HTTP connection and frees the ESP HTTPS OTA context.
@@ -142,6 +166,27 @@ bool esp_https_ota_is_complete_data_received(esp_https_ota_handle_t https_ota_ha
  *    - ESP_ERR_OTA_VALIDATE_FAILED: Invalid app image
  */
 esp_err_t esp_https_ota_finish(esp_https_ota_handle_t https_ota_handle);
+
+/**
+ * @brief    Clean-up HTTPS OTA Firmware upgrade and close HTTPS connection
+ *
+ * This function closes the HTTP connection and frees the ESP HTTPS OTA context.
+ * This function DOES NOT make any change to the OTA Partition.
+ *
+ * @note     Any updates requied to the OTA Partition or the boot info should
+ *           be done after this function.
+ *           Only use this after performing Differential Updates usin
+ *           esp_https_diff_ota_perform()
+ *
+ * @param[in]  https_ota_handle   pointer to esp_https_ota_handle_t structure
+ *
+ * @return
+ *    - ESP_OK: Clean-up successful
+ *    - ESP_ERR_INVALID_STATE
+ *    - ESP_ERR_INVALID_ARG: Invalid argument
+ *    - ESP_ERR_OTA_VALIDATE_FAILED: Invalid app image
+ */
+esp_err_t esp_https_diff_ota_finish(esp_https_ota_handle_t https_ota_handle);
 
 
 /**

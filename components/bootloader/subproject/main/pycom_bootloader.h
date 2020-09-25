@@ -33,11 +33,11 @@ typedef struct _boot_info_t
   uint32_t  crc;
 } boot_info_t;
 
-#define IMG_SIZE_8MB                            (1980 * 1024)
-#define IMG_UPDATE1_OFFSET_8MB                  (2112 * 1024)  // taken from the partitions table
+#define IMG_SIZE_8MB                            (3004 * 1024)
+#define IMG_UPDATE1_OFFSET_8MB                  (1088 * 1024)  // taken from the partitions table
 
-#define IMG_SIZE_4MB                            (1720 * 1024)
-#define IMG_UPDATE1_OFFSET_4MB                  (1792 * 1024)  // taken from the partitions table
+#define IMG_SIZE_4MB                            (2424 * 1024)
+#define IMG_UPDATE1_OFFSET_4MB                  (1088 * 1024)  // taken from the partitions table
 
 #define OTAA_DATA_SIZE                      (4 * 1024)
 #define OTA_DATA_INDEX                      2
