@@ -55,23 +55,6 @@
 #include "sdkconfig.h"              // for KConfig options
 #include "port_serial_slave.h"
 
-// Definitions of UART default pin numbers
-#define MB_UART_RXD   (CONFIG_MB_UART_RXD)
-#define MB_UART_TXD   (CONFIG_MB_UART_TXD)
-#define MB_UART_RTS   (CONFIG_MB_UART_RTS)
-
-#define MB_BAUD_RATE_DEFAULT        (115200)
-#define MB_QUEUE_LENGTH             (CONFIG_FMB_QUEUE_LENGTH)
-
-#define MB_SERIAL_TASK_PRIO         (CONFIG_FMB_SERIAL_TASK_PRIO)
-#define MB_SERIAL_TASK_STACK_SIZE   (CONFIG_FMB_SERIAL_TASK_STACK_SIZE)
-#define MB_SERIAL_TOUT              (3) // 3.5*8 = 28 ticks, TOUT=3 -> ~24..33 ticks
-
-#define MB_SERIAL_TX_TOUT_MS        (100)
-#define MB_SERIAL_TX_TOUT_TICKS     pdMS_TO_TICKS(MB_SERIAL_TX_TOUT_MS) // timeout for transmission
-// Set buffer size for transmission
-#define MB_SERIAL_BUF_SIZE          (CONFIG_FMB_SERIAL_BUF_SIZE)
-
 // Note: This code uses mixed coding standard from legacy IDF code and used freemodbus stack
 
 // A queue to handle UART event.

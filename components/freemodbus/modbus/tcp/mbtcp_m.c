@@ -38,11 +38,11 @@
 /* ----------------------- Modbus includes ----------------------------------*/
 #include "mb.h"
 #include "mbconfig.h"
-#include "mbtcp.h"
+#include "mbtcp_m.h"
 #include "mbframe.h"
 #include "mbport.h"
 
-#if MB_TCP_ENABLED
+#if MB_MASTER_TCP_ENABLED
 
 /* ----------------------- Defines ------------------------------------------*/
 
@@ -72,11 +72,11 @@
 
 /* ----------------------- Start implementation -----------------------------*/
 eMBErrorCode
-eMBTCPDoInit( USHORT ucTCPPort )
+eMBMasterTCPDoInit( USHORT ucTCPPort )
 {
     eMBErrorCode    eStatus = MB_ENOERR;
 
-    if( xMBTCPPortInit( ucTCPPort ) == FALSE )
+    if( xMBMasterTCPPortInit( ucTCPPort ) == FALSE )
     {
         eStatus = MB_EPORTERR;
     }
@@ -84,26 +84,26 @@ eMBTCPDoInit( USHORT ucTCPPort )
 }
 
 void
-eMBTCPStart( void )
+eMBMasterTCPStart( void )
 {
 }
 
 void
-eMBTCPStop( void )
+eMBMasterTCPStop( void )
 {
     /* Make sure that no more clients are connected. */
-    vMBTCPPortDisable( );
+    vMBMasterTCPPortDisable( );
 }
 
 eMBErrorCode
-eMBTCPReceive( UCHAR * pucRcvAddress, UCHAR ** ppucFrame, USHORT * pusLength )
+eMBMasterTCPReceive( UCHAR * pucRcvAddress, UCHAR ** ppucFrame, USHORT * pusLength )
 {
     eMBErrorCode    eStatus = MB_EIO;
     UCHAR          *pucMBTCPFrame;
     USHORT          usLength;
     USHORT          usPID;
 
-    if( xMBTCPPortGetRequest( &pucMBTCPFrame, &usLength ) != FALSE )
+    if( xMBMasterTCPPortGetRequest( &pucMBTCPFrame, &usLength ) != FALSE )
     {
         usPID = pucMBTCPFrame[MB_TCP_PID] << 8U;
         usPID |= pucMBTCPFrame[MB_TCP_PID + 1];
@@ -128,7 +128,7 @@ eMBTCPReceive( UCHAR * pucRcvAddress, UCHAR ** ppucFrame, USHORT * pusLength )
 }
 
 eMBErrorCode
-eMBTCPSend( UCHAR _unused, const UCHAR * pucFrame, USHORT usLength )
+eMBMasterTCPSend( UCHAR _unused, const UCHAR * pucFrame, USHORT usLength )
 {
     eMBErrorCode    eStatus = MB_ENOERR;
     UCHAR          *pucMBTCPFrame = ( UCHAR * ) pucFrame - MB_TCP_FUNC;
@@ -142,7 +142,7 @@ eMBTCPSend( UCHAR _unused, const UCHAR * pucFrame, USHORT usLength )
      */
     pucMBTCPFrame[MB_TCP_LEN] = ( usLength + 1 ) >> 8U;
     pucMBTCPFrame[MB_TCP_LEN + 1] = ( usLength + 1 ) & 0xFF;
-    if( xMBTCPPortSendResponse( pucMBTCPFrame, usTCPLength ) == FALSE )
+    if( xMBMasterTCPPortSendResponse( pucMBTCPFrame, usTCPLength ) == FALSE )
     {
         eStatus = MB_EIO;
     }

@@ -281,7 +281,9 @@ xMBMasterRTUReceiveFSM( void )
     case STATE_M_RX_RCV:
         if( usMasterRcvBufferPos < MB_SER_PDU_SIZE_MAX )
         {
-            ucMasterRTURcvBuf[usMasterRcvBufferPos++] = ucByte;
+            if ( xStatus ) {
+                ucMasterRTURcvBuf[usMasterRcvBufferPos++] = ucByte;
+            }
         }
         else
         {
@@ -342,7 +344,8 @@ xMBMasterRTUTransmitFSM( void )
     return xNeedPoll;
 }
 
-BOOL MB_PORT_ISR_ATTR xMBMasterRTUTimerExpired(void)
+BOOL MB_PORT_ISR_ATTR
+xMBMasterRTUTimerExpired(void)
 {
     BOOL xNeedPoll = FALSE;
 

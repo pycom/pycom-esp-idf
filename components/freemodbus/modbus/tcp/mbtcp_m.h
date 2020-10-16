@@ -25,42 +25,30 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * File: $Id: mbrtu.h,v 1.9 2006/12/07 22:10:34 wolti Exp $
+ * File: $Id: mbtcp.h,v 1.2 2006/12/07 22:10:34 wolti Exp $
  */
-#include "mbconfig.h"
 
-#ifndef _MB_RTU_H
-#define _MB_RTU_H
+#ifndef _MB_TCP_M_H
+#define _MB_TCP_M_H
 
 #ifdef __cplusplus
 PR_BEGIN_EXTERN_C
 #endif
 
 /* ----------------------- Defines ------------------------------------------*/
-#define MB_SER_PDU_SIZE_MIN     4       /*!< Minimum size of a Modbus RTU frame. */
 
-#if MB_SLAVE_RTU_ENABLED
-eMBErrorCode eMBRTUInit( UCHAR slaveAddress, UCHAR ucPort, ULONG ulBaudRate,
-                             eMBParity eParity );
-void            eMBRTUStart( void );
-void            eMBRTUStop( void );
-eMBErrorCode    eMBRTUReceive( UCHAR * pucRcvAddress, UCHAR ** pucFrame, USHORT * pusLength );
-eMBErrorCode    eMBRTUSend( UCHAR slaveAddress, const UCHAR * pucFrame, USHORT usLength );
-BOOL            xMBRTUReceiveFSM( void );
-BOOL            xMBRTUTransmitFSM( void );
-BOOL            xMBRTUTimerT15Expired( void );
-BOOL            xMBRTUTimerT35Expired( void );
-#endif
+#if MB_MASTER_TCP_ENABLED
 
-#if MB_MASTER_RTU_ENABLED
-eMBErrorCode    eMBMasterRTUInit( UCHAR ucPort, ULONG ulBaudRate,eMBParity eParity );
-void            eMBMasterRTUStart( void );
-void            eMBMasterRTUStop( void );
-eMBErrorCode    eMBMasterRTUReceive( UCHAR * pucRcvAddress, UCHAR ** pucFrame, USHORT * pusLength );
-eMBErrorCode    eMBMasterRTUSend( UCHAR slaveAddress, const UCHAR * pucFrame, USHORT usLength );
-BOOL            xMBMasterRTUReceiveFSM( void );
-BOOL            xMBMasterRTUTransmitFSM( void );
-BOOL            xMBMasterRTUTimerExpired( void );
+/* ----------------------- Function prototypes ------------------------------*/
+eMBErrorCode    eMBMasterTCPDoInit( USHORT ucTCPPort );
+void            eMBMasterTCPStart( void );
+void            eMBMasterTCPStop( void );
+eMBErrorCode    eMBMasterTCPReceive( UCHAR * pucRcvAddress, UCHAR ** pucFrame,
+                               USHORT * pusLength );
+eMBErrorCode    eMBMasterTCPSend( UCHAR _unused, const UCHAR * pucFrame,
+                            USHORT usLength );
+BOOL            xMBMasterTCPTimerExpired(void);
+
 #endif
 
 #ifdef __cplusplus

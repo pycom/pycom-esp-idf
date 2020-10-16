@@ -52,9 +52,10 @@
 #endif
 #if MB_MASTER_TCP_ENABLED
 #include "mbtcp.h"
+#include "mbtcp_m.h"
 #endif
 
-#if MB_MASTER_RTU_ENABLED || MB_MASTER_ASCII_ENABLED
+#if MB_MASTER_RTU_ENABLED || MB_MASTER_ASCII_ENABLED || MB_MASTER_TCP_ENABLED
 
 #ifndef MB_PORT_HAS_CLOSE
 #define MB_PORT_HAS_CLOSE 1
@@ -66,11 +67,12 @@ static UCHAR    ucMBMasterDestAddress;
 static BOOL     xMBRunInMasterMode = FALSE;
 static volatile eMBMasterErrorEventType eMBMasterCurErrorType;
 static volatile USHORT  usMasterSendPDULength;
+static volatile eMBMode eMBMasterCurrentMode;
 
 /*------------------------ Shared variables ---------------------------------*/
 
-volatile UCHAR  ucMasterSndBuf[MB_PDU_SIZE_MAX];
-volatile UCHAR  ucMasterRcvBuf[MB_SER_PDU_SIZE_MAX];
+volatile UCHAR  ucMasterSndBuf[MB_SERIAL_BUF_SIZE];
+volatile UCHAR  ucMasterRcvBuf[MB_SERIAL_BUF_SIZE];
 volatile eMBMasterTimerMode eMasterCurTimerMode;
 volatile BOOL   xFrameIsBroadcast = FALSE;
 
@@ -143,8 +145,43 @@ static xMBFunctionHandler xMasterFuncHandlers[MB_FUNC_HANDLERS_MAX] = {
 };
 
 /* ----------------------- Start implementation -----------------------------*/
+#if MB_MASTER_TCP_ENABLED > 0
 eMBErrorCode
-eMBMasterInit( eMBMode eMode, UCHAR ucPort, ULONG ulBaudRate, eMBParity eParity )
+eMBMasterTCPInit( USHORT ucTCPPort )
+{
+    eMBErrorCode    eStatus = MB_ENOERR;
+
+    if( ( eStatus = eMBMasterTCPDoInit( ucTCPPort ) ) != MB_ENOERR ) {
+        eMBState = STATE_DISABLED;
+    }
+    else if( !xMBMasterPortEventInit(  ) ) {
+        /* Port dependent event module initialization failed. */
+        eStatus = MB_EPORTERR;
+    } else {
+        pvMBMasterFrameStartCur = eMBMasterTCPStart;
+        pvMBMasterFrameStopCur = eMBMasterTCPStop;
+        peMBMasterFrameReceiveCur = eMBMasterTCPReceive;
+        peMBMasterFrameSendCur = eMBMasterTCPSend;
+        pxMBMasterPortCBTimerExpired = xMBMasterTCPTimerExpired;
+        pvMBMasterFrameCloseCur = MB_PORT_HAS_CLOSE ? vMBMasterTCPPortClose : NULL;
+        ucMBMasterDestAddress = MB_TCP_PSEUDO_ADDRESS;
+        eMBMasterCurrentMode = MB_TCP;
+        eMBState = STATE_DISABLED;
+
+        // initialize the OS resource for modbus master.
+        vMBMasterOsResInit();
+        if( xMBMasterPortTimersInit( MB_MASTER_TIMEOUT_MS_RESPOND * MB_TIMER_TICS_PER_MS ) != TRUE )
+        {
+            eStatus = MB_EPORTERR;
+        }
+
+    }
+    return eStatus;
+}
+#endif
+
+eMBErrorCode
+eMBMasterSerialInit( eMBMode eMode, UCHAR ucPort, ULONG ulBaudRate, eMBParity eParity )
 {
     eMBErrorCode    eStatus = MB_ENOERR;
 
