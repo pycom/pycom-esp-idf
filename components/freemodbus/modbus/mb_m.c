@@ -266,7 +266,7 @@ eMBMasterEnable( void )
         /* Activate the protocol stack. */
         pvMBMasterFrameStartCur(  );
         /* Release the resource, because it created in busy state */
-        vMBMasterRunResRelease( );
+        //vMBMasterRunResRelease( );
         eMBState = STATE_ENABLED;
     }
     else
@@ -331,7 +331,8 @@ eMBMasterPoll( void )
             eStatus = peMBMasterFrameReceiveCur( &ucRcvAddress, &ucMBFrame, &usLength);
             ESP_LOG_BUFFER_HEX_LEVEL("POLL RCV buffer:", (void*)ucMBFrame, (uint16_t)usLength, ESP_LOG_DEBUG);
             // Check if the frame is for us. If not ,send an error process event.
-            if ( ( eStatus == MB_ENOERR ) && ( ucRcvAddress == ucMBMasterGetDestAddress() ) )
+            if ( ( eStatus == MB_ENOERR ) && ( ( ucRcvAddress == ucMBMasterGetDestAddress() ) 
+                                          || ( ucRcvAddress == MB_TCP_PSEUDO_ADDRESS ) ) )
             {
                 ESP_LOGD(MB_PORT_TAG, "%s: Packet data received successfully (%u).", __func__, eStatus);
                 ( void ) xMBMasterPortEventPost( EV_MASTER_EXECUTE );
@@ -339,6 +340,7 @@ eMBMasterPoll( void )
             else
             {
                 vMBMasterSetErrorType(EV_ERROR_RECEIVE_DATA);
+                ( void ) xMBMasterPortEventPost( EV_MASTER_ERROR_PROCESS );
                 ESP_LOGD( MB_PORT_TAG, "%s: Packet data receive failed (addr=%u)(%u).",
                                        __func__, ucRcvAddress, eStatus);
                 ( void ) xMBMasterPortEventPost( EV_MASTER_ERROR_PROCESS );
