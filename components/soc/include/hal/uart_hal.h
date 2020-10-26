@@ -430,6 +430,42 @@ void uart_hal_get_sclk(uart_hal_context_t *hal, uart_sclk_t *sclk);
  */
 void uart_hal_set_loop_back(uart_hal_context_t *hal, bool loop_back_en);
 
+/**
+ * @brief  Calculate uart symbol bit length, as defined in configuration.
+ *
+ * @param  hw Beginning address of the peripheral registers.
+ *
+ * @return number of bits per UART symbol.
+ */
+uint8_t uart_hal_get_symb_len(uart_hal_context_t *hal);
+
+/**
+ * @brief  Get UART maximum timeout threshold.
+ *
+ * @param  hw Beginning address of the peripheral registers.
+ *
+ * @return maximum timeout threshold value for target.
+ */
+uint16_t uart_hal_get_max_rx_timeout_thrd(uart_hal_context_t *hal);
+
+/**
+ * @brief  Get the timeout threshold value set for receiver.
+ *
+ * @param  hw Beginning address of the peripheral registers.
+ *
+ * @return tout_thr The timeout value. If timeout is disabled then returns 0.
+ */
+#define uart_hal_get_rx_tout_thr(hal) uart_ll_get_rx_tout_thr((hal)->dev)
+
+/**
+ * @brief  Get the length of readable data in UART rxfifo.
+ *
+ * @param  hw Beginning address of the peripheral registers.
+ *
+ * @return The readable data length in rxfifo.
+ */
+#define uart_hal_get_rxfifo_len(hal) uart_ll_get_rxfifo_len((hal)->dev)
+
 #ifdef __cplusplus
 }
 #endif

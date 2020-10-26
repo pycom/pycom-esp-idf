@@ -104,6 +104,7 @@ typedef struct {
     intr_handle_t intr_handle;          /*!< UART interrupt handle*/
     uart_mode_t uart_mode;              /*!< UART controller actual mode set by uart_set_mode() */
     bool coll_det_flg;                  /*!< UART collision detection flag */
+    bool rx_always_timeout_flg;         /*!< UART always detect rx timeout flag */
 
     //rx parameters
     int rx_buffered_len;                  /*!< UART cached data length */
@@ -1556,4 +1557,14 @@ esp_err_t uart_set_loop_back(uart_port_t uart_num, bool loop_back_en)
     UART_CHECK((uart_num < UART_NUM_MAX), "uart_num error", ESP_ERR_INVALID_ARG);
     uart_hal_set_loop_back(&(uart_context[uart_num].hal), loop_back_en);
     return ESP_OK;
+}
+
+void uart_set_always_rx_timeout(uart_port_t uart_num, bool always_rx_timeout)
+{
+    // uint16_t rx_tout = uart_hal_get_rx_tout_thr(&(uart_context[uart_num].hal));
+    // if (rx_tout) {
+    //     p_uart_obj[uart_num]->rx_always_timeout_flg = always_rx_timeout;
+    // } else {
+    //     p_uart_obj[uart_num]->rx_always_timeout_flg = false;
+    // }
 }
