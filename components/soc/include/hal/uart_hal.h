@@ -133,7 +133,7 @@ typedef struct {
  *
  * @return None
  */
-void uart_hal_read_rxfifo(uart_hal_context_t *hal, uint8_t *buf, int *rd_len);
+void uart_hal_read_rxfifo(uart_hal_context_t *hal, uint8_t *buf, int *inout_rd_len);
 
 /**
  * @brief  Write data into the UART txfifo

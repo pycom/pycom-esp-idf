@@ -353,14 +353,15 @@ static inline void uart_ll_set_tx_idle_num(uart_dev_t *hw, uint32_t idle_num)
  * @brief  Configure the timeout value for receiver receiving a byte, and enable rx timeout function.
  *
  * @param  hw Beginning address of the peripheral registers.
- * @param  tout_thr The timeout value. The rx timeout function will be disabled if `tout_thr == 0`.
+ * @param  tout_thrd The timeout value as UART bit time. The rx timeout function will be disabled if `tout_thrd == 0`.
  *
  * @return None.
  */
-static inline void uart_ll_set_rx_tout(uart_dev_t *hw, uint8_t tout_thr)
+static inline void uart_ll_set_rx_tout(uart_dev_t *hw, uint16_t tout_thrd)
 {
-    if(tout_thr > 0) {
-        hw->mem_conf.rx_tout_thrhd = tout_thr;
+    uint16_t tout_val = tout_thrd;
+    if(tout_thrd > 0) {
+        hw->mem_conf.rx_tout_thrhd = tout_val;
         hw->conf1.rx_tout_en = 1;
     } else {
         hw->conf1.rx_tout_en = 0;

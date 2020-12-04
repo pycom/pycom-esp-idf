@@ -197,7 +197,7 @@ eMBMasterSerialInit( eMBMode eMode, UCHAR ucPort, ULONG ulBaudRate, eMBParity eP
         pxMBMasterFrameCBByteReceived = xMBMasterRTUReceiveFSM;
         pxMBMasterFrameCBTransmitterEmpty = xMBMasterRTUTransmitFSM;
         pxMBMasterPortCBTimerExpired = xMBMasterRTUTimerExpired;
-        eMBMasterCurrentMode = MB_ASCII;
+        eMBMasterCurrentMode = MB_RTU;
 
         eStatus = eMBMasterRTUInit(ucPort, ulBaudRate, eParity);
         break;
@@ -212,7 +212,7 @@ eMBMasterSerialInit( eMBMode eMode, UCHAR ucPort, ULONG ulBaudRate, eMBParity eP
         pxMBMasterFrameCBByteReceived = xMBMasterASCIIReceiveFSM;
         pxMBMasterFrameCBTransmitterEmpty = xMBMasterASCIITransmitFSM;
         pxMBMasterPortCBTimerExpired = xMBMasterASCIITimerT1SExpired;
-        eMBMasterCurrentMode = MB_RTU;
+        eMBMasterCurrentMode = MB_ASCII;
 
         eStatus = eMBMasterASCIIInit(ucPort, ulBaudRate, eParity );
         break;
@@ -346,11 +346,6 @@ eMBMasterPoll( void )
             MB_PORT_CLEAR_EVENT( eEvent, EV_MASTER_FRAME_SENT );
         } else if ( MB_PORT_CHECK_EVENT( eEvent, EV_MASTER_FRAME_RECEIVED ) ) {
             eStatus = peMBMasterFrameReceiveCur( &ucRcvAddress, &ucMBFrame, &usLength);
-            // printf("ucMBFrame received:");
-            // for (uint8_t pet =0; pet<usLength; pet++){
-            //     printf(" 0x%02X ", ucMBFrame[pet]);
-            // }
-            // printf("\n");
             // Check if the frame is for us. If not ,send an error process event.
             if ( ( eStatus == MB_ENOERR ) && ( ( ucRcvAddress == ucMBMasterGetDestAddress() ) 
                                           || ( ucRcvAddress == MB_TCP_PSEUDO_ADDRESS ) ) )

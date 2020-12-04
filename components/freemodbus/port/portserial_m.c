@@ -95,6 +95,7 @@ static USHORT usMBMasterPortSerialRxPoll(size_t xEventSize)
         // The buffer is transferred into Modbus stack and is not needed here any more
         uart_flush_input(ucUartNumber);
         ESP_LOGD(TAG, "Received data: %d(bytes in buffer)\n", (uint32_t)usCnt);
+        printf("Received data: %d(bytes in buffer)\n", (uint32_t)usCnt);
     } else {
         ESP_LOGE(TAG, "%s: bRxState disabled but junk data (%d bytes) received. ", __func__, xEventSize);
     }
@@ -108,11 +109,12 @@ BOOL xMBMasterPortSerialTxPoll(void)
 
     if( bTxStateEnabled ) {
         // Continue while all response bytes put in buffer or out of buffer
-        while((bNeedPoll) && (usCount++ < MB_SERIAL_BUF_SIZE)) {
+        while(bNeedPoll && (usCount++ < MB_SERIAL_BUF_SIZE)) {
             // Calls the modbus stack callback function to let it fill the UART transmit buffer.
-            bNeedPoll = pxMBMasterFrameCBTransmitterEmpty( ); // callback to transmit FSM state machine
+            bNeedPoll = pxMBMasterFrameCBTransmitterEmpty( ); // callback to transmit FSM
         }
         ESP_LOGD(TAG, "MB_TX_buffer sent: (%d) bytes.", (uint16_t)(usCount - 1));
+        printf("MB_TX_buffer sent: (%d) bytes.", (uint16_t)(usCount - 1));
         // Waits while UART sending the packet
         esp_err_t xTxStatus = uart_wait_tx_done(ucUartNumber, MB_SERIAL_TX_TOUT_TICKS);
         vMBMasterPortSerialEnable( TRUE, FALSE );
@@ -140,8 +142,6 @@ static void vUartTask(void* pvParameters)
                         // Read received data and send it to modbus stack
                         usResult = usMBMasterPortSerialRxPoll(xEvent.size);
                         ESP_LOGD(TAG,"Timeout occured, processed: %d bytes", usResult);
-                        // Block receiver task until data is not processed
-                        vTaskSuspend(NULL);
                     }
                     break;
                 //Event of HW FIFO overflow detected
@@ -158,6 +158,7 @@ static void vUartTask(void* pvParameters)
                 //Event of UART RX break detected
                 case UART_BREAK:
                     ESP_LOGD(TAG, "uart rx break.");
+                    printf("\n");
                     break;
                 //Event of UART parity check error
                 case UART_PARITY_ERR:
@@ -229,7 +230,7 @@ BOOL xMBMasterPortSerialInit( UCHAR ucPORT, ULONG ulBaudRate, UCHAR ucDataBits, 
             FALSE, "mb config failure, uart_param_config() returned (0x%x).", xErr);
     // Install UART driver, and get the queue.
     xErr = uart_driver_install(ucUartNumber, MB_SERIAL_BUF_SIZE, MB_SERIAL_BUF_SIZE,
-                                    MB_QUEUE_LENGTH, &xMbUartQueue, MB_PORT_SERIAL_ISR_FLAG, NULL);
+                                    MB_QUEUE_LENGTH, &xMbUartQueue, MB_PORT_SERIAL_ISR_FLAG);
     MB_PORT_CHECK((xErr == ESP_OK), FALSE,
             "mb serial driver failure, uart_driver_install() returned (0x%x).", xErr);
     // Set timeout for TOUT interrupt (T3.5 modbus time)

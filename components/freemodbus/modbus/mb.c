@@ -154,7 +154,7 @@ eMBInit( eMBMode eMode, UCHAR ucSlaveAddress, UCHAR ucPort, ULONG ulBaudRate, eM
             pxMBFrameCBByteReceived = xMBRTUReceiveFSM;
             pxMBFrameCBTransmitterEmpty = xMBRTUTransmitFSM;
             pxMBPortCBTimerExpired = xMBRTUTimerT35Expired;
-
+            printf("%s", pxMBPortCBTimerExpired ? "true" : "false");
             eStatus = eMBRTUInit( ucMBAddress, ucPort, ulBaudRate, eParity );
             break;
 #endif
@@ -368,11 +368,11 @@ eMBPoll( void )
                 {
                     ( void )xMBPortEventPost( EV_EXECUTE );
                     ESP_LOG_BUFFER_HEX_LEVEL(MB_PORT_TAG, &ucMBFrame[MB_PDU_FUNC_OFF], usLength, ESP_LOG_DEBUG);
-                    // printf("ucMBFrame received:");
-                    // for (uint8_t pet =0; pet<usLength; pet++){
-                    //     printf(" 0x%02X ", ucMBFrame[pet]);
-                    // }
-                    // printf("\n");
+                    printf("ucMBFrame received:");
+                    for (uint8_t pet =0; pet<usLength; pet++){
+                        printf(" 0x%02X ", ucMBFrame[pet]);
+                    }
+                    printf(" | len:%hu\n",usLength);
                 }
             }
             break;

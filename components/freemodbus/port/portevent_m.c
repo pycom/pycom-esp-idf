@@ -140,7 +140,7 @@ xMBMasterPortEventGet( eMBMasterEventType* eEvent )
                                     MB_EVENT_POLL_MASK, // The bits within the event group to wait for.
                                     pdTRUE,             // Masked bits should be cleared before returning.
                                     pdFALSE,            // Don't wait for both bits, either bit will do.
-                                    portMAX_DELAY);     // Wait forever for either bit to be set.
+                                    1000);     // Wait forever for either bit to be set.
     // Check if poll event is correct
     if (MB_PORT_CHECK_EVENT(uxBits, MB_EVENT_POLL_MASK)) {
         *eEvent = (eMBMasterEventType)(uxBits & MB_EVENT_POLL_MASK);
