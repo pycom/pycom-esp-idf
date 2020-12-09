@@ -104,7 +104,6 @@ static USHORT usMBPortSerialRxPoll(size_t xEventSize)
         (void)pxMBPortCBTimerExpired(); // calls callback xMBRTUTimerT35Expired();
 #endif
         ESP_LOGD(TAG, "RX: %d bytes\n", usCnt);
-        printf("RX: %d bytes\n", usCnt);
     }
     return usCnt;
 }
@@ -120,8 +119,7 @@ BOOL xMBPortSerialTxPoll(void)
             // Calls the modbus stack callback function to let it fill the UART transmit buffer.
             bNeedPoll = pxMBFrameCBTransmitterEmpty( ); // callback to transmit FSM
         }
-        ESP_LOGD(TAG, "MB_TX_buffer send: (%d) bytes\n", (uint16_t)usCount);        
-        printf("MB_TX_buffer send: (%d) bytes\n", (uint16_t)usCount);
+        ESP_LOGD(TAG, "MB_TX_buffer send: (%d) bytes\n", (uint16_t)usCount);
 
         // Waits while UART sending the packet
         esp_err_t xTxStatus = uart_wait_tx_done(ucUartNumber, MB_SERIAL_TX_TOUT_TICKS);
@@ -165,7 +163,6 @@ static void vUartTask(void *pvParameters)
                 //Event of UART RX break detected
                 case UART_BREAK:
                     ESP_LOGD(TAG, "uart rx break\n");
-                    printf("+\n");
                     break;
                 //Event of UART parity check error
                 case UART_PARITY_ERR:

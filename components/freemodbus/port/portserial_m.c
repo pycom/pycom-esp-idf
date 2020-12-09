@@ -95,7 +95,6 @@ static USHORT usMBMasterPortSerialRxPoll(size_t xEventSize)
         // The buffer is transferred into Modbus stack and is not needed here any more
         uart_flush_input(ucUartNumber);
         ESP_LOGD(TAG, "Received data: %d(bytes in buffer)\n", (uint32_t)usCnt);
-        printf("Received data: %d(bytes in buffer)\n", (uint32_t)usCnt);
     } else {
         ESP_LOGE(TAG, "%s: bRxState disabled but junk data (%d bytes) received. ", __func__, xEventSize);
     }
@@ -114,7 +113,6 @@ BOOL xMBMasterPortSerialTxPoll(void)
             bNeedPoll = pxMBMasterFrameCBTransmitterEmpty( ); // callback to transmit FSM
         }
         ESP_LOGD(TAG, "MB_TX_buffer sent: (%d) bytes.", (uint16_t)(usCount - 1));
-        printf("MB_TX_buffer sent: (%d) bytes.", (uint16_t)(usCount - 1));
         // Waits while UART sending the packet
         esp_err_t xTxStatus = uart_wait_tx_done(ucUartNumber, MB_SERIAL_TX_TOUT_TICKS);
         vMBMasterPortSerialEnable( TRUE, FALSE );
@@ -158,7 +156,6 @@ static void vUartTask(void* pvParameters)
                 //Event of UART RX break detected
                 case UART_BREAK:
                     ESP_LOGD(TAG, "uart rx break.");
-                    printf("\n");
                     break;
                 //Event of UART parity check error
                 case UART_PARITY_ERR:
