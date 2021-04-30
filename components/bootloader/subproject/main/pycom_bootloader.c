@@ -34,7 +34,7 @@ int pycom_bootloader_utility_get_selected_boot_partition(const bootloader_state_
         return INVALID_INDEX;
     }
 
-#ifndef RGB_LED_DISABLE
+#ifndef CONFIG_PYCOM_RGB_LED_DISABLE
     mperror_init0();
 #endif
     if (!pycom_bootloader_common_ota_select_valid(boot_info)) {
@@ -46,7 +46,7 @@ int pycom_bootloader_utility_get_selected_boot_partition(const bootloader_state_
         boot_info->safeboot = false;
         if (!pycom_ota_write_boot_info (boot_info, bs->ota_info.offset)) {
             ESP_LOGE(TAG, "Error writing boot info");
-#ifndef RGB_LED_DISABLE
+#ifndef CONFIG_PYCOM_RGB_LED_DISABLE
             mperror_fatal_error();
 #endif
             return ESP_FAIL;
