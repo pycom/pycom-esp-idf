@@ -1169,6 +1169,12 @@ CONFIG_WPA_MBEDTLS_CRYPTO=y
 # CONFIG_LEGACY_INCLUDE_COMMON_HEADERS is not set
 # end of Compatibility options
 
+#
+# Pycom
+#
+# CONFIG_PYCOM_SAFEBOOT_PIN_DISABLE is not set
+# end of Pycom
+
 # Deprecated options for backward compatibility
 CONFIG_TOOLPREFIX="xtensa-esp32-elf-"
 CONFIG_PYTHON="python"
