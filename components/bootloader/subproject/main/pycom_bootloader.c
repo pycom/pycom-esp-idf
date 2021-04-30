@@ -91,6 +91,7 @@ int pycom_bootloader_utility_get_selected_boot_partition(const bootloader_state_
             }
         }
 
+#ifndef CONFIG_PYCOM_SAFEBOOT_PIN_DISABLE
         // this one might modify the boot info hence it MUST be called after
         // bootmgr_verify! (so that the changes are not saved to flash)
         ESP_LOGI(TAG, "Checking safe boot pin");
@@ -113,6 +114,7 @@ int pycom_bootloader_utility_get_selected_boot_partition(const bootloader_state_
                 return ESP_FAIL;
             }
         }
+#endif
 
         // load the selected active image
         if(boot_info->ActiveImg == IMG_ACT_FACTORY) {

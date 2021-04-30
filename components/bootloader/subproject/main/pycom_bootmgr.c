@@ -7,6 +7,8 @@
  * available at https://www.pycom.io/opensource/licensing
  */
 
+#include "sdkconfig.h"
+#ifndef CONFIG_PYCOM_SAFEBOOT_PIN_DISABLE
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -14,7 +16,6 @@
 #include <stdint.h>
 
 #include "../../heap/include/esp_heap_caps.h"
-#include "sdkconfig.h"
 #include "esp_system.h"
 #include "esp_spi_flash.h"
 #include "../../nvs_flash/include/nvs_flash.h"
@@ -130,3 +131,4 @@ uint32_t wait_for_safe_boot (const boot_info_t *boot_info, uint32_t *ActiveImg) 
     gpio_config(&gpioconf);
     return ret;
 }
+#endif // CONFIG_PYCOM_SAFEBOOT_PIN_DISABLE
