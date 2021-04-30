@@ -366,4 +366,8 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 With this config you can disable this safe boot pin handling.
                 For example if the pin is used for some peripheral.
 
+        config PYCOM_RGB_LED_DISABLE
+            bool "Disable RGB LED"
+            default n
+
     endmenu #Pycom

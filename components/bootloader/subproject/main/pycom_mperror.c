@@ -6,7 +6,9 @@
  * see the Pycom Licence v1.0 document supplied with this file, or
  * available at https://www.pycom.io/opensource/licensing
  */
-#ifndef RGB_LED_DISABLE
+#include "sdkconfig.h"
+#ifndef CONFIG_PYCOM_RGB_LED_DISABLE
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -14,7 +16,6 @@
 
 #include "xtensa/xtruntime.h"
 #include "../../heap/include/esp_heap_caps.h"
-#include "sdkconfig.h"
 #include "esp_system.h"
 #include "esp_spi_flash.h"
 #include "../../nvs_flash/include/nvs_flash.h"
@@ -155,4 +156,4 @@ __attribute__((noreturn)) void mperror_fatal_error (void) {
     for ( ; ; );
 }
 
-#endif //RGB_LED_DISABLE
+#endif //CONFIG_PYCOM_RGB_LED_DISABLE
