@@ -72,7 +72,6 @@ typedef struct _boot_info_t
 
 // Luckily these are the same for all boards, they are defined in mpconfigboard.h
 #define MICROPY_HW_SAFE_PIN_NUM                                 (21)
-#define MICROPY_HW_HB_PIN_NUM                                   (0)
 
 extern int pycom_bootloader_utility_get_selected_boot_partition(const bootloader_state_t *bs);
 extern bool pycom_bootloader_common_ota_select_valid(const boot_info_t *s);

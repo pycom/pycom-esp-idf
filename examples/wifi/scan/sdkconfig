@@ -1174,6 +1174,7 @@ CONFIG_WPA_MBEDTLS_CRYPTO=y
 #
 # CONFIG_PYCOM_SAFEBOOT_PIN_DISABLE is not set
 # CONFIG_PYCOM_RGB_LED_DISABLE is not set
+CONFIG_PYCOM_RGB_LED_PIN=0
 # end of Pycom
 
 # Deprecated options for backward compatibility

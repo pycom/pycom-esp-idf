@@ -56,7 +56,7 @@ void TASK_Heartbeat (void *pvParameters);
  ******************************************************************************/
 
 void mperror_init0 (void) {
-    gpio_config_t gpioconf = {.pin_bit_mask = 1ull << MICROPY_HW_HB_PIN_NUM,
+    gpio_config_t gpioconf = {.pin_bit_mask = 1ull << CONFIG_PYCOM_RGB_LED_PIN,
                               .mode = GPIO_MODE_OUTPUT,
                               .pull_up_en = GPIO_PULLUP_DISABLE,
                               .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -123,7 +123,6 @@ static void IRAM_ATTR wait_for_count(uint32_t count) {
 }
 
 #define DELAY_NS(ns)                        wait_for_count(NS_TO_COUNT(ns))
-#define GP0_PIN_NUMBER                      (0)
 
 void IRAM_ATTR mperror_set_rgb_color (uint32_t rgbcolor) {
     uint32_t volatile register grbcolor =
@@ -133,14 +132,14 @@ void IRAM_ATTR mperror_set_rgb_color (uint32_t rgbcolor) {
 
     for (int volatile register i = 24; i != 0; --i) {
         if (grbcolor & 0x800000) {
-            GPIO_REG_WRITE(GPIO_OUT_W1TS_REG, 1 << GP0_PIN_NUMBER);
+            GPIO_REG_WRITE(GPIO_OUT_W1TS_REG, 1 << CONFIG_PYCOM_RGB_LED_PIN);
             DELAY_NS(BIT_1_HIGH_TIME_NS);
-            GPIO_REG_WRITE(GPIO_OUT_W1TC_REG, 1 << GP0_PIN_NUMBER);
+            GPIO_REG_WRITE(GPIO_OUT_W1TC_REG, 1 << CONFIG_PYCOM_RGB_LED_PIN);
             DELAY_NS(BIT_1_LOW_TIME_NS);
         } else {
-            GPIO_REG_WRITE(GPIO_OUT_W1TS_REG, 1 << GP0_PIN_NUMBER);
+            GPIO_REG_WRITE(GPIO_OUT_W1TS_REG, 1 << CONFIG_PYCOM_RGB_LED_PIN);
 //            DELAY_NS(BIT_0_HIGH_TIME_NS);
-            GPIO_REG_WRITE(GPIO_OUT_W1TC_REG, 1 << GP0_PIN_NUMBER);
+            GPIO_REG_WRITE(GPIO_OUT_W1TC_REG, 1 << CONFIG_PYCOM_RGB_LED_PIN);
             DELAY_NS(BIT_0_LOW_TIME_NS);
         }
         // put the next bit in place
