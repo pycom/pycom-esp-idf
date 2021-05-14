@@ -49,22 +49,22 @@
 	url = https://github.com/espressif/esp-lwip.git
 [submodule "components/bootloader/subproject/components/micro-ecc/micro-ecc"]
 	path = components/bootloader/subproject/components/micro-ecc/micro-ecc
-	url = git@github.com:kmackay/micro-ecc.git
+	url = https://github.com/kmackay/micro-ecc.git
 [submodule "components/bt/controller/lib"]
 	path = components/bt/controller/lib
-	url = git@github.com:espressif/esp32-bt-lib.git
+	url = https://github.com/espressif/esp32-bt-lib.git
 [submodule "components/bt/host/nimble/nimble"]
 	path = components/bt/host/nimble/nimble
-	url = git@github.com:espressif/esp-nimble.git
+	url = https://github.com/espressif/esp-nimble.git
 [submodule "components/esp_wifi/lib_esp32"]
 	path = components/esp_wifi/lib_esp32
-	url = git@github.com:espressif/esp32-wifi-lib.git
+	url = https://github.com/espressif/esp32-wifi-lib.git
 [submodule "components/cbor/tinycbor"]
 	path = components/cbor/tinycbor
-	url = git@github.com:intel/tinycbor.git
+	url = https://github.com/intel/tinycbor.git
 [submodule "components/esp_wifi/lib"]
 	path = components/esp_wifi/lib
-	url = git@github.com:espressif/esp32-wifi-lib.git
+	url = https://github.com/espressif/esp32-wifi-lib.git
 [submodule "components/coap/libcoap"]
 	path = components/coap/libcoap
-	url = git@github.com:obgm/libcoap.git
+	url = https://github.com/zbgm/libcoap.git
