@@ -41,6 +41,9 @@
 #include "esp_system.h"
 #include "esp_efuse.h"
 
+#include "bootloader_utility.h"
+#include "pycom_bootloader_support.h"
+
 #ifdef CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/crc.h"
 #elif CONFIG_IDF_TARGET_ESP32S2
@@ -370,7 +373,8 @@ static uint8_t get_ota_partition_count(void)
     return ota_app_count;
 }
 
-static esp_err_t esp_rewrite_ota_data(esp_partition_subtype_t subtype)
+// Pycom modification: make the function global so no "defined but not used" compilation warning is dropped
+esp_err_t esp_rewrite_ota_data(esp_partition_subtype_t subtype)
 {
     esp_ota_select_entry_t otadata[2];
     const esp_partition_t *otadata_partition = read_otadata(otadata);
@@ -453,7 +457,23 @@ esp_err_t esp_ota_set_boot_partition(const esp_partition_t *partition)
                 return ESP_ERR_OTA_SMALL_SEC_VER;
             }
 #endif
-            return esp_rewrite_ota_data(partition->subtype);
+
+            bootloader_state_t bs;
+            boot_info_t boot_info;
+            bootloader_utility_load_partition_table(&bs);
+            pycom_read_otadata(&bs.ota_info, &boot_info);
+            /* Update the OTA Data to load image from OTA partition on next boot
+             * At this point the current image is Factory for sure.
+             */
+            boot_info.PrevImg = IMG_ACT_FACTORY;
+            boot_info.ActiveImg = IMG_ACT_UPDATE1;
+            boot_info.Status = IMG_STATUS_READY;
+            if(true == pycom_ota_write_boot_info (&boot_info, bs.ota_info.offset)) {
+                return ESP_OK;
+            }
+            else {
+                return ESP_FAIL;
+            }
         }
     } else {
         return ESP_ERR_INVALID_ARG;

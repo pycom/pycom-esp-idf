@@ -326,6 +326,51 @@ bool esp_https_ota_is_complete_data_received(esp_https_ota_handle_t https_ota_ha
     return esp_http_client_is_complete_data_received(handle->http_client);
 }
 
+esp_err_t esp_https_diff_ota_perform(esp_https_ota_handle_t https_ota_handle, void **buffer)
+{
+    esp_https_ota_t *handle = (esp_https_ota_t *)https_ota_handle;
+    if (handle == NULL) {
+        ESP_LOGE(TAG, "esp_https_diff_ota_perform: Invalid argument");
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (handle->state < ESP_HTTPS_OTA_BEGIN) {
+        ESP_LOGE(TAG, "esp_https_diff_ota_perform: Invalid state");
+        return ESP_FAIL;
+    }
+
+    int data_read;
+    switch (handle->state) {
+        case ESP_HTTPS_OTA_BEGIN:
+            handle->state = ESP_HTTPS_OTA_IN_PROGRESS;
+            /* falls through */
+        case ESP_HTTPS_OTA_IN_PROGRESS:
+            data_read = esp_http_client_read(handle->http_client,
+                                             handle->ota_upgrade_buf,
+                                             handle->ota_upgrade_buf_size);
+            if (data_read == 0) {
+                ESP_LOGI(TAG, "Connection closed, all data received");
+            } else if (data_read < 0) {
+                ESP_LOGE(TAG, "Error: SSL data read error");
+                return ESP_FAIL;
+            } else if (data_read > 0) {
+                // Copy the data to local buffer
+                memcpy(*buffer, handle->ota_upgrade_buf, data_read);
+
+                // Move the pointer forward
+                *buffer += data_read;
+
+                return ESP_ERR_HTTPS_OTA_IN_PROGRESS;
+            }
+            handle->state = ESP_HTTPS_OTA_SUCCESS;
+            break;
+         default:
+            ESP_LOGE(TAG, "Invalid ESP HTTPS OTA State");
+            return ESP_FAIL;
+            break;
+    }
+    return ESP_OK;
+}
+
 esp_err_t esp_https_ota_finish(esp_https_ota_handle_t https_ota_handle)
 {
     esp_https_ota_t *handle = (esp_https_ota_t *)https_ota_handle;
@@ -361,6 +406,37 @@ esp_err_t esp_https_ota_finish(esp_https_ota_handle_t https_ota_handle)
             ESP_LOGE(TAG, "esp_ota_set_boot_partition failed! err=0x%d", err);
         }
     }
+    free(handle);
+    return err;
+}
+
+esp_err_t esp_https_diff_ota_finish(esp_https_ota_handle_t https_ota_handle)
+{
+    esp_https_ota_t *handle = (esp_https_ota_t *)https_ota_handle;
+    if (handle == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (handle->state < ESP_HTTPS_OTA_BEGIN) {
+        return ESP_FAIL;
+    }
+
+    esp_err_t err = ESP_OK;
+    switch (handle->state) {
+        case ESP_HTTPS_OTA_SUCCESS:
+        case ESP_HTTPS_OTA_IN_PROGRESS:
+        case ESP_HTTPS_OTA_BEGIN:
+            if (handle->ota_upgrade_buf) {
+                free(handle->ota_upgrade_buf);
+            }
+            if (handle->http_client) {
+                _http_cleanup(handle->http_client);
+            }
+            break;
+        default:
+            ESP_LOGE(TAG, "Invalid ESP HTTPS OTA State");
+            break;
+    }
+
     free(handle);
     return err;
 }

@@ -12,7 +12,7 @@ set(srcs
     "src/flash_qio_mode.c"
     "src/bootloader_flash_config_${IDF_TARGET}.c"
     "src/bootloader_efuse_${IDF_TARGET}.c"
-    )
+    "src/pycom_bootloader_support.c")
 
 if(BOOTLOADER_BUILD)
     set(include_dirs "include" "include_bootloader")

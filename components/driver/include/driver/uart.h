@@ -93,12 +93,14 @@ typedef intr_handle_t uart_isr_handle_t;
  * @param intr_alloc_flags Flags used to allocate the interrupt. One or multiple (ORred)
  *        ESP_INTR_FLAG_* values. See esp_intr_alloc.h for more info. Do not set ESP_INTR_FLAG_IRAM here
  *        (the driver's ISR handler is not located in IRAM)
+ * @param rx_callback callback to be called when data is received
  *
  * @return
  *     - ESP_OK   Success
  *     - ESP_FAIL Parameter error
  */
-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags);
+typedef void (*uart_rx_callback_t)(int uart_id, int rx_byte);
+esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback);
 
 /**
  * @brief Uninstall UART driver.
@@ -467,6 +469,31 @@ esp_err_t uart_param_config(uart_port_t uart_num, const uart_config_t *uart_conf
  *     - ESP_FAIL Parameter error
  */
 esp_err_t uart_intr_config(uart_port_t uart_num, const uart_intr_config_t *intr_conf);
+
+/**
+ * @brief Install UART driver.
+ *
+ * UART ISR handler will be attached to the same CPU core that this function is running on.
+ *
+ * @note  Rx_buffer_size should be greater than UART_FIFO_LEN. Tx_buffer_size should be either zero or greater than UART_FIFO_LEN.
+ *
+ * @param uart_num UART_NUM_0, UART_NUM_1 or UART_NUM_2
+ * @param rx_buffer_size UART RX ring buffer size.
+ * @param tx_buffer_size UART TX ring buffer size.
+ *        If set to zero, driver will not use TX buffer, TX function will block task until all data have been sent out.
+ * @param queue_size UART event queue size/depth.
+ * @param uart_queue UART event queue handle (out param). On success, a new queue handle is written here to provide
+ *        access to UART events. If set to NULL, driver will not use an event queue.
+ * @param intr_alloc_flags Flags used to allocate the interrupt. One or multiple (ORred)
+ *        ESP_INTR_FLAG_* values. See esp_intr_alloc.h for more info. Do not set ESP_INTR_FLAG_IRAM here
+ *        (the driver's ISR handler is not located in IRAM)
+ *
+ * @return
+ *     - ESP_OK   Success
+ *     - ESP_FAIL Parameter error
+ */
+typedef void (*uart_rx_callback_t)(int uart_id, int rx_byte);
+esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback);
 
 /**
  * @brief Wait until UART TX FIFO is empty.
