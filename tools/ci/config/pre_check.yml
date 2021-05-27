@@ -8,6 +8,25 @@ check_permissions:
   script:
     - tools/ci/check-executable.sh
 
+check_docs_lang_sync:
+  extends: .check_job_template
+  stage: pre_check
+  variables:
+    SUBMODULES_TO_FETCH: "none"
+  script:
+    - cd docs
+    - ./check_lang_folder_sync.sh
+
+check_docs_gh_links:
+  extends: .build_docs_template
+  stage: pre_check
+  variables:
+    SUBMODULES_TO_FETCH: "none"
+  script:
+    - cd docs
+    - ${IDF_PATH}/tools/ci/multirun_with_pyenv.sh -p 3.6.10 pip install -r requirements.txt
+    - ${IDF_PATH}/tools/ci/multirun_with_pyenv.sh -p 3.6.10 ./build_docs.py gh-linkcheck
+
 check_version:
   extends: .check_job_template
   # Don't run this for feature/bugfix branches, so that it is possible to modify
@@ -35,7 +54,7 @@ check_examples_rom_header:
     - tools/ci/check_examples_rom_header.sh
 
 check_python_style:
-  extends: .check_job_template_with_filter
+  extends: .python_lint_template
   artifacts:
     when: on_failure
     paths:
@@ -85,7 +104,7 @@ check_wifi_lib_md5:
   dependencies: []
   script:
     - IDF_TARGET=esp32 $IDF_PATH/components/esp_wifi/test_md5/test_md5.sh
-    - IDF_TARGET=esp32s2beta $IDF_PATH/components/esp_wifi/test_md5/test_md5.sh
+    - IDF_TARGET=esp32s2 $IDF_PATH/components/esp_wifi/test_md5/test_md5.sh
 
 .build_with_make_and_cmake: &build_with_make_and_cmake |
   echo -e "section_end:"`date +%s`":build_script\r\e[0Ksection_start:"`date +%s`":build_make\r\e[0KBuild with Make"
@@ -112,7 +131,7 @@ build_template_app:
   script:
     # Set the variable for 'esp-idf-template' testing
     - ESP_IDF_TEMPLATE_GIT=${ESP_IDF_TEMPLATE_GIT:-"https://github.com/espressif/esp-idf-template.git"}
-    - git clone ${ESP_IDF_TEMPLATE_GIT}
+    - ./tools/ci/retry_failed.sh git clone ${ESP_IDF_TEMPLATE_GIT}
     # Try to use the same branch name for esp-idf-template that we're
     # using on esp-idf. If it doesn't exist then just stick to the default branch
     - python $CHECKOUT_REF_SCRIPT esp-idf-template esp-idf-template
@@ -152,6 +171,34 @@ build_template_app:
 
     # Check if there are any stray printf/ets_printf references in WiFi libs
     - pushd ../components/esp_wifi/lib
-    - for dir in esp32 esp32s2beta; do test $(xtensa-esp32-elf-nm $dir/*.a | grep -w printf | wc -l) -eq 0; done;
-    - for dir in esp32 esp32s2beta; do test $(xtensa-esp32-elf-nm $dir/*.a | grep -w ets_printf | wc -l) -eq 0; done;
+    - for dir in esp32 esp32s2; do test $(xtensa-esp32-elf-nm $dir/*.a | grep -w printf | wc -l) -eq 0; done;
+    - for dir in esp32 esp32s2; do test $(xtensa-esp32-elf-nm $dir/*.a | grep -w ets_printf | wc -l) -eq 0; done;
     - popd
+
+check_public_headers:
+  stage: pre_check
+  image: $CI_DOCKER_REGISTRY/esp32-ci-env$BOT_DOCKER_IMAGE_TAG
+  tags:
+    - build
+  variables:
+    BATCH_BUILD: "1"
+  only:
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+      - $BOT_LABEL_BUILD
+      - $BOT_LABEL_REGULAR_TEST
+  script:
+    - python tools/ci/check_public_headers.py --jobs 4 --prefix xtensa-esp32-elf-
+
+# For release tag pipelines only, make sure the tag was created with 'git tag -a' so it will update
+# the version returned by 'git describe'
+check_version_tag:
+  extends: .check_job_template
+  only:
+    refs:
+      - /^v\d+\.\d+(\.\d+)?($|-)/
+    variables:
+      - $BOT_TRIGGER_WITH_LABEL == null
+  script:
+    - (git cat-file -t $CI_COMMIT_REF_NAME | grep tag) || (echo "ESP-IDF versions must be annotated tags." && exit 1)
+

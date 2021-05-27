@@ -141,9 +141,9 @@ ESP-NETIF programmer's manual
 
 Please refer to the example section for basic initialization of default interfaces:
 
-- WiFi Station: :example:`examples/wifi/getting_started/station/main/station_example_main.c`
-- WiFi Access Point: :example:`examples/wifi/getting_started/softAP/main/softap_example_main.c`
-- Ethernet :example:`examples/ethernet/basic/main/ethernet_example_main.c`
+- WiFi Station: :example_file:`wifi/getting_started/station/main/station_example_main.c`
+- WiFi Access Point: :example_file:`wifi/getting_started/softAP/main/softap_example_main.c`
+- Ethernet: :example_file:`ethernet/basic/main/ethernet_example_main.c`
 
 For more specific cases please consult this guide: :doc:`/api-reference/network/esp_netif_driver`.
 
@@ -168,10 +168,10 @@ configured with default settings, which as a consequence, means that:
 API Reference
 -------------
 
-.. include:: /_build/inc/esp_netif.inc
+.. include-build-file:: inc/esp_netif.inc
 
 
 WiFi default API reference
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. include:: /_build/inc/esp_wifi_default.inc
+.. include-build-file:: inc/esp_wifi_default.inc

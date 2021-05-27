@@ -8,7 +8,7 @@
 
 本文档旨在指导用户搭建 ESP32 硬件开发的软件环境，通过一个简单的示例展示如何使用 ESP-IDF (Espressif IoT Development Framework) 配置菜单，并编译、下载固件至 ESP32 开发板等步骤。
 
-.. include:: /_build/inc/version-note.inc
+.. include-build-file:: inc/version-note.inc
 
 概述
 ====
@@ -57,10 +57,11 @@ ESP32 采用 40 nm 工艺制成，具有最佳的功耗性能、射频性能、�
 .. toctree::
     :maxdepth: 1
 
-    ESP32-DevKitC <../hw-reference/get-started-devkitc>
-    ESP-WROVER-KIT <../hw-reference/get-started-wrover-kit>
-    ESP32-PICO-KIT <../hw-reference/get-started-pico-kit>
-    ESP32-Ethernet-Kit <../hw-reference/get-started-ethernet-kit>
+    ESP32-DevKitC <../hw-reference/esp32/get-started-devkitc>
+    ESP-WROVER-KIT <../hw-reference/esp32/get-started-wrover-kit>
+    ESP32-PICO-KIT <../hw-reference/esp32/get-started-pico-kit>
+    ESP32-Ethernet-Kit <../hw-reference/esp32/get-started-ethernet-kit>
+    ESP32-DevKit-S(-R) <../hw-reference/esp32/user-guide-devkits-r-v1.1>
 
 
 .. _get-started-step-by-step-legacy:
@@ -141,13 +142,13 @@ ESP32 采用 40 nm 工艺制成，具有最佳的功耗性能、射频性能、�
 
 打开终端，后运行以下命令：
 
-.. include:: /_build/inc/git-clone-bash.inc
+.. include-build-file:: inc/git-clone-bash.inc
 
 ESP-IDF 将下载至 ``~/esp/esp-idf``。
 
 请前往 :doc:`/versions`，查看 ESP-IDF 不同版本的具体适用场景。
 
-.. include:: /_build/inc/git-clone-notes.inc
+.. include-build-file:: inc/git-clone-notes.inc
 
 .. note::
 
@@ -395,7 +396,7 @@ Windows 操作系统
 用户可以在使用 ``make`` 命令时 **直接设置** 部分环境变量，而无需进入 ``make menuconfig`` 进行重新配置。这些变量包括：
 
 
-.. list-table:: 
+.. list-table::
     :widths: 25 75
     :header-rows: 1
 
@@ -416,7 +417,7 @@ Windows 操作系统
 更新 ESP-IDF
 =============
 
-乐鑫会不时推出更新版本的 ESP-IDF，修复 bug 或推出新的特性。因此，您在使用时，也应注意更新您本地的版本。最简单的方法是：直接删除您本地的 ``esp-idf`` 文件夹，然后按照 :ref:`get-started-get-esp-idf-legacy` 中的指示，重新完成克隆。 
+乐鑫会不时推出更新版本的 ESP-IDF，修复 bug 或推出新的特性。因此，您在使用时，也应注意更新您本地的版本。最简单的方法是：直接删除您本地的 ``esp-idf`` 文件夹，然后按照 :ref:`get-started-get-esp-idf-legacy` 中的指示，重新完成克隆。
 
 如果您希望将 ESP-IDF 克隆到新的路径下，请务必 :doc:`重新设置 IDF_PATH <add-idf_path-to-profile>`。否则，工具链将无法找到 ESP-IDF。
 

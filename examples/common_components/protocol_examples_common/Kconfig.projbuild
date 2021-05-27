@@ -1,18 +1,11 @@
 menu "Example Connection Configuration"
-    choice EXAMPLE_CONNECT_INTERFACE
-        prompt "Connect using"
-        default EXAMPLE_CONNECT_WIFI
+
+    config EXAMPLE_CONNECT_WIFI
+        bool "connect using WiFi interface"
+        default y
         help
-            Protocol examples can use Wi-Fi or Ethernet to connect to the network.
-            Choose which interface to use.
-
-        config EXAMPLE_CONNECT_WIFI
-            bool "Wi-Fi"
-
-        config EXAMPLE_CONNECT_ETHERNET
-            bool "Ethernet"
-
-    endchoice
+            Protocol examples can use Wi-Fi and/or Ethernet to connect to the network.
+            Choose this option to connect with WiFi
 
     if EXAMPLE_CONNECT_WIFI
         config EXAMPLE_WIFI_SSID
@@ -28,6 +21,13 @@ menu "Example Connection Configuration"
                 WiFi password (WPA or WPA2) for the example to use.
                 Can be left blank if the network has no security set.
     endif
+
+    config EXAMPLE_CONNECT_ETHERNET
+        bool "connect using Ethernet interface"
+        default n
+        help
+            Protocol examples can use Wi-Fi and/or Ethernet to connect to the network.
+            Choose this option to connect with Ethernet
 
     if EXAMPLE_CONNECT_ETHERNET
         choice EXAMPLE_USE_ETHERNET
@@ -175,11 +175,44 @@ menu "Example Connection Configuration"
     endif
 
     config EXAMPLE_CONNECT_IPV6
-        bool "Obtain IPv6 link-local address"
-        depends on IDF_TARGET_ESP32
-        # ToDo: remove once IPV6 is supported on esp32s2
+        bool "Obtain IPv6 address"
         default y
         help
-            By default, examples will wait until IPv4 and IPv6 addresses are obtained.
+            By default, examples will wait until IPv4 and IPv6 local link addresses are obtained.
             Disable this option if the network does not support IPv6.
+            Choose the preferred IPv6 address type if the connection code should wait until other than
+            the local link address gets assigned.
+
+    if EXAMPLE_CONNECT_IPV6
+        choice EXAMPLE_CONNECT_PREFERRED_IPV6
+            prompt "Preferred IPv6 Type"
+            default EXAMPLE_CONNECT_IPV6_PREF_LOCAL_LINK
+            help
+                Select which kind of IPv6 address the connect logic waits for.
+
+            config EXAMPLE_CONNECT_IPV6_PREF_LOCAL_LINK
+                bool "Local Link Address"
+                help
+                    Blocks until Local link address assigned.
+
+            config EXAMPLE_CONNECT_IPV6_PREF_GLOBAL
+                bool "Global Address"
+                help
+                    Blocks until Global address assigned.
+
+            config EXAMPLE_CONNECT_IPV6_PREF_SITE_LOCAL
+                bool "Site Local Address"
+                help
+                    Blocks until Site link address assigned.
+
+            config EXAMPLE_CONNECT_IPV6_PREF_UNIQUE_LOCAL
+                bool "Unique Local Link Address"
+                help
+                    Blocks until Unique local address assigned.
+
+        endchoice
+
+    endif
+
+
 endmenu

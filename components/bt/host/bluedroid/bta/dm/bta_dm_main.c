@@ -78,6 +78,10 @@ const tBTA_DM_ACTION bta_dm_action[BTA_DM_MAX_EVT] = {
     bta_dm_pm_btm_status,                   /* BTA_DM_PM_BTM_STATUS_EVT */
     bta_dm_pm_timer,                        /* BTA_DM_PM_TIMER_EVT */
 #endif /* #if (BTA_DM_PM_INCLUDED == TRUE) */
+#if (BTA_DM_QOS_INCLUDED == TRUE)
+    /* Quality of Service set events */
+    bta_dm_set_qos,                         /* BTA_DM_API_QOS_SET_EVT */
+#endif /* #if (BTA_DM_QOS_INCLUDED == TRUE) */
     /* simple pairing events */
 #if (SMP_INCLUDED == TRUE)
     bta_dm_confirm,                         /* BTA_DM_API_CONFIRM_EVT */
@@ -165,7 +169,7 @@ const tBTA_DM_ACTION bta_dm_action[BTA_DM_MAX_EVT] = {
     bta_dm_ble_set_channels,                /* BTA_DM_API_BLE_SET_CHANNELS_EVT */
     bta_dm_update_white_list,               /* BTA_DM_API_UPDATE_WHITE_LIST_EVT */
     bta_dm_ble_read_adv_tx_power,           /* BTA_DM_API_BLE_READ_ADV_TX_POWER_EVT */
-    bta_dm_ble_read_rssi,                   /* BTA_DM_API_BLE_READ_RSSI_EVT */
+    bta_dm_read_rssi,                       /* BTA_DM_API_READ_RSSI_EVT */
 #if BLE_INCLUDED == TRUE
     bta_dm_ble_update_duplicate_exceptional_list,/* BTA_DM_API_UPDATE_DUPLICATE_EXCEPTIONAL_LIST_EVT */
 #endif

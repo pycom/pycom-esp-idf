@@ -21,8 +21,8 @@
 #include "unity.h"
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/uart.h"
-#elif CONFIG_IDF_TARGET_ESP32S2BETA
-#include "esp32s2beta/rom/uart.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/rom/uart.h"
 #endif
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -81,8 +81,8 @@ TEST_CASE("can read from stdin", "[vfs]")
 
 TEST_CASE("CRs are removed from the stdin correctly", "[vfs]")
 {
-    esp_vfs_dev_uart_set_rx_line_endings(ESP_LINE_ENDINGS_CRLF);
-    esp_vfs_dev_uart_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+    esp_vfs_dev_uart_port_set_rx_line_endings(CONFIG_ESP_CONSOLE_UART_NUM, ESP_LINE_ENDINGS_CRLF);
+    esp_vfs_dev_uart_port_set_tx_line_endings(CONFIG_ESP_CONSOLE_UART_NUM, ESP_LINE_ENDINGS_CRLF);
 
     flush_stdin_stdout();
     const char* send_str = "1234567890\n\r123\r\n4\n";
@@ -184,7 +184,7 @@ TEST_CASE("can write to UART while another task is reading", "[vfs]")
     flush_stdin_stdout();
 
     ESP_ERROR_CHECK( uart_driver_install(CONFIG_ESP_CONSOLE_UART_NUM,
-            256, 0, 0, NULL, 0, NULL) );
+            256, 0, 0, NULL, 0) );
     esp_vfs_dev_uart_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
 
 

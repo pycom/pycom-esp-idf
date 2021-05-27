@@ -17,8 +17,8 @@
 #include <assert.h>
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/sha.h"
-#elif CONFIG_IDF_TARGET_ESP32S2BETA
-#include "esp32s2beta/sha.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/sha.h"
 #endif
 
 #include <mbedtls/sha1.h>
@@ -26,7 +26,6 @@
 #include <mbedtls/sha512.h>
 
 
-#if CONFIG_IDF_TARGET_ESP32
 void esp_sha(esp_sha_type sha_type, const unsigned char *input, size_t ilen, unsigned char *output)
 {
     int ret;
@@ -83,4 +82,3 @@ void esp_sha(esp_sha_type sha_type, const unsigned char *input, size_t ilen, uns
     }
 
 }
-#endif

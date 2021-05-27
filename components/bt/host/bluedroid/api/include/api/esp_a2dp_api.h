@@ -31,7 +31,8 @@ extern "C" {
 
 typedef uint8_t esp_a2d_mct_t;
 
-/// A2DP media codec capabilities union
+/** A2DP media codec capabilities union
+ */
 typedef struct {
     esp_a2d_mct_t type;                        /*!< A2DP media codec type */
 #define ESP_A2D_CIE_LEN_SBC          (4)
@@ -39,10 +40,10 @@ typedef struct {
 #define ESP_A2D_CIE_LEN_M24          (6)
 #define ESP_A2D_CIE_LEN_ATRAC        (7)
     union {
-        uint8_t sbc[ESP_A2D_CIE_LEN_SBC];
-        uint8_t m12[ESP_A2D_CIE_LEN_M12];
-        uint8_t m24[ESP_A2D_CIE_LEN_M24];
-        uint8_t atrac[ESP_A2D_CIE_LEN_ATRAC];
+        uint8_t sbc[ESP_A2D_CIE_LEN_SBC];      /*!< SBC codec capabilities */
+        uint8_t m12[ESP_A2D_CIE_LEN_M12];      /*!< MPEG-1,2 audio codec capabilities */
+        uint8_t m24[ESP_A2D_CIE_LEN_M24];      /*!< MPEG-2, 4 AAC audio codec capabilities */
+        uint8_t atrac[ESP_A2D_CIE_LEN_ATRAC];  /*!< ATRAC family codec capabilities */
     } cie;                                     /*!< A2DP codec information element */
 } __attribute__((packed)) esp_a2d_mcc_t;
 
@@ -76,12 +77,18 @@ typedef enum {
 
 /// A2DP media control commands
 typedef enum {
-    ESP_A2D_MEDIA_CTRL_NONE = 0,               /*!< dummy command */
+    ESP_A2D_MEDIA_CTRL_NONE = 0,               /*!< Not for application use, use inside stack only. */
     ESP_A2D_MEDIA_CTRL_CHECK_SRC_RDY,          /*!< check whether AVDTP is connected, only used in A2DP source */
     ESP_A2D_MEDIA_CTRL_START,                  /*!< command to set up media transmission channel */
     ESP_A2D_MEDIA_CTRL_STOP,                   /*!< command to stop media transmission */
     ESP_A2D_MEDIA_CTRL_SUSPEND,                /*!< command to suspend media transmission  */
 } esp_a2d_media_ctrl_t;
+
+/// Bluetooth A2DP Initiation states
+typedef enum {
+    ESP_A2D_DEINIT_SUCCESS = 0,                /*!< A2DP profile deinit successful event */
+    ESP_A2D_INIT_SUCCESS                       /*!< A2DP profile deinit successful event */
+} esp_a2d_init_state_t;
 
 /// A2DP callback events
 typedef enum {
@@ -89,6 +96,7 @@ typedef enum {
     ESP_A2D_AUDIO_STATE_EVT,                   /*!< audio stream transmission state changed event */
     ESP_A2D_AUDIO_CFG_EVT,                     /*!< audio codec is configured, only used for A2DP SINK */
     ESP_A2D_MEDIA_CTRL_ACK_EVT,                /*!< acknowledge event in response to media control commands */
+    ESP_A2D_PROF_STATE_EVT,                    /*!< indicate a2dp init&deinit complete */
 } esp_a2d_cb_event_t;
 
 /// A2DP state callback parameters
@@ -125,6 +133,12 @@ typedef union {
         esp_a2d_media_ctrl_t cmd;              /*!< media control commands to acknowledge */
         esp_a2d_media_ctrl_ack_t status;       /*!< acknowledgement to media control commands */
     } media_ctrl_stat;                         /*!< status in acknowledgement to media control commands */
+    /**
+     * @brief ESP_A2D_PROF_STATE_EVT
+     */
+    struct a2d_prof_stat_param {
+        esp_a2d_init_state_t init_state;       /*!< a2dp profile state param */
+    } a2d_prof_stat;                           /*!< status to indicate a2d prof init or deinit */
 } esp_a2d_cb_param_t;
 
 /**
@@ -193,7 +207,9 @@ esp_err_t esp_a2d_sink_register_data_callback(esp_a2d_sink_data_cb_t callback);
 /**
  *
  * @brief           Initialize the bluetooth A2DP sink module. This function should be called
- *                  after esp_bluedroid_enable() completes successfully
+ *                  after esp_bluedroid_enable() completes successfully, and ESP_A2D_PROF_STATE_EVT
+ *                  with ESP_A2D_INIT_SUCCESS will reported to the APP layer. Note: A2DP can work independently.
+ *                  If you want to use AVRC together, you should initiate AVRC first.
  *
  * @return
  *                  - ESP_OK: if the initialization request is sent successfully
@@ -207,7 +223,8 @@ esp_err_t esp_a2d_sink_init(void);
 /**
  *
  * @brief           De-initialize for A2DP sink module. This function
- *                  should be called only after esp_bluedroid_enable() completes successfully
+ *                  should be called only after esp_bluedroid_enable() completes successfully,
+ *                  and ESP_A2D_PROF_STATE_EVT with ESP_A2D_DEINIT_SUCCESS will reported to APP layer.
  *
  * @return
  *                  - ESP_OK: success
@@ -264,7 +281,9 @@ esp_err_t esp_a2d_media_ctrl(esp_a2d_media_ctrl_t ctrl);
 /**
  *
  * @brief           Initialize the bluetooth A2DP source module. This function should be called
- *                  after esp_bluedroid_enable() completes successfully
+ *                  after esp_bluedroid_enable() completes successfully, and ESP_A2D_PROF_STATE_EVT
+ *                  with ESP_A2D_INIT_SUCCESS will reported to the APP layer. Note: A2DP can work independently.
+ *                  If you want to use AVRC together, you should initiate AVRC first.
  *
  * @return
  *                  - ESP_OK: if the initialization request is sent successfully
@@ -278,7 +297,8 @@ esp_err_t esp_a2d_source_init(void);
 /**
  *
  * @brief           De-initialize for A2DP source module. This function
- *                  should be called only after esp_bluedroid_enable() completes successfully
+ *                  should be called only after esp_bluedroid_enable() completes successfully,
+ *                  and ESP_A2D_PROF_STATE_EVT with ESP_A2D_DEINIT_SUCCESS will reported to APP layer.
  *
  * @return
  *                  - ESP_OK: success

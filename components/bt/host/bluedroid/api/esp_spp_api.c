@@ -133,7 +133,8 @@ esp_err_t esp_spp_start_srv(esp_spp_sec_t sec_mask,
     btc_spp_args_t arg;
     ESP_BLUEDROID_STATUS_CHECK(ESP_BLUEDROID_STATUS_ENABLED);
 
-    if (strlen(name) > ESP_SPP_SERVER_NAME_MAX) {
+    if (name == NULL || strlen(name) > ESP_SPP_SERVER_NAME_MAX) {
+        LOG_ERROR("Invalid server name!\n");
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -150,6 +151,39 @@ esp_err_t esp_spp_start_srv(esp_spp_sec_t sec_mask,
     arg.start_srv.local_scn = local_scn;
     arg.start_srv.max_session = ESP_SPP_MAX_SESSION;
     strcpy(arg.start_srv.name, name);
+
+    return (btc_transfer_context(&msg, &arg, sizeof(btc_spp_args_t), NULL) == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
+}
+
+esp_err_t esp_spp_stop_srv(void)
+{
+    btc_msg_t msg;
+    btc_spp_args_t arg;
+    ESP_BLUEDROID_STATUS_CHECK(ESP_BLUEDROID_STATUS_ENABLED);
+
+    msg.sig = BTC_SIG_API_CALL;
+    msg.pid = BTC_PID_SPP;
+    msg.act = BTC_SPP_ACT_STOP_SRV;
+    arg.stop_srv.scn = BTC_SPP_INVALID_SCN;
+
+    return (btc_transfer_context(&msg, &arg, sizeof(btc_spp_args_t), NULL) == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
+}
+
+esp_err_t esp_spp_stop_srv_scn(uint8_t scn)
+{
+    btc_msg_t msg;
+    btc_spp_args_t arg;
+    ESP_BLUEDROID_STATUS_CHECK(ESP_BLUEDROID_STATUS_ENABLED);
+
+    if ((scn == 0) || (scn >= PORT_MAX_RFC_PORTS)) {
+        LOG_ERROR("Invalid SCN!\n");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    msg.sig = BTC_SIG_API_CALL;
+    msg.pid = BTC_PID_SPP;
+    msg.act = BTC_SPP_ACT_STOP_SRV;
+    arg.stop_srv.scn = scn;
 
     return (btc_transfer_context(&msg, &arg, sizeof(btc_spp_args_t), NULL) == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
 }

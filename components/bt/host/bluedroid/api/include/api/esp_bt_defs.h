@@ -70,7 +70,7 @@ typedef uint8_t esp_link_key[ESP_BT_OCTET16_LEN];      /* Link Key */
 
 #define ESP_BLE_CONN_INT_MIN                0x0006       /*!< relate to BTM_BLE_CONN_INT_MIN in stack/btm_ble_api.h */
 #define ESP_BLE_CONN_INT_MAX                0x0C80       /*!< relate to BTM_BLE_CONN_INT_MAX in stack/btm_ble_api.h */
-#define ESP_BLE_CONN_LATENCY_MAX            500          /*!< relate to ESP_BLE_CONN_LATENCY_MAX in stack/btm_ble_api.h */
+#define ESP_BLE_CONN_LATENCY_MAX            499          /*!< relate to ESP_BLE_CONN_LATENCY_MAX in stack/btm_ble_api.h */
 #define ESP_BLE_CONN_SUP_TOUT_MIN           0x000A       /*!< relate to BTM_BLE_CONN_SUP_TOUT_MIN in stack/btm_ble_api.h */
 #define ESP_BLE_CONN_SUP_TOUT_MAX           0x0C80       /*!< relate to ESP_BLE_CONN_SUP_TOUT_MAX in stack/btm_ble_api.h */
 #define ESP_BLE_CONN_PARAM_UNDEF            0xffff       /* use this value when a specific value not to be overwritten */ /* relate to ESP_BLE_CONN_PARAM_UNDEF in stack/btm_ble_api.h */
@@ -86,9 +86,9 @@ typedef struct {
 #define ESP_UUID_LEN_128    16
     uint16_t len;							/*!< UUID length, 16bit, 32bit or 128bit */
     union {
-        uint16_t    uuid16;
-        uint32_t    uuid32;
-        uint8_t     uuid128[ESP_UUID_LEN_128];
+        uint16_t    uuid16;                 /*!< 16bit UUID */
+        uint32_t    uuid32;                 /*!< 32bit UUID */
+        uint8_t     uuid128[ESP_UUID_LEN_128]; /*!< 128bit UUID */
     } uuid;									/*!< UUID */
 } __attribute__((packed)) esp_bt_uuid_t;
 

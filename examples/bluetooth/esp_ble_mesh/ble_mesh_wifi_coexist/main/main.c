@@ -44,6 +44,8 @@
 #include "ble_mesh_fast_prov_server_model.h"
 #include "ble_mesh_example_init.h"
 
+#define TAG "EXAMPLE"
+
 extern struct _led_state led_state[3];
 extern struct k_delayed_work send_self_prov_node_addr_timer;
 extern bt_mesh_atomic_t fast_prov_cli_flags;
@@ -139,9 +141,9 @@ static esp_ble_mesh_model_t root_models[] = {
 
 static esp_ble_mesh_model_t vnd_models[] = {
     ESP_BLE_MESH_VENDOR_MODEL(CID_ESP, ESP_BLE_MESH_VND_MODEL_ID_FAST_PROV_SRV,
-    fast_prov_srv_op, NULL, &fast_prov_server),
+                              fast_prov_srv_op, NULL, &fast_prov_server),
     ESP_BLE_MESH_VENDOR_MODEL(CID_ESP, ESP_BLE_MESH_VND_MODEL_ID_FAST_PROV_CLI,
-    fast_prov_cli_op, NULL, &fast_prov_client),
+                              fast_prov_cli_op, NULL, &fast_prov_client),
 };
 
 static esp_ble_mesh_elem_t elements[] = {
@@ -247,7 +249,7 @@ static void provisioner_prov_complete(int node_idx, const uint8_t uuid[16], uint
             return;
         }
         if (fast_prov_server.node_addr_cnt != FAST_PROV_NODE_COUNT_MIN &&
-            fast_prov_server.node_addr_cnt <= fast_prov_server.max_node_num) {
+                fast_prov_server.node_addr_cnt <= fast_prov_server.max_node_num) {
             if (bt_mesh_atomic_test_and_clear_bit(fast_prov_server.srv_flags, GATT_PROXY_ENABLE_START)) {
                 k_delayed_work_cancel(&fast_prov_server.gatt_proxy_enable_timer);
             }
@@ -353,7 +355,7 @@ static void example_ble_mesh_provisioning_cb(esp_ble_mesh_prov_cb_event_t event,
     case ESP_BLE_MESH_NODE_PROV_COMPLETE_EVT:
         ESP_LOGI(TAG, "ESP_BLE_MESH_NODE_PROV_COMPLETE_EVT");
         node_prov_complete(param->node_prov_complete.net_idx, param->node_prov_complete.addr,
-            param->node_prov_complete.flags, param->node_prov_complete.iv_index);
+                           param->node_prov_complete.flags, param->node_prov_complete.iv_index);
         break;
     case ESP_BLE_MESH_NODE_PROXY_GATT_DISABLE_COMP_EVT:
         ESP_LOGI(TAG, "ESP_BLE_MESH_NODE_PROXY_GATT_DISABLE_COMP_EVT");
@@ -663,7 +665,7 @@ static void example_ble_mesh_config_server_cb(esp_ble_mesh_cfg_server_cb_event_t
             err = example_handle_config_app_key_add_evt(param->value.state_change.appkey_add.app_idx);
             if (err != ESP_OK) {
                 ESP_LOGE(TAG, "%s: Failed to bind app_idx 0x%04x with non-config models",
-                    __func__, param->value.state_change.appkey_add.app_idx);
+                         __func__, param->value.state_change.appkey_add.app_idx);
                 return;
             }
             break;
@@ -677,16 +679,16 @@ static void example_ble_mesh_config_server_cb(esp_ble_mesh_cfg_server_cb_event_t
 }
 
 static void example_ble_mesh_generic_server_cb(esp_ble_mesh_generic_server_cb_event_t event,
-                                               esp_ble_mesh_generic_server_cb_param_t *param)
+        esp_ble_mesh_generic_server_cb_param_t *param)
 {
     ESP_LOGI(TAG, "event 0x%02x, opcode 0x%04x, src 0x%04x, dst 0x%04x",
-        event, param->ctx.recv_op, param->ctx.addr, param->ctx.recv_dst);
+             event, param->ctx.recv_op, param->ctx.addr, param->ctx.recv_dst);
 
     switch (event) {
     case ESP_BLE_MESH_GENERIC_SERVER_STATE_CHANGE_EVT:
         ESP_LOGI(TAG, "ESP_BLE_MESH_GENERIC_SERVER_STATE_CHANGE_EVT");
         if (param->ctx.recv_op == ESP_BLE_MESH_MODEL_OP_GEN_ONOFF_SET ||
-            param->ctx.recv_op == ESP_BLE_MESH_MODEL_OP_GEN_ONOFF_SET_UNACK) {
+                param->ctx.recv_op == ESP_BLE_MESH_MODEL_OP_GEN_ONOFF_SET_UNACK) {
             ESP_LOGI(TAG, "onoff 0x%02x", param->value.state_change.onoff_set.onoff);
             example_change_led_state(param->value.state_change.onoff_set.onoff);
         }
@@ -742,68 +744,18 @@ static esp_err_t ble_mesh_init(void)
 
 #define WIFI_CONNECTED_BIT BIT0
 
-static void initialize_console(void)
-{
-    /* Disable buffering on stdin and stdout */
-    setvbuf(stdin, NULL, _IONBF, 0);
-    setvbuf(stdout, NULL, _IONBF, 0);
-
-    /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
-    esp_vfs_dev_uart_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
-    /* Move the caret to the beginning of the next line on '\n' */
-    esp_vfs_dev_uart_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
-
-    /* Install UART driver for interrupt-driven reads and writes */
-    ESP_ERROR_CHECK( uart_driver_install(CONFIG_ESP_CONSOLE_UART_NUM,
-                                         256, 0, 0, NULL, 0) );
-
-    /* Tell VFS to use UART driver */
-    esp_vfs_dev_uart_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
-
-    /* Initialize the console */
-    esp_console_config_t console_config = {
-        .max_cmdline_args = 32,
-        .max_cmdline_length = 256,
-#if CONFIG_LOG_COLORS
-        .hint_color = atoi(LOG_COLOR_CYAN)
-#endif
-    };
-    ESP_ERROR_CHECK( esp_console_init(&console_config) );
-
-    /* Configure linenoise line completion library */
-    /* Enable multiline editing. If not set, long commands will scroll within
-     * single line.
-     */
-    linenoiseSetMultiLine(1);
-
-    /* Tell linenoise where to get command completions and hints */
-    linenoiseSetCompletionCallback(&esp_console_get_completion);
-    linenoiseSetHintsCallback((linenoiseHintsCallback *) &esp_console_get_hint);
-
-    /* Set command history size */
-    linenoiseHistorySetMaxLen(100);
-}
-
 static void wifi_console_init(void)
 {
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK( ret );
-
     initialise_wifi();
-    initialize_console();
+
+    esp_console_repl_t *repl = NULL;
+    esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
+    esp_console_dev_uart_config_t uart_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
+    // init console REPL environment
+    ESP_ERROR_CHECK(esp_console_new_repl_uart(&uart_config, &repl_config, &repl));
 
     /* Register commands */
-    esp_console_register_help_command();
     register_wifi();
-
-    /* Prompt to be printed before each line.
-     * This can be customized, made dynamic, etc.
-     */
-    const char *prompt = LOG_COLOR_I "esp32> " LOG_RESET_COLOR;
 
     printf("\n ==================================================\n");
     printf(" |       Steps to test WiFi throughput            |\n");
@@ -815,50 +767,8 @@ static void wifi_console_init(void)
     printf(" |                                                |\n");
     printf(" =================================================\n\n");
 
-    /* Figure out if the terminal supports escape sequences */
-    int probe_status = linenoiseProbe();
-    if (probe_status) { /* zero indicates success */
-        printf("\n"
-               "Your terminal application does not support escape sequences.\n"
-               "Line editing and history features are disabled.\n"
-               "On Windows, try using Putty instead.\n");
-        linenoiseSetDumbMode(1);
-#if CONFIG_LOG_COLORS
-        /* Since the terminal doesn't support escape sequences,
-         * don't use color codes in the prompt.
-         */
-        prompt = "esp32> ";
-#endif //CONFIG_LOG_COLORS
-    }
-
-    /* Main loop */
-    while (true) {
-        /* Get a line using linenoise.
-         * The line is returned when ENTER is pressed.
-         */
-        char *line = linenoise(prompt);
-        if (line == NULL) { /* Ignore empty lines */
-            continue;
-        }
-        /* Add the command to the history */
-        linenoiseHistoryAdd(line);
-
-        /* Try to run the command */
-        int ret;
-        esp_err_t err = esp_console_run(line, &ret);
-        if (err == ESP_ERR_NOT_FOUND) {
-            printf("Unrecognized command\n");
-        } else if (err == ESP_OK && ret != ESP_OK) {
-            printf("Command returned non-zero error code: 0x%x\n", ret);
-        } else if (err != ESP_OK) {
-            printf("Internal error: %s\n", esp_err_to_name(err));
-        }
-        /* linenoise allocates line buffer on the heap, so need to free it */
-        linenoiseFree(line);
-    }
-
-    return;
-
+    // start console REPL
+    ESP_ERROR_CHECK(esp_console_start_repl(repl));
 }
 
 void app_main(void)

@@ -1,13 +1,18 @@
 import re
 import os
 import socket
-import BaseHTTPServer
-import SimpleHTTPServer
 from threading import Thread
 import ssl
 
 from tiny_test_fw import DUT
 import ttfw_idf
+
+try:
+    import BaseHTTPServer
+    from SimpleHTTPServer import SimpleHTTPRequestHandler
+except ImportError:
+    import http.server as BaseHTTPServer
+    from http.server import SimpleHTTPRequestHandler
 
 server_cert = "-----BEGIN CERTIFICATE-----\n" \
               "MIIDXTCCAkWgAwIBAgIJAP4LF7E72HakMA0GCSqGSIb3DQEBCwUAMEUxCzAJBgNV\n"\
@@ -87,7 +92,7 @@ def start_https_server(ota_image_dir, server_ip, server_port):
     key_file_handle.close()
 
     httpd = BaseHTTPServer.HTTPServer((server_ip, server_port),
-                                      SimpleHTTPServer.SimpleHTTPRequestHandler)
+                                      SimpleHTTPRequestHandler)
 
     httpd.socket = ssl.wrap_socket(httpd.socket,
                                    keyfile=key_file,
@@ -108,7 +113,7 @@ def test_examples_protocol_simple_ota_example(env, extra_data):
     binary_file = os.path.join(dut1.app.binary_path, "simple_ota.bin")
     bin_size = os.path.getsize(binary_file)
     ttfw_idf.log_performance("simple_ota_bin_size", "{}KB".format(bin_size // 1024))
-    ttfw_idf.check_performance("simple_ota_bin_size", bin_size // 1024)
+    ttfw_idf.check_performance("simple_ota_bin_size", bin_size // 1024, dut1.TARGET)
     # start test
     host_ip = get_my_ip()
     thread1 = Thread(target=start_https_server, args=(dut1.app.binary_path, host_ip, 8000))

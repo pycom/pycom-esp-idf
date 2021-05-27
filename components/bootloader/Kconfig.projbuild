@@ -53,20 +53,34 @@ menu "Bootloader config"
         default 4 if BOOTLOADER_LOG_LEVEL_DEBUG
         default 5 if BOOTLOADER_LOG_LEVEL_VERBOSE
 
+    config BOOTLOADER_SPI_CUSTOM_WP_PIN
+        bool "Use custom SPI Flash WP Pin when flash pins set in eFuse (read help)"
+        depends on IDF_TARGET_ESP32 && (ESPTOOLPY_FLASHMODE_QIO || ESPTOOLPY_FLASHMODE_QOUT)
+        default y if BOOTLOADER_SPI_WP_PIN != 7  # backwards compatibility, can remove in IDF 5
+        default n
+        help
+            This setting is only used if the SPI flash pins have been overridden by setting the eFuses
+            SPI_PAD_CONFIG_xxx, and the SPI flash mode is QIO or QOUT.
+
+            When this is the case, the eFuse config only defines 3 of the 4 Quad I/O data pins. The WP pin (aka
+            ESP32 pin "SD_DATA_3" or SPI flash pin "IO2") is not specified in eFuse. The same pin is also used
+            for external SPIRAM if it is enabled.
+
+            If this config item is set to N (default), the correct WP pin will be automatically used for any
+            Espressif chip or module with integrated flash. If a custom setting is needed, set this config item to
+            Y and specify the GPIO number connected to the WP.
+
     config BOOTLOADER_SPI_WP_PIN
-        int "SPI Flash WP Pin when customising pins via eFuse (read help)"
+        int "Custom SPI Flash WP Pin"
         range 0 33
         default 7
-        depends on ESPTOOLPY_FLASHMODE_QIO || ESPTOOLPY_FLASHMODE_QOUT
+        depends on IDF_TARGET_ESP32 && (ESPTOOLPY_FLASHMODE_QIO || ESPTOOLPY_FLASHMODE_QOUT)
+        #depends on BOOTLOADER_SPI_CUSTOM_WP_PIN  # backwards compatibility, can uncomment in IDF 5
         help
-            This value is ignored unless flash mode is set to QIO or QOUT *and* the SPI flash pins have been
-            overriden by setting the eFuses SPI_PAD_CONFIG_xxx.
+            The option "Use custom SPI Flash WP Pin" must be set or this value is ignored
 
-            When this is the case, the eFuse config only defines 3 of the 4 Quad I/O data pins. The WP pin (aka ESP32
-            pin "SD_DATA_3" or SPI flash pin "IO2") is not specified in eFuse. That pin number is compiled into the
-            bootloader instead.
-
-            The default value (GPIO 7) is correct for WP pin on ESP32-D2WD integrated flash.
+            If burning a customized set of SPI flash pins in eFuse and using QIO or QOUT mode for flash, set this
+            value to the GPIO number of the SPI flash WP pin.
 
     choice BOOTLOADER_VDDSDIO_BOOST
         bool "VDDSDIO LDO voltage"
@@ -231,11 +245,11 @@ menu "Bootloader config"
         depends on BOOTLOADER_APP_ANTI_ROLLBACK
         range 1 32 if IDF_TARGET_ESP32
         default 32 if IDF_TARGET_ESP32
-        range 1 16 if IDF_TARGET_ESP32S2BETA
-        default 16 if IDF_TARGET_ESP32S2BETA
+        range 1 16 if IDF_TARGET_ESP32S2
+        default 16 if IDF_TARGET_ESP32S2
         help
             The size of the efuse secure version field.
-            Its length is limited to 32 bits for ESP32 and 16 bits for ESP32S2BETA.
+            Its length is limited to 32 bits for ESP32 and 16 bits for ESP32-S2.
             This determines how many times the security version can be increased.
 
     config BOOTLOADER_EFUSE_SECURE_VERSION_EMULATE
@@ -320,6 +334,16 @@ menu "Security features"
         select MBEDTLS_ECDSA_C
         depends on SECURE_SIGNED_ON_BOOT || SECURE_SIGNED_ON_UPDATE
 
+    config SECURE_BOOT_SUPPORTS_RSA
+        bool
+        default y
+        depends on ESP32_REV_MIN_3 || IDF_TARGET_ESP32S2
+
+    config SECURE_TARGET_HAS_SECURE_ROM_DL_MODE
+        bool
+        default y
+        depends on IDF_TARGET_ESP32S2
+
 
     config SECURE_SIGNED_APPS_NO_SECURE_BOOT
         bool "Require signed app images"
@@ -355,7 +379,7 @@ menu "Security features"
 
         config SECURE_SIGNED_APPS_RSA_SCHEME
             bool "RSA"
-            depends on ESP32_REV_MIN_3 && SECURE_BOOT_V2_ENABLED
+            depends on SECURE_BOOT_SUPPORTS_RSA && SECURE_BOOT_V2_ENABLED
             help
                 Appends the RSA-3072 based Signature block to the application.
                 Refer to <Secure Boot Version 2 documentation link> before enabling.
@@ -419,7 +443,9 @@ menu "Security features"
 
         config SECURE_BOOT_V2_ENABLED
             bool "Enable Secure Boot version 2"
-            depends on ESP32_REV_MIN_3
+            depends on SECURE_BOOT_SUPPORTS_RSA
+            select SECURE_ENABLE_SECURE_ROM_DL_MODE if !IDF_TARGET_ESP32 && !SECURE_INSECURE_ALLOW_DL_MODE && !SECURE_DISABLE_ROM_DL_MODE # NOERROR
+            select SECURE_DISABLE_ROM_DL_MODE if ESP32_REV_MIN_3 && !SECURE_INSECURE_ALLOW_DL_MODE
             help
                 Build a bootloader which enables Secure Boot version 2 on first boot.
                 Refer to Secure Boot V2 section of the ESP-IDF Programmer's Guide for this version before enabling.
@@ -539,6 +565,7 @@ menu "Security features"
     config SECURE_FLASH_ENC_ENABLED
         bool "Enable flash encryption on boot (READ DOCS FIRST)"
         default N
+        select SPI_FLASH_ENABLE_ENCRYPTED_READ_WRITE
         help
             If this option is set, flash contents will be encrypted by the bootloader on first boot.
 
@@ -551,7 +578,7 @@ menu "Security features"
     choice SECURE_FLASH_ENCRYPTION_KEYSIZE
         bool "Size of generated AES-XTS key"
         default SECURE_FLASH_ENCRYPTION_AES128
-        depends on IDF_TARGET_ESP32S2BETA && SECURE_FLASH_ENC_ENABLED
+        depends on IDF_TARGET_ESP32S2 && SECURE_FLASH_ENC_ENABLED
         help
             Size of generated AES-XTS key.
 
@@ -587,6 +614,7 @@ menu "Security features"
 
         config SECURE_FLASH_ENCRYPTION_MODE_RELEASE
             bool "Release"
+            select SECURE_ENABLE_SECURE_ROM_DL_MODE if SECURE_TARGET_HAS_SECURE_ROM_DL_MODE && !SECURE_DISABLE_ROM_DL_MODE # NOERROR
 
     endchoice
 
@@ -601,7 +629,7 @@ menu "Security features"
 
         config SECURE_BOOT_ALLOW_ROM_BASIC
             bool "Leave ROM BASIC Interpreter available on reset"
-            depends on SECURE_BOOT_INSECURE || SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT
+            depends on (SECURE_BOOT_INSECURE || SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT) && IDF_TARGET_ESP32
             default N
             help
                 By default, the BASIC ROM Console starts on reset if no valid bootloader is
@@ -652,6 +680,19 @@ menu "Security features"
                 key digest, causing an immediate denial of service and possibly allowing an additional fault
                 injection attack to bypass the signature protection.
 
+        config SECURE_INSECURE_ALLOW_DL_MODE
+            bool "Don't automatically restrict UART download mode"
+            depends on SECURE_BOOT_INSECURE && SECURE_BOOT_V2_ENABLED
+            default N
+            help
+                By default, enabling either flash encryption in release mode or secure boot will automatically
+                disable UART download mode on ESP32 ECO3, or enable secure download mode on newer chips.
+                This is recommended to reduce the attack surface of the chip.
+
+                To allow the full UART download mode to stay enabled, enable this option and ensure
+                the options SECURE_DISABLE_ROM_DL_MODE and SECURE_ENABLE_SECURE_ROM_DL_MODE are disabled as applicable.
+                This is not recommended.
+
         config SECURE_FLASH_UART_BOOTLOADER_ALLOW_ENC
             bool "Leave UART bootloader encryption enabled"
             depends on SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT
@@ -664,7 +705,7 @@ menu "Security features"
 
         config SECURE_FLASH_UART_BOOTLOADER_ALLOW_DEC
             bool "Leave UART bootloader decryption enabled"
-            depends on SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT
+            depends on SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT && IDF_TARGET_ESP32
             default N
             help
                 If not set (default), the bootloader will permanently disable UART bootloader decryption access on
@@ -698,5 +739,48 @@ menu "Security features"
                 the wrong device. The device needs to have flash encryption already enabled using espefuse.py.
 
     endmenu  # Potentially Insecure
+
+    config SECURE_DISABLE_ROM_DL_MODE
+        bool "Permanently disable ROM Download Mode"
+        depends on !IDF_TARGET_ESP32 || ESP32_REV_MIN_3
+        default n
+        help
+            If set, during startup the app will burn an eFuse bit to permanently disable the UART ROM
+            Download Mode. This prevents any future use of esptool.py, espefuse.py and similar tools.
+
+            Once disabled, if the SoC is booted with strapping pins set for ROM Download Mode
+            then an error is printed instead.
+
+            It is recommended to enable this option in any production application where Flash
+            Encryption and/or Secure Boot is enabled and access to Download Mode is not required.
+
+            It is also possible to permanently disable Download Mode by calling
+            esp_efuse_disable_rom_download_mode() at runtime.
+
+    config SECURE_ENABLE_SECURE_ROM_DL_MODE
+        bool "Permanently switch to ROM UART Secure Download mode"
+        depends on SECURE_TARGET_HAS_SECURE_ROM_DL_MODE && !SECURE_DISABLE_ROM_DL_MODE
+        help
+            If set, during startup the app will burn an eFuse bit to permanently switch the UART ROM
+            Download Mode into a separate Secure Download mode. This option can only work if
+            Download Mode is not already disabled by eFuse.
+
+            Secure Download mode limits the use of Download Mode functions to simple flash read,
+            write and erase operations, plus a command to return a summary of currently enabled
+            security features.
+
+            Secure Download mode is not compatible with the esptool.py flasher stub feature,
+            espefuse.py, read/writing memory or registers, encrypted download, or any other
+            features that interact with unsupported Download Mode commands.
+
+            Secure Download mode should be enabled in any application where Flash Encryption
+            and/or Secure Boot is enabled. Disabling this option does not immediately cancel
+            the benefits of the security features, but it increases the potential "attack
+            surface" for an attacker to try and bypass them with a successful physical attack.
+
+            It is also possible to enable secure download mode at runtime by calling
+            esp_efuse_enable_rom_secure_download_mode()
+
+
 endmenu  # Security features
 

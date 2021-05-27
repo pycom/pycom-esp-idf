@@ -21,18 +21,16 @@
 #include "esp_attr.h"
 #include "eri.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/portmacro.h"
 #include "esp_freertos_hooks.h"
 #include "perfmon.h"
 #include "xtensa/core-macros.h"
 #include "xtensa/xt_perf_consts.h"
 #include "xtensa-debug-module.h"
-#include "esp_ipc.h"
 
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/clk.h"
-#elif CONFIG_IDF_TARGET_ESP32S2BETA
-#include "esp32s2beta/clk.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/clk.h"
 #endif
 
 #define D_STALL_COUNTER_ID 0

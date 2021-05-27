@@ -6,7 +6,7 @@
 应用示例
 -------------------
 
-- 以太网基本示例：:example:`ethernet/ethernet`.
+- 以太网基本示例：:example:`ethernet/basic`.
 - 以太网 iperf 示例：:example:`ethernet/iperf`.
 
 以太网驱动程序模型
@@ -37,25 +37,25 @@
 API 参考 -- 驱动程序模型
 ----------------------------
 
-.. include:: /_build/inc/esp_eth.inc
+.. include-build-file:: inc/esp_eth.inc
 
 API 参考 -- 通用接口
 --------------------------------
 
-.. include:: /_build/inc/esp_eth_com.inc
+.. include-build-file:: inc/esp_eth_com.inc
 
 API 参考 -- MAC 接口
 -----------------------------
 
-.. include:: /_build/inc/esp_eth_mac.inc
+.. include-build-file:: inc/esp_eth_mac.inc
 
 API 参考 -- PHY 接口
 -----------------------------
 
-.. include:: /_build/inc/esp_eth_phy.inc
+.. include-build-file:: inc/esp_eth_phy.inc
 
 API 参考 -- esp_netif 相关使用
 ----------------------------------
 
-.. include:: /_build/inc/esp_eth_netif_glue.inc
+.. include-build-file:: inc/esp_eth_netif_glue.inc
 

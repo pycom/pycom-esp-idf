@@ -60,6 +60,10 @@ static const char *TAG = "esp-tls";
 #define _esp_tls_read                       esp_wolfssl_read
 #define _esp_tls_write                      esp_wolfssl_write
 #define _esp_tls_conn_delete                esp_wolfssl_conn_delete
+#ifdef CONFIG_ESP_TLS_SERVER
+#define _esp_tls_server_session_create      esp_wolfssl_server_session_create
+#define _esp_tls_server_session_delete      esp_wolfssl_server_session_delete
+#endif  /* CONFIG_ESP_TLS_SERVER */
 #define _esp_tls_get_bytes_avail            esp_wolfssl_get_bytes_avail
 #define _esp_tls_init_global_ca_store       esp_wolfssl_init_global_ca_store
 #define _esp_tls_set_global_ca_store        esp_wolfssl_set_global_ca_store                 /*!< Callback function for setting global CA store data for TLS/SSL */
@@ -93,14 +97,22 @@ static ssize_t tcp_write(esp_tls_t *tls, const char *data, size_t datalen)
  */
 void esp_tls_conn_delete(esp_tls_t *tls)
 {
+    esp_tls_conn_destroy(tls);
+}
+
+int esp_tls_conn_destroy(esp_tls_t *tls)
+{
     if (tls != NULL) {
+        int ret = 0;
         _esp_tls_conn_delete(tls);
         if (tls->sockfd >= 0) {
-            close(tls->sockfd);
+            ret = close(tls->sockfd);
         }
-    free(tls->error_handle);
-    free(tls);
+        free(tls->error_handle);
+        free(tls);
+        return ret;
     }
+    return -1; // invalid argument
 }
 
 esp_tls_t *esp_tls_init(void)
@@ -115,8 +127,9 @@ esp_tls_t *esp_tls_init(void)
         return NULL;
     }
 #ifdef CONFIG_ESP_TLS_USING_MBEDTLS
-    tls->server_fd.fd = tls->sockfd = -1;
+    tls->server_fd.fd = -1;
 #endif
+    tls->sockfd = -1;
     return tls;
 }
 
@@ -146,6 +159,34 @@ static void ms_to_timeval(int timeout_ms, struct timeval *tv)
 {
     tv->tv_sec = timeout_ms / 1000;
     tv->tv_usec = (timeout_ms % 1000) * 1000;
+}
+
+static int esp_tls_tcp_enable_keep_alive(int fd, tls_keep_alive_cfg_t *cfg)
+{
+    int keep_alive_enable = 1;
+    int keep_alive_idle = cfg->keep_alive_idle;
+    int keep_alive_interval = cfg->keep_alive_interval;
+    int keep_alive_count = cfg->keep_alive_count;
+
+    ESP_LOGD(TAG, "Enable TCP keep alive. idle: %d, interval: %d, count: %d", keep_alive_idle, keep_alive_interval, keep_alive_count);
+    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keep_alive_enable, sizeof(keep_alive_enable)) != 0) {
+        ESP_LOGE(TAG, "Fail to setsockopt SO_KEEPALIVE");
+        return -1;
+    }
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &keep_alive_idle, sizeof(keep_alive_idle)) != 0) {
+        ESP_LOGE(TAG, "Fail to setsockopt TCP_KEEPIDLE");
+        return -1;
+    }
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &keep_alive_interval, sizeof(keep_alive_interval)) != 0) {
+        ESP_LOGE(TAG, "Fail to setsockopt TCP_KEEPINTVL");
+        return -1;
+    }
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &keep_alive_count, sizeof(keep_alive_count)) != 0) {
+        ESP_LOGE(TAG, "Fail to setsockopt TCP_KEEPCNT");
+        return -1;
+    }
+
+    return 0;
 }
 
 static esp_err_t esp_tcp_connect(const char *host, int hostlen, int port, int *sockfd, const esp_tls_t *tls, const esp_tls_cfg_t *cfg)
@@ -186,6 +227,12 @@ static esp_err_t esp_tcp_connect(const char *host, int hostlen, int port, int *s
             ms_to_timeval(cfg->timeout_ms, &tv);
             setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
             setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+            if (cfg->keep_alive_cfg && cfg->keep_alive_cfg->keep_alive_enable) {
+                if (esp_tls_tcp_enable_keep_alive(fd, cfg->keep_alive_cfg) < 0) {
+                    ESP_LOGE(TAG, "Error setting keep-alive");
+                    goto err_freesocket;
+                }
+            }
         }
         if (cfg->non_block) {
             int flags = fcntl(fd, F_GETFL, 0);
@@ -309,7 +356,7 @@ static int esp_tls_low_level_conn(const char *hostname, int hostlen, int port, c
  */
 esp_tls_t *esp_tls_conn_new(const char *hostname, int hostlen, int port, const esp_tls_cfg_t *cfg)
 {
-    esp_tls_t *tls = (esp_tls_t *)calloc(1, sizeof(esp_tls_t));
+    esp_tls_t *tls = esp_tls_init();
     if (!tls) {
         return NULL;
     }
@@ -428,6 +475,7 @@ mbedtls_x509_crt *esp_tls_get_global_ca_store(void)
     return _esp_tls_get_global_ca_store();
 }
 
+#endif /* CONFIG_ESP_TLS_USING_MBEDTLS */
 #ifdef CONFIG_ESP_TLS_SERVER
 /**
  * @brief      Create a server side TLS/SSL connection
@@ -444,11 +492,20 @@ void esp_tls_server_session_delete(esp_tls_t *tls)
     return _esp_tls_server_session_delete(tls);
 }
 #endif /* CONFIG_ESP_TLS_SERVER */
-#endif /* CONFIG_ESP_TLS_USING_MBEDTLS */
 
 ssize_t esp_tls_get_bytes_avail(esp_tls_t *tls)
 {
     return _esp_tls_get_bytes_avail(tls);
+}
+
+esp_err_t esp_tls_get_conn_sockfd(esp_tls_t *tls, int *sockfd)
+{
+    if (!tls || !sockfd) {
+        ESP_LOGE(TAG, "Invalid arguments passed");
+        return ESP_ERR_INVALID_ARG;
+    }
+    *sockfd = tls->sockfd;
+    return ESP_OK;
 }
 
 esp_err_t esp_tls_get_and_clear_last_error(esp_tls_error_handle_t h, int *esp_tls_code, int *esp_tls_flags)

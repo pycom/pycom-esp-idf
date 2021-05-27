@@ -22,18 +22,17 @@ GPATH
 .DS_Store
 
 # Example project files
+examples/**/sdkconfig
 examples/**/sdkconfig.old
 examples/**/build
 
 # Doc build artifacts
-docs/*/_build/
-docs/*/doxygen-warning-log.txt
-docs/*/sphinx-warning-log.txt
-docs/*/sphinx-warning-log-sanitized.txt
-docs/*/xml/
-docs/*/xml_in/
-docs/*/man/
+docs/_build/
 docs/doxygen_sqlite3.db
+
+# Downloaded font files
+docs/_static/DejaVuSans.ttf
+docs/_static/NotoSansSC-Regular.otf
 
 # Unit test app files
 tools/unit-test-app/sdkconfig
@@ -41,14 +40,20 @@ tools/unit-test-app/sdkconfig.old
 tools/unit-test-app/build
 tools/unit-test-app/builds
 tools/unit-test-app/output
+tools/unit-test-app/test_configs
+
+# Unit Test CMake compile log folder
+log_ut_cmake
+
+# test application build files
+tools/test_apps/**/build
+tools/test_apps/**/sdkconfig
+tools/test_apps/**/sdkconfig.old
 
 # IDF monitor test
 tools/test_idf_monitor/outputs
 
 TEST_LOGS
-
-# AWS IoT Examples require device-specific certs/keys
-examples/protocols/aws_iot/*/main/certs/*.pem.*
 
 # gcov coverage reports
 *.gcda
@@ -56,20 +61,25 @@ examples/protocols/aws_iot/*/main/certs/*.pem.*
 coverage.info
 coverage_report/
 
-# Windows tools installer build
-tools/windows/tool_setup/.*
-tools/windows/tool_setup/input
-tools/windows/tool_setup/dl
-tools/windows/tool_setup/keys
-tools/windows/tool_setup/Output
-
 test_multi_heap_host
 
 # VS Code Settings
 .vscode/
 
-# Results for the checking of the Python coding style
+# VIM files
+*.swp
+*.swo
+
+# Clion IDE CMake build & config
+.idea/
+cmake-build-*/
+
+# Results for the checking of the Python coding style and static analysis
+.mypy_cache
 flake8_output.txt
 
-# ESP-IDF library 
+# ESP-IDF default build directory name
 build
+
+# lock files for examples and components
+dependencies.lock

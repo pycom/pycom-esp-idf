@@ -14,8 +14,9 @@
 #include "lwip/sockets.h"
 #include "ping/ping_sock.h"
 #include "esp32/rom/md5_hash.h"
+#include "soc/soc_caps.h"
 
-#if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32S2BETA)
+#if SOC_EMAC_SUPPORTED
 
 static const char *TAG = "esp32_eth_test";
 
@@ -140,6 +141,7 @@ static esp_err_t test_uninstall_driver(esp_eth_handle_t eth_hdl, uint32_t ms_to_
 TEST_CASE("esp32 ethernet io test", "[ethernet][test_env=UT_T2_Ethernet]")
 {
     eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
+    mac_config.flags = ETH_MAC_FLAG_PIN_TO_CORE; // pin to core
     esp_eth_mac_t *mac = esp_eth_mac_new_esp32(&mac_config);
     eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
     // auto detect PHY address
@@ -503,4 +505,4 @@ TEST_CASE("esp32 ethernet download test", "[ethernet][test_env=UT_T2_Ethernet][t
     vEventGroupDelete(eth_event_group);
 }
 
-#endif
+#endif // SOC_EMAC_SUPPORTED

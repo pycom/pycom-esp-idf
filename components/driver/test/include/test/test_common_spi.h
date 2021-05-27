@@ -48,7 +48,7 @@
 #define ESP_SPI_SLAVE_TV        (12.5*3.5)
 #define WIRE_DELAY              12.5
 
-#elif CONFIG_IDF_TARGET_ESP32S2BETA
+#elif CONFIG_IDF_TARGET_ESP32S2
 
 #define TEST_SPI_HOST   FSPI_HOST
 #define TEST_SLAVE_HOST HSPI_HOST
@@ -109,7 +109,7 @@
 #define PSET_NAME_LEN   30  ///< length of each param set name
 
 //test low frequency, high frequency until freq limit for worst case (both GPIO)
-#define TEST_FREQ_DEFAULT(){\
+#define TEST_FREQ_DEFAULT(){    \
         1*1000*1000,            \
         SPI_MASTER_FREQ_8M ,    \
         SPI_MASTER_FREQ_9M ,    \

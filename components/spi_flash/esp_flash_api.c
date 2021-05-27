@@ -23,7 +23,6 @@
 #include "sdkconfig.h"
 #include "esp_heap_caps.h"
 #include "esp_flash_internal.h"
-#include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "esp_timer.h"
 
@@ -373,7 +372,9 @@ esp_err_t IRAM_ATTR esp_flash_erase_region(esp_flash_t *chip, uint32_t start, ui
         no_yield_time_us += (esp_timer_get_time() - start_time_us);
         if (no_yield_time_us / 1000 >= CONFIG_SPI_FLASH_ERASE_YIELD_DURATION_MS) {
             no_yield_time_us = 0;
-            vTaskDelay(CONFIG_SPI_FLASH_ERASE_YIELD_TICKS);
+            if (chip->os_func->yield) {
+                chip->os_func->yield(chip->os_func_data);
+            }
         }
 #endif
     }
@@ -705,7 +706,7 @@ esp_err_t esp_flash_app_disable_protect(bool disable)
     if (disable) {
         return esp_flash_app_disable_os_functions(esp_flash_default_chip);
     } else {
-        return esp_flash_app_init_os_functions(esp_flash_default_chip);
+        return esp_flash_app_enable_os_functions(esp_flash_default_chip);
     }
 }
 #endif

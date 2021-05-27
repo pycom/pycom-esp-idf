@@ -1,4 +1,4 @@
-// Copyright 2015-2019 Espressif Systems (Shanghai) PTE LTD
+// Copyright 2015-2020 Espressif Systems (Shanghai) PTE LTD
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,16 +17,23 @@
 #include "esp_types.h"
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "soc/i2s_periph.h"
 #include "soc/rtc_periph.h"
 #include "soc/i2s_caps.h"
-#include "driver/periph_ctrl.h"
-#include "driver/adc.h" // adc1_channel_t typedef
+#include "hal/i2s_hal.h"
 #include "hal/i2s_types.h"
+#include "driver/periph_ctrl.h"
+#include "esp_intr_alloc.h"
+#if SOC_I2S_SUPPORTS_ADC_DAC
+#include "driver/adc.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define I2S_PIN_NO_CHANGE (-1) /*!< Use in i2s_pin_config_t for pins which should not be changed */
 
 typedef intr_handle_t i2s_isr_handle_t;
 
@@ -54,7 +61,7 @@ typedef intr_handle_t i2s_isr_handle_t;
  */
 esp_err_t i2s_set_pin(i2s_port_t i2s_num, const i2s_pin_config_t *pin);
 
-#if SOC_I2S_SUPPORT_PDM
+#if SOC_I2S_SUPPORTS_PDM
 /**
  * @brief Set PDM mode down-sample rate
  *        In PDM RX mode, there would be 2 rounds of downsample process in hardware.
@@ -189,7 +196,7 @@ esp_err_t i2s_write_expand(i2s_port_t i2s_num, const void *src, size_t size, siz
  *
  * @param ticks_to_wait   RX buffer wait timeout in RTOS ticks. If this many ticks pass without bytes becoming available in the DMA receive buffer, then the function will return (note that if data is read from the DMA buffer in pieces, the overall operation may still take longer than this timeout.) Pass portMAX_DELAY for no timeout.
  *
- * @note If the built-in ADC mode is enabled, we should call i2s_adc_start and i2s_adc_stop around the whole reading process,
+ * @note If the built-in ADC mode is enabled, we should call i2s_adc_enable and i2s_adc_disable around the whole reading process,
  *       to prevent the data getting corrupted.
  *
  * @return
@@ -288,9 +295,11 @@ esp_err_t i2s_set_clk(i2s_port_t i2s_num, uint32_t rate, i2s_bits_per_sample_t b
  */
 float i2s_get_clk(i2s_port_t i2s_num);
 
+#if SOC_I2S_SUPPORTS_ADC_DAC
 /**
  * @brief Set built-in ADC mode for I2S DMA, this function will initialize ADC pad,
  *        and set ADC parameters.
+ * @note  In this mode, the ADC maximum sampling rate is 150KHz. Set the sampling rate through ``i2s_config_t``.
  * @param adc_unit    SAR ADC unit index
  * @param adc_channel ADC channel index
  * @return
@@ -322,6 +331,7 @@ esp_err_t i2s_adc_enable(i2s_port_t i2s_num);
  *     - ESP_ERR_INVALID_STATE  Driver state error
  */
 esp_err_t i2s_adc_disable(i2s_port_t i2s_num);
+#endif
 
 #ifdef __cplusplus
 }

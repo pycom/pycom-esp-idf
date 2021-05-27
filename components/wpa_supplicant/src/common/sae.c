@@ -27,14 +27,6 @@ void wpabuf_clear_free(struct wpabuf *buf)
     }
 }
 
-void bin_clear_free(void *bin, size_t len)
-{
-    if (bin) {
-        os_memset(bin, 0, len);
-        os_free(bin);
-    }
-}
-
 int sae_set_group(struct sae_data *sae, int group)
 {
 	struct sae_temporary_data *tmp;
@@ -675,7 +667,7 @@ static int sae_derive_commit_element_ffc(struct sae_data *sae,
 
 static int sae_derive_commit(struct sae_data *sae)
 {
-	struct crypto_bignum *mask;
+	struct crypto_bignum *mask = NULL;
 	int ret = -1;
 	unsigned int counter = 0;
 
@@ -690,7 +682,9 @@ static int sae_derive_commit(struct sae_data *sae)
 			 */
 			return ESP_FAIL;
 		}
-
+		if (mask) {
+		    crypto_bignum_deinit(mask, 1);
+		}
 		mask = sae_get_rand_and_mask(sae);
 		if (mask == NULL) {
 			wpa_printf(MSG_DEBUG, "SAE: Could not get rand/mask");

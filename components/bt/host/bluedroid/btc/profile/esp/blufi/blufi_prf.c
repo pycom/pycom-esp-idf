@@ -36,8 +36,9 @@
 #include "blufi_int.h"
 
 #include "esp_blufi_api.h"
+#include "esp_gatt_common_api.h"
 
-#if (GATTS_INCLUDED == TRUE)
+#if (BLUFI_INCLUDED == TRUE)
 
 #define BT_BD_ADDR_STR         "%02x:%02x:%02x:%02x:%02x:%02x"
 #define BT_BD_ADDR_HEX(addr)   addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]
@@ -287,6 +288,7 @@ static void blufi_profile_cb(tBTA_GATTS_EVT event, tBTA_GATTS *p_data)
         memcpy(blufi_env.remote_bda, p_data->conn.remote_bda, sizeof(esp_bd_addr_t));
         blufi_env.conn_id = p_data->conn.conn_id;
         blufi_env.is_connected = true;
+        blufi_env.recv_seq = blufi_env.send_seq = 0;
 
         msg.sig = BTC_SIG_API_CB;
         msg.pid = BTC_PID_BLUFI;
@@ -309,7 +311,6 @@ static void blufi_profile_cb(tBTA_GATTS_EVT event, tBTA_GATTS *p_data)
 
         memcpy(blufi_env.remote_bda, p_data->conn.remote_bda, sizeof(esp_bd_addr_t));
         blufi_env.conn_id = p_data->conn.conn_id;
-        blufi_env.is_connected = false;
         blufi_env.recv_seq = blufi_env.send_seq = 0;
         blufi_env.sec_mode = 0x0;
 
@@ -467,6 +468,11 @@ void btc_blufi_send_encap(uint8_t type, uint8_t *data, int total_data_len)
     uint16_t checksum;
     int ret;
 
+    if (blufi_env.is_connected == false) {
+        BTC_TRACE_ERROR("blufi connection has been disconnected \n");
+        return;
+    }
+
     while (remain_len > 0) {
         if (remain_len > blufi_env.frag_size) {
             hdr = osi_malloc(sizeof(struct blufi_hdr) + 2 + blufi_env.frag_size + 2);
@@ -530,10 +536,24 @@ void btc_blufi_send_encap(uint8_t type, uint8_t *data, int total_data_len)
             remain_len -= hdr->data_len;
         }
 
-        btc_blufi_send_notify((uint8_t *)hdr,
+retry:
+        if (blufi_env.is_connected == false) {
+            BTC_TRACE_WARNING("%s ble connection is broken\n", __func__);
+            osi_free(hdr);
+            hdr =  NULL;
+            return;
+        }
+
+        if (esp_ble_get_cur_sendable_packets_num(BTC_GATT_GET_CONN_ID(blufi_env.conn_id)) > 0) {
+            btc_blufi_send_notify((uint8_t *)hdr,
                 ((hdr->fc & BLUFI_FC_CHECK) ?
                  hdr->data_len + sizeof(struct blufi_hdr) + 2 :
                  hdr->data_len + sizeof(struct blufi_hdr)));
+        } else {
+            BTC_TRACE_WARNING("%s wait to send blufi custom data\n", __func__);
+            vTaskDelay(pdMS_TO_TICKS(10));
+            goto retry;
+        }
 
         osi_free(hdr);
         hdr =  NULL;
@@ -1121,4 +1141,4 @@ uint16_t btc_blufi_get_version(void)
     return BTC_BLUFI_VERSION;
 }
 
-#endif	///GATTS_INCLUDED == TRUE
+#endif  ///BLUFI_INCLUDED == TRUE

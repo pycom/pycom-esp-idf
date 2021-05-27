@@ -21,7 +21,7 @@ NVSPartitionManager* NVSPartitionManager::instance = nullptr;
 NVSPartitionManager* NVSPartitionManager::get_instance()
 {
     if (!instance) {
-        instance = new NVSPartitionManager();
+        instance = new (std::nothrow) NVSPartitionManager();
     }
 
     return instance;
@@ -45,6 +45,10 @@ esp_err_t NVSPartitionManager::init_partition(const char *partition_label)
         return ESP_ERR_NOT_FOUND;
     }
 
+    if (partition->flash_chip != esp_flash_default_chip) {
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
     return init_custom(partition_label, partition->address / SPI_FLASH_SEC_SIZE,
             partition->size / SPI_FLASH_SEC_SIZE);
 }
@@ -57,7 +61,10 @@ esp_err_t NVSPartitionManager::init_custom(const char *partName, uint32_t baseSe
     Storage* new_storage = NULL;
     Storage* storage = lookup_storage_from_name(partName);
     if (storage == NULL) {
-        new_storage = new Storage((const char *)partName);
+        new_storage = new (std::nothrow) Storage((const char *)partName);
+
+        if (!new_storage) return ESP_ERR_NO_MEM;
+
         storage = new_storage;
     }
 
@@ -87,6 +94,10 @@ esp_err_t NVSPartitionManager::secure_init_partition(const char *part_name, nvs_
             ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, part_name);
     if (partition == NULL) {
         return ESP_ERR_NOT_FOUND;
+    }
+
+    if (partition->flash_chip != esp_flash_default_chip) {
+        return ESP_ERR_NOT_SUPPORTED;
     }
 
     return secure_init_custom(part_name, partition->address / SPI_FLASH_SEC_SIZE,
@@ -159,7 +170,10 @@ esp_err_t NVSPartitionManager::open_handle(const char *part_name,
         return err;
     }
 
-    *handle = new NVSHandleSimple(open_mode==NVS_READONLY, nsIndex, sHandle);
+    *handle = new (std::nothrow) NVSHandleSimple(open_mode==NVS_READONLY, nsIndex, sHandle);
+
+    if (!handle) return ESP_ERR_NO_MEM;
+
     nvs_handles.push_back(*handle);
 
     return ESP_OK;

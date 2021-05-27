@@ -266,6 +266,7 @@ static esp_err_t lan8720_reset_hw(esp_eth_phy_t *phy)
         gpio_pad_select_gpio(lan8720->reset_gpio_num);
         gpio_set_direction(lan8720->reset_gpio_num, GPIO_MODE_OUTPUT);
         gpio_set_level(lan8720->reset_gpio_num, 0);
+        ets_delay_us(100); // insert min input assert time
         gpio_set_level(lan8720->reset_gpio_num, 1);
     }
     return ESP_OK;
@@ -324,12 +325,22 @@ static esp_err_t lan8720_pwrctl(esp_eth_phy_t *phy, bool enable)
     }
     PHY_CHECK(eth->phy_reg_write(eth, lan8720->addr, ETH_PHY_BMCR_REG_ADDR, bmcr.val) == ESP_OK,
               "write BMCR failed", err);
-    PHY_CHECK(eth->phy_reg_read(eth, lan8720->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
-              "read BMCR failed", err);
     if (!enable) {
+        PHY_CHECK(eth->phy_reg_read(eth, lan8720->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                  "read BMCR failed", err);
         PHY_CHECK(bmcr.power_down == 1, "power down failed", err);
     } else {
-        PHY_CHECK(bmcr.power_down == 0, "power up failed", err);
+        /* wait for power up complete */
+        uint32_t to = 0;
+        for (to = 0; to < lan8720->reset_timeout_ms / 10; to++) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            PHY_CHECK(eth->phy_reg_read(eth, lan8720->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                      "read BMCR failed", err);
+            if (bmcr.power_down == 0) {
+                break;
+            }
+        }
+        PHY_CHECK(to < lan8720->reset_timeout_ms / 10, "power up timeout", err);
     }
     return ESP_OK;
 err:

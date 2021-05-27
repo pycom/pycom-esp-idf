@@ -221,6 +221,7 @@ static esp_err_t ip101_reset_hw(esp_eth_phy_t *phy)
         gpio_pad_select_gpio(ip101->reset_gpio_num);
         gpio_set_direction(ip101->reset_gpio_num, GPIO_MODE_OUTPUT);
         gpio_set_level(ip101->reset_gpio_num, 0);
+        ets_delay_us(100); // insert min input assert time
         gpio_set_level(ip101->reset_gpio_num, 1);
     }
     return ESP_OK;
@@ -277,12 +278,22 @@ static esp_err_t ip101_pwrctl(esp_eth_phy_t *phy, bool enable)
     }
     PHY_CHECK(eth->phy_reg_write(eth, ip101->addr, ETH_PHY_BMCR_REG_ADDR, bmcr.val) == ESP_OK,
               "write BMCR failed", err);
-    PHY_CHECK(eth->phy_reg_read(eth, ip101->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
-              "read BMCR failed", err);
     if (!enable) {
+        PHY_CHECK(eth->phy_reg_read(eth, ip101->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                  "read BMCR failed", err);
         PHY_CHECK(bmcr.power_down == 1, "power down failed", err);
     } else {
-        PHY_CHECK(bmcr.power_down == 0, "power up failed", err);
+        /* wait for power up complete */
+        uint32_t to = 0;
+        for (to = 0; to < ip101->reset_timeout_ms / 10; to++) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            PHY_CHECK(eth->phy_reg_read(eth, ip101->addr, ETH_PHY_BMCR_REG_ADDR, &(bmcr.val)) == ESP_OK,
+                      "read BMCR failed", err);
+            if (bmcr.power_down == 0) {
+                break;
+            }
+        }
+        PHY_CHECK(to < ip101->reset_timeout_ms / 10, "power up timeout", err);
     }
     return ESP_OK;
 err:

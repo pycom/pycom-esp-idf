@@ -166,6 +166,7 @@ static esp_err_t cmd_set_prop_vals_handler(LocalCtrlMessage *req,
         ESP_LOGE(TAG, "Failed to allocate memory for setting values");
         free(idxs);
         free(vals);
+	free(resp_payload);
         return ESP_ERR_NO_MEM;
     }
     for (size_t i = 0; i < req->cmd_set_prop_vals->n_props; i++) {
@@ -214,7 +215,7 @@ static void esp_local_ctrl_command_cleanup(LocalCtrlMessage *resp, void **ctx)
                 if (resp->resp_get_prop_vals) {
                     prop_val_free_fn_t *free_fns = (prop_val_free_fn_t *)(*ctx);
                     for (size_t i = 0; i < resp->resp_get_prop_vals->n_props; i++) {
-                        if (free_fns[i]) {
+                        if (free_fns && free_fns[i]) {
                             free_fns[i](resp->resp_get_prop_vals->props[i]->value.data);
                         }
                         free(resp->resp_get_prop_vals->props[i]);

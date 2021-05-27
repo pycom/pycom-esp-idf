@@ -21,20 +21,21 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
-#include <esp32/rom/spi_flash.h>
-#include <esp32/rom/cache.h>
 #include <soc/soc.h>
 #include <soc/dport_reg.h>
 #include <soc/soc_memory_layout.h>
 #include "sdkconfig.h"
-#include "esp_ipc.h"
 #include "esp_attr.h"
 #include "esp_spi_flash.h"
 #include "esp_log.h"
 #if CONFIG_IDF_TARGET_ESP32
+#include "esp32/rom/spi_flash.h"
+#include "esp32/rom/cache.h"
 #include "esp32/clk.h"
-#elif CONFIG_IDF_TARGET_ESP32S2BETA
-#include "esp32s2beta/clk.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/rom/spi_flash.h"
+#include "esp32s2/rom/cache.h"
+#include "esp32s2/clk.h"
 #include "soc/spi_mem_reg.h"
 #include "soc/spi_mem_struct.h"
 #endif
@@ -81,6 +82,7 @@ static spi_flash_counters_t s_flash_stats;
 
 static esp_err_t spi_flash_translate_rc(esp_rom_spiflash_result_t rc);
 static bool is_safe_write_address(size_t addr, size_t size);
+static void spi_flash_os_yield(void);
 
 const DRAM_ATTR spi_flash_guard_funcs_t g_flash_guard_default_ops = {
     .start                  = spi_flash_disable_interrupts_caches_and_other_cpu,
@@ -88,18 +90,20 @@ const DRAM_ATTR spi_flash_guard_funcs_t g_flash_guard_default_ops = {
     .op_lock                = spi_flash_op_lock,
     .op_unlock              = spi_flash_op_unlock,
 #if !CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED
-    .is_safe_write_address  = is_safe_write_address
+    .is_safe_write_address  = is_safe_write_address,
 #endif
+    .yield                  = spi_flash_os_yield,
 };
 
 const DRAM_ATTR spi_flash_guard_funcs_t g_flash_guard_no_os_ops = {
     .start                  = spi_flash_disable_interrupts_caches_and_other_cpu_no_os,
     .end                    = spi_flash_enable_interrupts_caches_no_os,
-    .op_lock                = 0,
-    .op_unlock              = 0,
+    .op_lock                = NULL,
+    .op_unlock              = NULL,
 #if !CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED
-    .is_safe_write_address  = 0
+    .is_safe_write_address  = NULL,
 #endif
+    .yield                  = NULL,
 };
 
 static const spi_flash_guard_funcs_t *s_flash_guard_ops;
@@ -184,6 +188,13 @@ static inline void IRAM_ATTR spi_flash_guard_op_unlock(void)
     }
 }
 
+static void IRAM_ATTR spi_flash_os_yield(void)
+{
+#ifdef CONFIG_SPI_FLASH_YIELD_DURING_ERASE
+    vTaskDelay(CONFIG_SPI_FLASH_ERASE_YIELD_TICKS);
+#endif
+}
+
 #ifdef CONFIG_SPI_FLASH_USE_LEGACY_IMPL
 static esp_rom_spiflash_result_t IRAM_ATTR spi_flash_unlock(void)
 {
@@ -262,7 +273,9 @@ esp_err_t IRAM_ATTR spi_flash_erase_range(size_t start_addr, size_t size)
             no_yield_time_us += (esp_timer_get_time() - start_time_us);
             if (no_yield_time_us / 1000 >= CONFIG_SPI_FLASH_ERASE_YIELD_DURATION_MS) {
                 no_yield_time_us = 0;
-                vTaskDelay(CONFIG_SPI_FLASH_ERASE_YIELD_TICKS);
+                if (s_flash_guard_ops && s_flash_guard_ops->yield) {
+                    s_flash_guard_ops->yield();
+                }
             }
 #endif
         }
@@ -449,6 +462,67 @@ out:
 }
 #endif // CONFIG_SPI_FLASH_USE_LEGACY_IMPL
 
+#ifndef CONFIG_SPI_FLASH_USE_LEGACY_IMPL
+extern void spi_common_set_dummy_output(esp_rom_spiflash_read_mode_t mode);
+extern void spi_dummy_len_fix(uint8_t spi, uint8_t freqdiv);
+extern uint8_t g_rom_spiflash_dummy_len_plus[];
+void IRAM_ATTR flash_rom_init(void)
+{
+    uint32_t freqdiv = 0;
+
+#if CONFIG_IDF_TARGET_ESP32
+    uint32_t dummy_bit = 0;
+#if CONFIG_ESPTOOLPY_FLASHFREQ_80M
+    dummy_bit = ESP_ROM_SPIFLASH_DUMMY_LEN_PLUS_80M;
+#elif CONFIG_ESPTOOLPY_FLASHFREQ_40M
+    dummy_bit = ESP_ROM_SPIFLASH_DUMMY_LEN_PLUS_40M;
+#elif CONFIG_ESPTOOLPY_FLASHFREQ_26M
+    dummy_bit = ESP_ROM_SPIFLASH_DUMMY_LEN_PLUS_26M;
+#elif CONFIG_ESPTOOLPY_FLASHFREQ_20M
+    dummy_bit = ESP_ROM_SPIFLASH_DUMMY_LEN_PLUS_20M;
+#endif
+#endif//CONFIG_IDF_TARGET_ESP32
+
+#if CONFIG_ESPTOOLPY_FLASHFREQ_80M
+    freqdiv = 1;
+#elif CONFIG_ESPTOOLPY_FLASHFREQ_40M
+    freqdiv = 2;
+#elif CONFIG_ESPTOOLPY_FLASHFREQ_26M
+    freqdiv = 3;
+#elif CONFIG_ESPTOOLPY_FLASHFREQ_20M
+    freqdiv = 4;
+#endif
+
+#if !CONFIG_IDF_TARGET_ESP32S2 && !CONFIG_IDF_TARGET_ESP32
+    esp_rom_spiflash_read_mode_t read_mode;
+#if CONFIG_ESPTOOLPY_FLASHMODE_QIO
+    read_mode = ESP_ROM_SPIFLASH_QIO_MODE;
+#elif CONFIG_ESPTOOLPY_FLASHMODE_QOUT
+    read_mode = ESP_ROM_SPIFLASH_QOUT_MODE;
+#elif CONFIG_ESPTOOLPY_FLASHMODE_DIO
+    read_mode = ESP_ROM_SPIFLASH_DIO_MODE;
+#elif CONFIG_ESPTOOLPY_FLASHMODE_DOUT
+    read_mode = ESP_ROM_SPIFLASH_DOUT_MODE;
+#endif
+#endif //!CONFIG_IDF_TARGET_ESP32S2 && !CONFIG_IDF_TARGET_ESP32
+
+#if CONFIG_IDF_TARGET_ESP32
+    g_rom_spiflash_dummy_len_plus[1] = dummy_bit;
+#else
+    spi_dummy_len_fix(1, freqdiv);
+#endif //CONFIG_IDF_TARGET_ESP32
+
+#if !CONFIG_IDF_TARGET_ESP32S2 && !CONFIG_IDF_TARGET_ESP32
+    spi_common_set_dummy_output(read_mode);
+#endif //!CONFIG_IDF_TARGET_ESP32S2
+    esp_rom_spiflash_config_clk(freqdiv, 1);
+}
+#else
+void IRAM_ATTR flash_rom_init(void)
+{
+    return;
+}
+#endif // !CONFIG_SPI_FLASH_USE_LEGACY_IMPL
 
 esp_err_t IRAM_ATTR spi_flash_write_encrypted(size_t dest_addr, const void *src, size_t size)
 {
@@ -759,7 +833,7 @@ void spi_flash_dump_counters(void)
 
 #endif //CONFIG_SPI_FLASH_ENABLE_COUNTERS
 
-#if defined(CONFIG_SPI_FLASH_USE_LEGACY_IMPL) && defined(CONFIG_IDF_TARGET_ESP32S2BETA)
-// TODO esp32s2beta: Remove once ESP32S2Beta has new SPI Flash API support
+#if defined(CONFIG_SPI_FLASH_USE_LEGACY_IMPL) && defined(CONFIG_IDF_TARGET_ESP32S2)
+// TODO esp32s2: Remove once ESP32S2 has new SPI Flash API support
 esp_flash_t *esp_flash_default_chip = NULL;
 #endif

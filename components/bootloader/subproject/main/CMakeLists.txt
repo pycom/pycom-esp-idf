@@ -1,5 +1,5 @@
-idf_component_register(SRCS "bootloader_start.c" "pycom_bootloader.c" "pycom_bootmgr.c" "pycom_gpio.c" "pycom_mperror.c"
-                    REQUIRES bootloader bootloader_support spi_flash)
+idf_component_register(SRCS "bootloader_start.c"
+                    REQUIRES bootloader bootloader_support)
 
 idf_build_get_property(target IDF_TARGET)
 set(scripts "ld/${target}/bootloader.ld"

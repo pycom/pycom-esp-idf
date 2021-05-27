@@ -24,23 +24,22 @@ mainmenu "Espressif IoT Development Framework Configuration"
         bool
         default "y" if IDF_TARGET="esp32"
 
-    config IDF_TARGET_ESP32S2BETA
+    config IDF_TARGET_ESP32S2
         bool
-        default "y" if IDF_TARGET="esp32s2beta"
+        default "y" if IDF_TARGET="esp32s2"
         select FREERTOS_UNICORE
 
     config IDF_FIRMWARE_CHIP_ID
         hex
         default 0x0000 if IDF_TARGET_ESP32
-        # note: S2 beta uses Chip ID 0 still, S2 will use 0x0002
-        default 0x0000 if IDF_TARGET_ESP32S2BETA
+        default 0x0002 if IDF_TARGET_ESP32S2
         default 0xFFFF
 
     menu "SDK tool configuration"
         config SDK_TOOLPREFIX
             string "Compiler toolchain path/prefix"
             default "xtensa-esp32-elf-" if IDF_TARGET_ESP32
-            default "xtensa-esp32s2-elf-" if IDF_TARGET_ESP32S2BETA
+            default "xtensa-esp32s2-elf-" if IDF_TARGET_ESP32S2
             help
                 The prefix/path that is used to call the toolchain. The default setting assumes
                 a crosstool-ng gcc setup that is in your PATH.
@@ -134,8 +133,8 @@ mainmenu "Espressif IoT Development Framework Configuration"
                     CONFIG_APP_BUILD_TYPE_ELF_RAM=y
                     CONFIG_VFS_SUPPORT_TERMIOS=
                     CONFIG_NEWLIB_NANO_FORMAT=y
-                    CONFIG_ESP32_PANIC_PRINT_HALT=y
-                    CONFIG_ESP32_DEBUG_STUBS_ENABLE=
+                    CONFIG_ESP_SYSTEM_PANIC_PRINT_HALT=y
+                    CONFIG_ESP_DEBUG_STUBS_ENABLE=
                     CONFIG_ESP_ERR_TO_NAME_LOOKUP=
 
 
@@ -353,28 +352,3 @@ mainmenu "Espressif IoT Development Framework Configuration"
                 is totally deprecated by enable this option.
 
     endmenu #Compatibility options
-
-    menu "Pycom"
-        config PYCOM_SAFEBOOT_PIN_DISABLE
-            bool "Disable safe boot pin"
-            default n
-            help
-                By default the safe boot pin  (Pycom P12, aka ESP32 GPIO21) is
-                checked during boot. If it is pulled high, the module goes
-                into safe boot mode.
-
-                With this config you can disable this safe boot pin handling.
-                For example if the pin is used for some peripheral.
-
-        menuconfig PYCOM_RGB_LED_DISABLE
-            bool "Disable RGB LED"
-            default n
-
-        config PYCOM_RGB_LED_PIN
-            int "RGB LED pin number"
-            default 0
-            depends on !PYCOM_RGB_LED_DISABLE
-            help
-                ESP32 GPIO pin number used for RGB LED (default is GPIO0).
-
-    endmenu #Pycom

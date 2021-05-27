@@ -39,10 +39,18 @@ static const char *TAG = "WEBSOCKET_CLIENT";
 #define WEBSOCKET_NETWORK_TIMEOUT_MS    (10*1000)
 #define WEBSOCKET_PING_TIMEOUT_MS       (10*1000)
 #define WEBSOCKET_EVENT_QUEUE_SIZE      (1)
+#define WEBSOCKET_KEEP_ALIVE_IDLE       (5)
+#define WEBSOCKET_KEEP_ALIVE_INTERVAL   (5)
+#define WEBSOCKET_KEEP_ALIVE_COUNT      (3)
 
 #define ESP_WS_CLIENT_MEM_CHECK(TAG, a, action) if (!(a)) {                                         \
         ESP_LOGE(TAG,"%s:%d (%s): %s", __FILE__, __LINE__, __FUNCTION__, "Memory exhausted");       \
         action;                                                                                     \
+        }
+
+#define ESP_WS_CLIENT_STATE_CHECK(TAG, a, action) if ((a->state) < WEBSOCKET_STATE_INIT) {           \
+        ESP_LOGE(TAG,"%s:%d (%s): %s", __FILE__, __LINE__, __FUNCTION__, "Websocket already stop");  \
+        action;                                                                                      \
         }
 
 const static int STOPPED_BIT = BIT0;
@@ -77,6 +85,7 @@ typedef enum {
 
 struct esp_websocket_client {
     esp_event_loop_handle_t     event_handle;
+    TaskHandle_t                task_handle;
     esp_transport_list_handle_t transport_list;
     esp_transport_handle_t      transport;
     websocket_config_storage_t *config;
@@ -95,6 +104,7 @@ struct esp_websocket_client {
     ws_transport_opcodes_t      last_opcode;
     int                         payload_len;
     int                         payload_offset;
+    esp_transport_keep_alive_t  keep_alive_cfg;
 };
 
 static uint64_t _tick_get_ms(void)
@@ -130,11 +140,15 @@ static esp_err_t esp_websocket_client_dispatch_event(esp_websocket_client_handle
 
 static esp_err_t esp_websocket_client_abort_connection(esp_websocket_client_handle_t client)
 {
+    ESP_WS_CLIENT_STATE_CHECK(TAG, client, return ESP_FAIL);
     esp_transport_close(client->transport);
-    client->wait_timeout_ms = WEBSOCKET_RECONNECT_TIMEOUT_MS;
-    client->reconnect_tick_ms = _tick_get_ms();
+
+    if (client->config->auto_reconnect) {
+        client->wait_timeout_ms = WEBSOCKET_RECONNECT_TIMEOUT_MS;
+        client->reconnect_tick_ms = _tick_get_ms();
+        ESP_LOGI(TAG, "Reconnect after %d ms", client->wait_timeout_ms);
+    }
     client->state = WEBSOCKET_STATE_WAIT_TIMEOUT;
-    ESP_LOGI(TAG, "Reconnect after %d ms", client->wait_timeout_ms);
     esp_websocket_client_dispatch_event(client, WEBSOCKET_EVENT_DISCONNECTED, NULL, 0);
     return ESP_OK;
 }
@@ -266,6 +280,13 @@ esp_websocket_client_handle_t esp_websocket_client_init(const esp_websocket_clie
         return NULL;
     }
 
+    if (config->keep_alive_enable == true) {
+        client->keep_alive_cfg.keep_alive_enable = true;
+        client->keep_alive_cfg.keep_alive_idle = (config->keep_alive_idle == 0) ? WEBSOCKET_KEEP_ALIVE_IDLE : config->keep_alive_idle;
+        client->keep_alive_cfg.keep_alive_interval = (config->keep_alive_interval == 0) ? WEBSOCKET_KEEP_ALIVE_INTERVAL : config->keep_alive_interval;
+        client->keep_alive_cfg.keep_alive_count =  (config->keep_alive_count == 0) ? WEBSOCKET_KEEP_ALIVE_COUNT : config->keep_alive_count;
+    }
+
     client->lock = xSemaphoreCreateRecursiveMutex();
     ESP_WS_CLIENT_MEM_CHECK(TAG, client->lock, goto _websocket_init_fail);
 
@@ -279,6 +300,7 @@ esp_websocket_client_handle_t esp_websocket_client_init(const esp_websocket_clie
     ESP_WS_CLIENT_MEM_CHECK(TAG, tcp, goto _websocket_init_fail);
 
     esp_transport_set_default_port(tcp, WEBSOCKET_TCP_DEFAULT_PORT);
+    esp_transport_tcp_set_keep_alive(tcp, &client->keep_alive_cfg);
     esp_transport_list_add(client->transport_list, tcp, "_tcp"); // need to save to transport list, for cleanup
 
 
@@ -299,6 +321,7 @@ esp_websocket_client_handle_t esp_websocket_client_init(const esp_websocket_clie
     if (config->cert_pem) {
         esp_transport_ssl_set_cert_data(ssl, config->cert_pem, strlen(config->cert_pem));
     }
+    esp_transport_ssl_set_keep_alive(ssl, &client->keep_alive_cfg);
     esp_transport_list_add(client->transport_list, ssl, "_ssl"); // need to save to transport list, for cleanup
 
     esp_transport_handle_t wss = esp_transport_ws_init(ssl);
@@ -457,7 +480,6 @@ static esp_err_t esp_websocket_client_recv(esp_websocket_client_handle_t client)
         rlen = esp_transport_read(client->transport, client->rx_buffer, client->buffer_size, client->config->network_timeout_ms);
         if (rlen < 0) {
             ESP_LOGE(TAG, "Error read data");
-            esp_websocket_client_abort_connection(client);
             return ESP_FAIL;
         }
         client->payload_len = esp_transport_ws_get_read_payload_len(client->transport);
@@ -584,7 +606,7 @@ esp_err_t esp_websocket_client_start(esp_websocket_client_handle_t client)
         ESP_LOGE(TAG, "The client has started");
         return ESP_FAIL;
     }
-    if (xTaskCreate(esp_websocket_client_task, "websocket_task", client->config->task_stack, client, client->config->task_prio, NULL) != pdTRUE) {
+    if (xTaskCreate(esp_websocket_client_task, "websocket_task", client->config->task_stack, client, client->config->task_prio, &client->task_handle) != pdTRUE) {
         ESP_LOGE(TAG, "Error create websocket task");
         return ESP_FAIL;
     }
@@ -601,6 +623,15 @@ esp_err_t esp_websocket_client_stop(esp_websocket_client_handle_t client)
         ESP_LOGW(TAG, "Client was not started");
         return ESP_FAIL;
     }
+
+    /* A running client cannot be stopped from the websocket task/event handler */
+    TaskHandle_t running_task = xTaskGetCurrentTaskHandle();
+    if (running_task == client->task_handle) {
+        ESP_LOGE(TAG, "Client cannot be stopped from websocket task");
+        return ESP_FAIL;
+    }
+
+
     client->run = false;
     xEventGroupWaitBits(client->status_bits, STOPPED_BIT, false, true, portMAX_DELAY);
     client->state = WEBSOCKET_STATE_UNKNOW;
@@ -663,6 +694,7 @@ static int esp_websocket_client_send_with_opcode(esp_websocket_client_handle_t c
         if (wlen <= 0) {
             ret = wlen;
             ESP_LOGE(TAG, "Network error: esp_transport_write() returned %d, errno=%d", ret, errno);
+            esp_websocket_client_abort_connection(client);
             goto unlock_and_return;
         }
         current_opcode = 0;

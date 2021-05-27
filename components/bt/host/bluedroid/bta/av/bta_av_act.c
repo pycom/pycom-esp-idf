@@ -208,11 +208,8 @@ static void bta_av_rc_ctrl_cback(UINT8 handle, UINT8 event, UINT16 result, BD_AD
     UINT16 msg_event = 0;
     UNUSED(result);
 
-#if (defined(BTA_AV_MIN_DEBUG_TRACES) && BTA_AV_MIN_DEBUG_TRACES == TRUE)
-    APPL_TRACE_EVENT("rc_ctrl handle: %d event=0x%x", handle, event);
-#else
-    APPL_TRACE_EVENT("bta_av_rc_ctrl_cback handle: %d event=0x%x", handle, event);
-#endif
+    APPL_TRACE_EVENT("%s handle: %d event: 0x%x",__func__, handle, event);
+
     if (event == AVRC_OPEN_IND_EVT) {
         /* save handle of opened connection
         bta_av_cb.rc_handle = handle;*/
@@ -779,6 +776,10 @@ tBTA_AV_EVT bta_av_proc_meta_cmd(tAVRC_RESPONSE  *p_rc_rsp, tBTA_AV_RC_MSG *p_ms
 
         case AVRC_PDU_SET_ABSOLUTE_VOLUME:
             p_rc_rsp->rsp.status = BTA_AV_STS_NO_RSP;
+            break;
+        case AVRC_PDU_SET_PLAYER_APP_VALUE:
+            /* Setting of a value by CT does not implicitly mean that the setting will take effect on TG. */
+            /* The setting shall take effect after a play command from CT. */
             break;
         default:
             APPL_TRACE_WARNING("%s unhandled RC vendor PDU: 0x%x", __FUNCTION__, pdu);

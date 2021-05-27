@@ -70,6 +70,8 @@ typedef enum {
 typedef struct {
     uart_event_type_t type; /*!< UART event type */
     size_t size;            /*!< UART data size for UART_DATA event*/
+    bool timeout_flag;      /*!< UART data read timeout flag for UART_DATA event (no new data received during configured RX TOUT)*/
+                            /*!< If the event is caused by FIFO-full interrupt, then there will be no event with the timeout flag before the next byte coming.*/
 } uart_event_t;
 
 typedef intr_handle_t uart_isr_handle_t;
@@ -91,14 +93,12 @@ typedef intr_handle_t uart_isr_handle_t;
  * @param intr_alloc_flags Flags used to allocate the interrupt. One or multiple (ORred)
  *        ESP_INTR_FLAG_* values. See esp_intr_alloc.h for more info. Do not set ESP_INTR_FLAG_IRAM here
  *        (the driver's ISR handler is not located in IRAM)
- * @param rx_callback callback to be called when data is received
  *
  * @return
  *     - ESP_OK   Success
  *     - ESP_FAIL Parameter error
  */
-typedef void (*uart_rx_callback_t)(int uart_id, int rx_byte);
-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback);
+esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags);
 
 /**
  * @brief Uninstall UART driver.
@@ -467,31 +467,6 @@ esp_err_t uart_param_config(uart_port_t uart_num, const uart_config_t *uart_conf
  *     - ESP_FAIL Parameter error
  */
 esp_err_t uart_intr_config(uart_port_t uart_num, const uart_intr_config_t *intr_conf);
-
-/**
- * @brief Install UART driver.
- *
- * UART ISR handler will be attached to the same CPU core that this function is running on.
- *
- * @note  Rx_buffer_size should be greater than UART_FIFO_LEN. Tx_buffer_size should be either zero or greater than UART_FIFO_LEN.
- *
- * @param uart_num UART_NUM_0, UART_NUM_1 or UART_NUM_2
- * @param rx_buffer_size UART RX ring buffer size.
- * @param tx_buffer_size UART TX ring buffer size.
- *        If set to zero, driver will not use TX buffer, TX function will block task until all data have been sent out.
- * @param queue_size UART event queue size/depth.
- * @param uart_queue UART event queue handle (out param). On success, a new queue handle is written here to provide
- *        access to UART events. If set to NULL, driver will not use an event queue.
- * @param intr_alloc_flags Flags used to allocate the interrupt. One or multiple (ORred)
- *        ESP_INTR_FLAG_* values. See esp_intr_alloc.h for more info. Do not set ESP_INTR_FLAG_IRAM here
- *        (the driver's ISR handler is not located in IRAM)
- *
- * @return
- *     - ESP_OK   Success
- *     - ESP_FAIL Parameter error
- */
-typedef void (*uart_rx_callback_t)(int uart_id, int rx_byte);
-esp_err_t uart_driver_install(uart_port_t uart_num, int rx_buffer_size, int tx_buffer_size, int queue_size, QueueHandle_t* uart_queue, int intr_alloc_flags, uart_rx_callback_t rx_callback);
 
 /**
  * @brief Wait until UART TX FIFO is empty.
@@ -871,6 +846,20 @@ esp_err_t uart_wait_tx_idle_polling(uart_port_t uart_num);
   *      - ESP_FAIL Driver not installed
   */
 esp_err_t uart_set_loop_back(uart_port_t uart_num, bool loop_back_en);
+
+/**
+  * @brief Configure behavior of UART RX timeout interrupt.
+  *
+  * When always_rx_timeout is true, timeout interrupt is triggered even if FIFO is full.
+  * This function can cause extra timeout interrupts triggered only to send the timeout event.
+  * Call this function only if you want to ensure timeout interrupt will always happen after a byte stream.
+  *
+  * @param uart_num UART number
+  * @param always_rx_timeout_en Set to false enable the default behavior of timeout interrupt,
+  *                             set it to true to always trigger timeout interrupt.
+  *
+  */
+void uart_set_always_rx_timeout(uart_port_t uart_num, bool always_rx_timeout_en);
 
 #ifdef __cplusplus
 }

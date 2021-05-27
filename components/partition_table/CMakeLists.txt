@@ -37,19 +37,26 @@ set(gen_partition_table "${python}" "${CMAKE_CURRENT_SOURCE_DIR}/gen_esp32part.p
                         "--offset" "${PARTITION_TABLE_OFFSET}" "${md5_opt}" "${flashsize_opt}"
                         "${partition_secure_opt}" )
 
+set(partition_table_display
+    COMMAND ${CMAKE_COMMAND} -E echo "Partition table binary generated. Contents:"
+    COMMAND ${CMAKE_COMMAND} -E echo "*******************************************************************************"
+    COMMAND ${gen_partition_table} "${build_dir}/partition_table/${unsigned_partition_bin}"
+    COMMAND ${CMAKE_COMMAND} -E echo "*******************************************************************************"
+)
+
 add_custom_command(OUTPUT "${build_dir}/partition_table/${unsigned_partition_bin}"
     COMMAND ${gen_partition_table} "${partition_csv}" "${build_dir}/partition_table/${unsigned_partition_bin}"
+    ${partition_table_display}
     DEPENDS ${partition_csv} "${CMAKE_CURRENT_SOURCE_DIR}/gen_esp32part.py"
     VERBATIM)
 
+add_custom_target(partition_table_bin DEPENDS "${build_dir}/partition_table/${unsigned_partition_bin}"
+                                              "${build_dir}/partition_table/${final_partition_bin}")
+
 if(EXISTS ${partition_csv})
-    add_custom_target(partition_table ALL
-                        DEPENDS "${build_dir}/partition_table/${unsigned_partition_bin}"
-                                "${build_dir}/partition_table/${final_partition_bin}"
-                        COMMAND ${CMAKE_COMMAND} -E echo "Partition table binary generated. Contents:"
-                        COMMAND ${CMAKE_COMMAND} -E echo "*******************************************************************************"
-                        COMMAND ${gen_partition_table} "${build_dir}/partition_table/${unsigned_partition_bin}"
-                        COMMAND ${CMAKE_COMMAND} -E echo "*******************************************************************************"
+    add_custom_target(partition_table
+                        DEPENDS partition_table_bin
+                        ${partition_table_display}
                         VERBATIM)
 else()
     # If the partition input CSV is not found, create a phony partition_table target that
@@ -87,11 +94,13 @@ elseif(CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME)
     VERBATIM)
 endif()
 
-# Use global properties ESPTOOL_WRITE_FLASH_ARGS to pass this info to build
-# the list of esptool write arguments for flashing
-set_property(GLOBAL APPEND_STRING PROPERTY
-    ESPTOOL_WRITE_FLASH_ARGS
-    "${PARTITION_TABLE_OFFSET}  ${build_dir}/partition_table/${final_partition_bin} ")
+idf_component_get_property(main_args esptool_py FLASH_ARGS)
+idf_component_get_property(sub_args esptool_py FLASH_SUB_ARGS)
 
-esptool_py_flash_project_args(partition_table ${PARTITION_TABLE_OFFSET}
-                              ${build_dir}/partition_table/partition-table.bin FLASH_IN_PROJECT)
+if(CONFIG_APP_BUILD_GENERATE_BINARIES)
+    esptool_py_flash_target(partition_table-flash "${main_args}" "${sub_args}")
+    esptool_py_flash_target_image(partition_table-flash partition_table "${PARTITION_TABLE_OFFSET}"
+                                        "${build_dir}/partition_table/${final_partition_bin}")
+    esptool_py_flash_target_image(flash partition_table "${PARTITION_TABLE_OFFSET}"
+                                        "${build_dir}/partition_table/${final_partition_bin}")
+endif()

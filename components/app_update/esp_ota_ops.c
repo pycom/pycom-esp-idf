@@ -41,9 +41,12 @@
 #include "esp_system.h"
 #include "esp_efuse.h"
 
-#include "bootloader_utility.h"
-#include "pycom_bootloader_support.h"
-
+#ifdef CONFIG_IDF_TARGET_ESP32
+#include "esp32/rom/crc.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/rom/crc.h"
+#include "esp32s2/rom/secure_boot.h"
+#endif
 
 #define SUB_TYPE_ID(i) (i & 0x0F)
 
@@ -253,6 +256,43 @@ esp_err_t esp_ota_write(esp_ota_handle_t handle, const void *data, size_t size)
     return ESP_ERR_INVALID_ARG;
 }
 
+esp_err_t esp_ota_write_with_offset(esp_ota_handle_t handle, const void *data, size_t size, uint32_t offset)
+{
+    const uint8_t *data_bytes = (const uint8_t *)data;
+    esp_err_t ret;
+    ota_ops_entry_t *it;
+
+    if (data == NULL) {
+        ESP_LOGE(TAG, "write data is invalid");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // find ota handle in linked list
+    for (it = LIST_FIRST(&s_ota_ops_entries_head); it != NULL; it = LIST_NEXT(it, entries)) {
+        if (it->handle == handle) {
+            // must erase the partition before writing to it
+            assert(it->erased_size > 0 && "must erase the partition before writing to it");
+
+            /* esp_ota_write_with_offset is used to write data in non contiguous manner.
+             * Hence, unaligned data(less than 16 bytes) cannot be cached if flash encryption is enabled.
+             */
+            if (esp_flash_encryption_enabled() && (size % 16)) {
+                ESP_LOGE(TAG, "Size should be 16byte aligned for flash encryption case");
+                return ESP_ERR_INVALID_ARG;
+            }
+            ret = esp_partition_write(it->part, offset, data_bytes, size);
+            if (ret == ESP_OK) {
+                it->wrote_size += size;
+            }
+            return ret;
+        }
+    }
+
+    // OTA handle is not found in linked list
+    ESP_LOGE(TAG,"OTA handle not found");
+    return ESP_ERR_INVALID_ARG;
+}
+
 esp_err_t esp_ota_end(esp_ota_handle_t handle)
 {
     ota_ops_entry_t *it;
@@ -330,8 +370,7 @@ static uint8_t get_ota_partition_count(void)
     return ota_app_count;
 }
 
-// Pycom modification: make the function global so no "defined but not used" compilation warning is dropped
-esp_err_t esp_rewrite_ota_data(esp_partition_subtype_t subtype)
+static esp_err_t esp_rewrite_ota_data(esp_partition_subtype_t subtype)
 {
     esp_ota_select_entry_t otadata[2];
     const esp_partition_t *otadata_partition = read_otadata(otadata);
@@ -414,23 +453,7 @@ esp_err_t esp_ota_set_boot_partition(const esp_partition_t *partition)
                 return ESP_ERR_OTA_SMALL_SEC_VER;
             }
 #endif
-
-            bootloader_state_t bs;
-            boot_info_t boot_info;
-            bootloader_utility_load_partition_table(&bs);
-            pycom_read_otadata(&bs.ota_info, &boot_info);
-            /* Update the OTA Data to load image from OTA partition on next boot
-             * At this point the current image is Factory for sure.
-             */
-            boot_info.PrevImg = IMG_ACT_FACTORY;
-            boot_info.ActiveImg = IMG_ACT_UPDATE1;
-            boot_info.Status = IMG_STATUS_READY;
-            if(true == pycom_ota_write_boot_info (&boot_info, bs.ota_info.offset)) {
-                return ESP_OK;
-            }
-            else {
-                return ESP_FAIL;
-            }
+            return esp_rewrite_ota_data(partition->subtype);
         }
     } else {
         return ESP_ERR_INVALID_ARG;
@@ -841,3 +864,24 @@ esp_err_t esp_ota_erase_last_boot_app_partition(void)
 
     return ESP_OK;
 }
+
+#if CONFIG_IDF_TARGET_ESP32S2 && CONFIG_SECURE_BOOT_V2_ENABLED
+esp_err_t esp_ota_revoke_secure_boot_public_key(esp_ota_secure_boot_public_key_index_t index) {
+
+    if (!esp_secure_boot_enabled()) {
+        ESP_LOGE(TAG, "Secure boot v2 has not been enabled.");
+        return ESP_FAIL;
+    }
+
+    if (index != SECURE_BOOT_PUBLIC_KEY_INDEX_0 &&
+         index != SECURE_BOOT_PUBLIC_KEY_INDEX_1 &&
+         index != SECURE_BOOT_PUBLIC_KEY_INDEX_2) {
+        ESP_LOGE(TAG, "Invalid Index found for public key revocation %d.", index);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ets_secure_boot_revoke_public_key_digest(index);
+    ESP_LOGI(TAG, "Revoked signature block %d.", index);
+    return ESP_OK;
+}
+#endif

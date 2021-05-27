@@ -1,8 +1,6 @@
 import re
 import os
 import socket
-import BaseHTTPServer
-import SimpleHTTPServer
 from threading import Thread
 import ssl
 
@@ -10,6 +8,13 @@ from tiny_test_fw import DUT
 import ttfw_idf
 import random
 import subprocess
+
+try:
+    import BaseHTTPServer
+    from SimpleHTTPServer import SimpleHTTPRequestHandler
+except ImportError:
+    import http.server as BaseHTTPServer
+    from http.server import SimpleHTTPRequestHandler
 
 server_cert = "-----BEGIN CERTIFICATE-----\n" \
               "MIIDXTCCAkWgAwIBAgIJAP4LF7E72HakMA0GCSqGSIb3DQEBCwUAMEUxCzAJBgNV\n"\
@@ -95,10 +100,33 @@ def get_ca_cert(ota_image_dir):
     return server_file, key_file
 
 
+def https_request_handler():
+    """
+    Returns a request handler class that handles broken pipe exception
+    """
+    class RequestHandler(SimpleHTTPRequestHandler):
+        def finish(self):
+            try:
+                if not self.wfile.closed:
+                    self.wfile.flush()
+                    self.wfile.close()
+            except socket.error:
+                pass
+            self.rfile.close()
+
+        def handle(self):
+            try:
+                BaseHTTPServer.BaseHTTPRequestHandler.handle(self)
+            except socket.error:
+                pass
+
+    return RequestHandler
+
+
 def start_https_server(ota_image_dir, server_ip, server_port):
     server_file, key_file = get_ca_cert(ota_image_dir)
-    httpd = BaseHTTPServer.HTTPServer((server_ip, server_port),
-                                      SimpleHTTPServer.SimpleHTTPRequestHandler)
+    requestHandler = https_request_handler()
+    httpd = BaseHTTPServer.HTTPServer((server_ip, server_port), requestHandler)
 
     httpd.socket = ssl.wrap_socket(httpd.socket,
                                    keyfile=key_file,
@@ -116,12 +144,18 @@ def redirect_handler_factory(url):
     """
     Returns a request handler class that redirects to supplied `url`
     """
-    class RedirectHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+    class RedirectHandler(SimpleHTTPRequestHandler):
         def do_GET(self):
             print("Sending resp, URL: " + url)
             self.send_response(301)
             self.send_header('Location', url)
             self.end_headers()
+
+        def handle(self):
+            try:
+                BaseHTTPServer.BaseHTTPRequestHandler.handle(self)
+            except socket.error:
+                pass
 
     return RedirectHandler
 
@@ -160,7 +194,7 @@ def test_examples_protocol_advanced_https_ota_example(env, extra_data):
     binary_file = os.path.join(dut1.app.binary_path, bin_name)
     bin_size = os.path.getsize(binary_file)
     ttfw_idf.log_performance("advanced_https_ota_bin_size", "{}KB".format(bin_size // 1024))
-    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024)
+    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024, dut1.TARGET)
     # start test
     host_ip = get_my_ip()
     if (get_server_status(host_ip, server_port) is False):
@@ -215,7 +249,7 @@ def test_examples_protocol_advanced_https_ota_example_truncated_bin(env, extra_d
     binary_file = os.path.join(dut1.app.binary_path, truncated_bin_name)
     bin_size = os.path.getsize(binary_file)
     ttfw_idf.log_performance("advanced_https_ota_bin_size", "{}KB".format(bin_size // 1024))
-    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024)
+    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024, dut1.TARGET)
     # start test
     host_ip = get_my_ip()
     if (get_server_status(host_ip, server_port) is False):
@@ -266,7 +300,7 @@ def test_examples_protocol_advanced_https_ota_example_truncated_header(env, extr
     binary_file = os.path.join(dut1.app.binary_path, truncated_bin_name)
     bin_size = os.path.getsize(binary_file)
     ttfw_idf.log_performance("advanced_https_ota_bin_size", "{}KB".format(bin_size // 1024))
-    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024)
+    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024, dut1.TARGET)
     # start test
     host_ip = get_my_ip()
     if (get_server_status(host_ip, server_port) is False):
@@ -316,7 +350,7 @@ def test_examples_protocol_advanced_https_ota_example_random(env, extra_data):
     fo.close()
     bin_size = os.path.getsize(binary_file)
     ttfw_idf.log_performance("advanced_https_ota_bin_size", "{}KB".format(bin_size // 1024))
-    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024)
+    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024, dut1.TARGET)
     # start test
     host_ip = get_my_ip()
     if (get_server_status(host_ip, server_port) is False):
@@ -355,7 +389,7 @@ def test_examples_protocol_advanced_https_ota_example_chunked(env, extra_data):
     binary_file = os.path.join(dut1.app.binary_path, bin_name)
     bin_size = os.path.getsize(binary_file)
     ttfw_idf.log_performance("advanced_https_ota_bin_size", "{}KB".format(bin_size // 1024))
-    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024)
+    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024, dut1.TARGET)
     # start test
     host_ip = get_my_ip()
     chunked_server = start_chunked_server(dut1.app.binary_path, 8070)
@@ -398,7 +432,7 @@ def test_examples_protocol_advanced_https_ota_example_redirect_url(env, extra_da
     binary_file = os.path.join(dut1.app.binary_path, bin_name)
     bin_size = os.path.getsize(binary_file)
     ttfw_idf.log_performance("advanced_https_ota_bin_size", "{}KB".format(bin_size // 1024))
-    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024)
+    ttfw_idf.check_performance("advanced_https_ota_bin_size", bin_size // 1024, dut1.TARGET)
     # start test
     host_ip = get_my_ip()
     if (get_server_status(host_ip, server_port) is False):

@@ -18,8 +18,8 @@
 #include "esp_flash_internal.h"
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/crc.h"
-#elif CONFIG_IDF_TARGET_ESP32S2BETA
-#include "esp32s2beta/rom/crc.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/rom/crc.h"
 #endif
 
 const static DRAM_ATTR char TAG[] __attribute__((unused)) = "esp_core_dump_flash";
@@ -301,7 +301,10 @@ esp_err_t esp_core_dump_image_get(size_t* out_addr, size_t *out_size)
     uint32_t *dw = (uint32_t *)core_data;
     *out_size = *dw;
     spi_flash_munmap(core_data_handle);
-    if ((*out_size < sizeof(uint32_t)) || (*out_size > core_part->size)) {
+    if (*out_size == 0xFFFFFFFF) {
+        ESP_LOGD(TAG, "Blank core dump partition!");
+        return ESP_ERR_INVALID_SIZE;
+    } else if ((*out_size < sizeof(uint32_t)) || (*out_size > core_part->size)) {
         ESP_LOGE(TAG, "Incorrect size of core dump image: %d", *out_size);
         return ESP_ERR_INVALID_SIZE;
     }

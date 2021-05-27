@@ -18,7 +18,7 @@ except ImportError:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     from find_build_apps import BuildItem, setup_logging
 
-WARNING_REGEX = r"error|warning"
+WARNING_REGEX = re.compile(r"^\s*(?:error|warning)", re.MULTILINE | re.IGNORECASE)
 
 IGNORE_WARNS = [
     re.compile(r_str) for r_str in [
@@ -29,12 +29,15 @@ IGNORE_WARNS = [
         r"reassigning to symbol",
         r"changes choice state",
         r"crosstool_version_check\.cmake",
+        r"CryptographyDeprecationWarning",
+        r"Python 3 versions older than 3.6 are not supported.",
+        r"Support for Python 2 is deprecated and will be removed in future versions.",
     ]
 ]
 
 
 def line_has_warnings(line):  # type: (str) -> bool
-    if not re.search(WARNING_REGEX, line):
+    if not WARNING_REGEX.search(line):
         return False
 
     has_warnings = True

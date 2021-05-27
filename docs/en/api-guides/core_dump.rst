@@ -1,8 +1,14 @@
-ESP32 Core Dump
-===============
+Core Dump
+=========
 
 Overview
 --------
+
+.. only:: esp32s2
+
+    .. note::
+
+        The python utility does not currently support ESP32-S2
 
 ESP-IDF provides support to generate core dumps on unrecoverable software errors. This useful technique allows post-mortem analysis of software state at the moment of failure.
 Upon the crash system enters panic state, prints some information and halts or reboots depending configuration. User can choose to generate core dump in order to analyse
@@ -12,6 +18,8 @@ ESP-IDF provides special script `espcoredump.py` to help users to retrieve and a
 
 * info_corefile - prints crashed task's registers, callstack, list of available tasks in the system, memory regions and contents of memory stored in core dump (TCBs and stacks)
 * dbg_corefile - creates core dump ELF file and runs GDB debug session with this file. User can examine memory, variables and tasks states manually. Note that since not all memory is saved in core dump only values of variables allocated on stack will be meaningfull
+
+For more information about core dump internals see the - :doc:`Core dump internals <core_dump_internals>`
 
 Configuration
 -------------

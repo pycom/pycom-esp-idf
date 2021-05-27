@@ -18,8 +18,8 @@
 #if CONFIG_ESP32_COREDUMP_CHECKSUM_CRC32
 #if CONFIG_IDF_TARGET_ESP32
 #include "esp32/rom/crc.h"
-#elif CONFIG_IDF_TARGET_ESP32S2BETA
-#include "esp32s2beta/rom/crc.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/rom/crc.h"
 #endif
 #elif CONFIG_ESP32_COREDUMP_CHECKSUM_SHA256
 #include "mbedtls/sha256.h"
@@ -35,15 +35,14 @@ extern "C" {
 
 #if CONFIG_IDF_TARGET_ESP32
 #define COREDUMP_VERSION_CHIP ESP_CHIP_ID_ESP32
-#elif CONFIG_IDF_TARGET_ESP32S2BETA
-// TODO: set to ESP32-S2 chip ID
-#define COREDUMP_VERSION_CHIP ~ESP_CHIP_ID_ESP32
+#elif CONFIG_IDF_TARGET_ESP32S2
+#define COREDUMP_VERSION_CHIP ESP_CHIP_ID_ESP32S2
 #endif
 
 #define COREDUMP_TCB_SIZE   sizeof(StaticTask_t)
 
 // Gets RTOS tasks snapshot
-uint32_t esp_core_dump_get_tasks_snapshot(core_dump_task_header_t* const tasks,
+uint32_t esp_core_dump_get_tasks_snapshot(core_dump_task_header_t** const tasks,
                         const uint32_t snapshot_size);
 
 // Checks TCB consistency

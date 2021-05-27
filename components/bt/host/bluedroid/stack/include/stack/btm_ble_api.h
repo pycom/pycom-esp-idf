@@ -129,7 +129,7 @@ typedef UINT8   tBTM_BLE_SFP;
 #define BTM_BLE_EXT_SCAN_WIN_MAX        0xFFFF
 #define BTM_BLE_CONN_INT_MIN            0x0006
 #define BTM_BLE_CONN_INT_MAX            0x0C80
-#define BTM_BLE_CONN_LATENCY_MAX        500
+#define BTM_BLE_CONN_LATENCY_MAX        499
 #define BTM_BLE_CONN_SUP_TOUT_MIN       0x000A
 #define BTM_BLE_CONN_SUP_TOUT_MAX       0x0C80
 #define BTM_BLE_CONN_PARAM_UNDEF        0xffff      /* use this value when a specific value not to be overwritten */
@@ -2126,6 +2126,17 @@ tBTM_STATUS BTM_UpdateBleDuplicateExceptionalList(uint8_t subcode, uint32_t type
 *******************************************************************************/
 
 BOOLEAN BTM_GetCurrentConnParams(BD_ADDR bda, uint16_t *interval, uint16_t *latency, uint16_t *timeout);
+
+/*******************************************************************************
+**
+** Function         BTM_Ble_Authorization
+**
+** Description      This function is used to authorize a specified device
+**
+** Returns          TRUE or FALSE
+**
+*******************************************************************************/
+BOOLEAN BTM_Ble_Authorization(BD_ADDR bd_addr, BOOLEAN authorize);
 /*
 #ifdef __cplusplus
 }

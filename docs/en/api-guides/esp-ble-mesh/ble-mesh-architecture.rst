@@ -322,7 +322,7 @@ Mesh Models are used to implement the specific functions of model in nodes. Serv
 2.2 Mesh Bearers Implementation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Portability is fully considered in the implementation of Mesh Bearers. When the ESP-BLE-MESH protocol stack is being ported to other platforms, users only need to modify :component_file:`mesh_bearer_adapt.c <bt/esp_ble_mesh/mesh_core/mesh_bearer_adapt.c>`.
+Portability is fully considered in the implementation of Mesh Bearers. When the ESP-BLE-MESH protocol stack is being ported to other platforms, users only need to modify :component_file:`mesh_bearer_adapt.c <bt/esp_ble_mesh/mesh_core/bluedroid_host/mesh_bearer_adapt.c>` (example of :component_file:`NimBLE version <bt/esp_ble_mesh/mesh_core/nimble_host/mesh_bearer_adapt.c>`).
 
 .. list-table:: Table 2.5  Mesh Bearers File Description
   :widths: 40 150
@@ -330,12 +330,12 @@ Portability is fully considered in the implementation of Mesh Bearers. When the 
 
   * - File
     - Functionality
-  * - :component_file:`mesh_bearer_adapt.c <bt/esp_ble_mesh/mesh_core/mesh_bearer_adapt.c>`
+  * - :component_file:`mesh_bearer_adapt.c <bt/esp_ble_mesh/mesh_core/bluedroid_host/mesh_bearer_adapt.c>`
     - ESP-BLE-MESH Bearer Layer adapter，This file provides the interfaces used to receive and send ESP-BLE-MESH ADV & GATT related packets.
 
 .. note::
 
-  :component_file:`mesh_bearer_adapt.c <bt/esp_ble_mesh/mesh_core/mesh_bearer_adapt.c>` is the implementation of ``Advertising Bearer`` and ``GATT Bearer`` in Mesh Networking framework.
+  :component_file:`mesh_bearer_adapt.c <bt/esp_ble_mesh/mesh_core/bluedroid_host/mesh_bearer_adapt.c>` is the implementation of ``Advertising Bearer`` and ``GATT Bearer`` in Mesh Networking framework.
 
 2.3 Mesh Applications Implementation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

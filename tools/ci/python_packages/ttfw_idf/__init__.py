@@ -15,8 +15,9 @@ import os
 import re
 
 from tiny_test_fw import TinyFW, Utility
-from .IDFApp import IDFApp, Example, LoadableElfExample, UT  # noqa: export all Apps for users
+from .IDFApp import IDFApp, Example, LoadableElfTestApp, UT, TestApp  # noqa: export all Apps for users
 from .IDFDUT import IDFDUT, ESP32DUT, ESP32S2DUT, ESP8266DUT, ESP32QEMUDUT  # noqa: export DUTs for users
+from .DebugUtils import OCDProcess, GDBProcess, TelnetProcess, CustomProcess  # noqa: export DebugUtils for users
 
 
 def format_case_id(chip, case_name):
@@ -88,6 +89,41 @@ def idf_unit_test(app=UT, dut=IDFDUT, chip="ESP32", module="unit-test", executio
     return test
 
 
+def idf_custom_test(app=TestApp, dut=IDFDUT, chip="ESP32", module="misc", execution_time=1,
+                    level="integration", erase_nvs=True, config_name=None, group="test-apps", **kwargs):
+
+    """
+    decorator for idf custom tests (with default values for some keyword args).
+
+    :param app: test application class
+    :param dut: dut class
+    :param chip: chip supported, string or tuple
+    :param module: module, string
+    :param execution_time: execution time in minutes, int
+    :param level: test level, could be used to filter test cases, string
+    :param erase_nvs: if need to erase_nvs in DUT.start_app()
+    :param config_name: if specified, name of the app configuration
+    :param group: identifier to group custom tests (unused for now, defaults to "test-apps")
+    :param kwargs: other keyword args
+    :return: test method
+    """
+    try:
+        # try to config the default behavior of erase nvs
+        dut.ERASE_NVS = erase_nvs
+    except AttributeError:
+        pass
+
+    original_method = TinyFW.test_method(app=app, dut=dut, chip=chip, module=module,
+                                         execution_time=execution_time, level=level, **kwargs)
+
+    def test(func):
+        test_func = original_method(func)
+        test_func.case_info["ID"] = format_case_id(chip, test_func.case_info["name"])
+        return test_func
+
+    return test
+
+
 def log_performance(item, value):
     """
     do print performance with pre-defined format to console
@@ -102,31 +138,42 @@ def log_performance(item, value):
     current_junit_case.stdout += performance_msg + "\r\n"
 
 
-def check_performance(item, value):
+def check_performance(item, value, target):
     """
     check if idf performance meet pass standard
 
     :param item: performance item name
     :param value: performance item value
+    :param target: target chip
     :raise: AssertionError: if check fails
     """
-    ret = True
-    standard_value = 0
 
-    idf_path = IDFApp.get_sdk_path()
-    performance_file = os.path.join(idf_path, "components", "idf_test", "include", "idf_performance.h")
-
-    if os.path.exists(performance_file):
-        with open(performance_file, "r") as f:
+    def _find_perf_item(path):
+        with open(path, 'r') as f:
             data = f.read()
-        match = re.search(r"#define\s+IDF_PERFORMANCE_(MIN|MAX)_{}\s+([\d.]+)".format(item.upper()), data)
-        if match:
-            op = match.group(1)
-            standard_value = float(match.group(2))
-            if op == "MAX":
-                ret = value <= standard_value
-            else:
-                ret = value >= standard_value
-    if not ret:
-        raise AssertionError("[Performance] {} value is {}, doesn't meet pass standard {}"
-                             .format(item, value, standard_value))
+        match = re.search(r'#define\s+IDF_PERFORMANCE_(MIN|MAX)_{}\s+([\d.]+)'.format(item.upper()), data)
+        return match.group(1), float(match.group(2))
+
+    def _check_perf(op, standard_value):
+        if op == 'MAX':
+            ret = value <= standard_value
+        else:
+            ret = value >= standard_value
+        if not ret:
+            raise AssertionError("[Performance] {} value is {}, doesn't meet pass standard {}"
+                                 .format(item, value, standard_value))
+
+    path_prefix = os.path.join(IDFApp.get_sdk_path(), 'components', 'idf_test', 'include')
+    performance_files = (os.path.join(path_prefix, target, 'idf_performance_target.h'),
+                         os.path.join(path_prefix, 'idf_performance.h'))
+
+    for performance_file in performance_files:
+        try:
+            op, value = _find_perf_item(performance_file)
+        except (IOError, AttributeError):
+            # performance file doesn't exist or match is not found in it
+            continue
+
+        _check_perf(op, value)
+        # if no exception was thrown then the performance is met and no need to continue
+        break

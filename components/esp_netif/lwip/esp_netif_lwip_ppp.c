@@ -60,6 +60,11 @@ static void on_ppp_status_changed(ppp_pcb *pcb, int err_code, void *ctx)
         case PPPERR_NONE: /* Connected */
             ESP_LOGI(TAG, "Connected");
             if (pcb->if4_up && !ip_addr_isany(&pppif->ip_addr)) {
+                esp_netif_ip_info_t *ip_info = netif->ip_info;
+                ip4_addr_set(&ip_info->ip, ip_2_ip4(&pppif->ip_addr));
+                ip4_addr_set(&ip_info->netmask, ip_2_ip4(&pppif->netmask));
+                ip4_addr_set(&ip_info->gw, ip_2_ip4(&pppif->gw));
+
                 evt.ip_info.ip.addr = pppif->ip_addr.u_addr.ip4.addr;
                 evt.ip_info.gw.addr = pppif->gw.u_addr.ip4.addr;
                 evt.ip_info.netmask.addr = pppif->netmask.u_addr.ip4.addr;
@@ -155,7 +160,7 @@ static void on_ppp_status_changed(ppp_pcb *pcb, int err_code, void *ctx)
             break;
     }
     if (obj->ppp_error_event_enabled) {
-        err = esp_event_post(NETIF_PPP_STATUS, err_code, netif, sizeof(netif), 0);
+        err = esp_event_post(NETIF_PPP_STATUS, err_code, &netif, sizeof(netif), 0);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "esp_event_post failed with code %d", err);
         }
@@ -205,7 +210,7 @@ static void on_ppp_notify_phase(ppp_pcb *pcb, u8_t phase, void *ctx)
     esp_netif_t *netif = ctx;
     struct lwip_ppp_ctx *obj =  netif->lwip_ppp_ctx;
     if (obj && obj->ppp_phase_event_enabled) {
-        esp_err_t err = esp_event_post(NETIF_PPP_STATUS, NETIF_PP_PHASE_OFFSET + phase, netif, sizeof(netif), 0);
+        esp_err_t err = esp_event_post(NETIF_PPP_STATUS, NETIF_PP_PHASE_OFFSET + phase, &netif, sizeof(netif), 0);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "esp_event_post failed with code %d", err);
         }
@@ -241,14 +246,15 @@ esp_err_t esp_netif_ppp_set_auth(esp_netif_t *netif, esp_netif_auth_type_t autht
     struct lwip_ppp_ctx *obj =  netif->lwip_ppp_ctx;
     pppapi_set_auth(obj->ppp, authtype, user, passwd);
 #else
-#error "Unsupported AUTH Negotiation"
+    ESP_LOGE(TAG, "%s failed: No authorisation enabled in menuconfig", __func__);
+    return ESP_ERR_ESP_NETIF_IF_NOT_READY;
 #endif
     return ESP_OK;
 }
 
 void esp_netif_ppp_set_default_netif(lwip_ppp_ctx_t* ppp_ctx)
 {
-    pppapi_set_default(ppp_ctx->ppp);
+    ppp_set_default(ppp_ctx->ppp);
 }
 
 lwip_ppp_ctx_t* esp_netif_new_ppp(esp_netif_t *esp_netif, const esp_netif_netstack_config_t *esp_netif_stack_config)

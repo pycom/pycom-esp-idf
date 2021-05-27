@@ -326,11 +326,11 @@ void BTA_DmBleReadAdvTxPower(tBTA_CMPL_CB *cmpl_cb)
 }
 #endif  ///BLE_INCLUDED == TRUE
 
-void BTA_DmBleReadRSSI(BD_ADDR remote_addr, tBTA_TRANSPORT transport, tBTA_CMPL_CB *cmpl_cb)
+void BTA_DmReadRSSI(BD_ADDR remote_addr, tBTA_TRANSPORT transport, tBTA_CMPL_CB *cmpl_cb)
 {
     tBTA_DM_API_READ_RSSI *p_msg;
     if ((p_msg = (tBTA_DM_API_READ_RSSI *)osi_malloc(sizeof(tBTA_DM_API_READ_RSSI))) != NULL) {
-        p_msg->hdr.event = BTA_DM_API_BLE_READ_RSSI_EVT;
+        p_msg->hdr.event = BTA_DM_API_READ_RSSI_EVT;
         memcpy(p_msg->remote_addr, remote_addr, sizeof(BD_ADDR));
         p_msg->transport = transport;
         p_msg->read_rssi_cb = cmpl_cb;
@@ -722,7 +722,8 @@ void BTA_DmPasskeyReqReply(BOOLEAN accept, BD_ADDR bd_addr, UINT32 passkey)
 *******************************************************************************/
 void BTA_DmAddDevice(BD_ADDR bd_addr, DEV_CLASS dev_class, LINK_KEY link_key,
                      tBTA_SERVICE_MASK trusted_mask, BOOLEAN is_trusted,
-                     UINT8 key_type, tBTA_IO_CAP io_cap, UINT8 pin_length)
+                     UINT8 key_type, tBTA_IO_CAP io_cap, UINT8 pin_length,
+                     UINT8 sc_support)
 {
 
     tBTA_DM_API_ADD_DEVICE *p_msg;
@@ -735,6 +736,7 @@ void BTA_DmAddDevice(BD_ADDR bd_addr, DEV_CLASS dev_class, LINK_KEY link_key,
         p_msg->tm = trusted_mask;
         p_msg->is_trusted = is_trusted;
         p_msg->io_cap = io_cap;
+        p_msg->sc_support = sc_support;
 
         if (link_key) {
             p_msg->link_key_known = TRUE;
@@ -2661,9 +2663,7 @@ void BTA_VendorCleanup (void)
     }
 #endif
 
-    if (cmn_ble_vsc_cb.adv_inst_max > 0) {
-        btm_ble_multi_adv_cleanup();
-    }
+    btm_ble_multi_adv_cleanup();
 }
 
 #endif

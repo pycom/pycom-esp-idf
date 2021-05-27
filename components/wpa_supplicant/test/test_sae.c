@@ -27,6 +27,7 @@
 
 typedef struct crypto_bignum crypto_bignum;
 
+
 static struct wpabuf *wpabuf_alloc2(size_t len)
 {
     struct wpabuf *buf = (struct wpabuf *)os_zalloc(sizeof(struct wpabuf) + len);

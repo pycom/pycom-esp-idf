@@ -8,8 +8,8 @@ if(BOOTLOADER_BUILD)
         "${target}/ld/${target}.rom.newlib-funcs.ld"
         "${target}/ld/${target}.rom.libgcc.ld"
         )
-    if(target STREQUAL "esp32s2beta")
-        list(APPEND scripts "esp32s2beta/ld/esp32s2beta.rom.spiflash.ld")
+    if(target STREQUAL "esp32s2")
+        list(APPEND scripts "esp32s2/ld/esp32s2.rom.spiflash.ld")
     endif()
 
     if(CONFIG_ESP32_REV_MIN_3)
@@ -46,15 +46,20 @@ else() # Regular app build
             list(APPEND scripts "esp32/ld/esp32.rom.spiflash.ld")
         endif()
 
-    elseif(target STREQUAL "esp32s2beta")
-        # no SPIRAM workaround for esp32s2beta
+        if(CONFIG_ESP32_REV_MIN_3)
+            list(APPEND scripts "esp32/ld/esp32.rom.eco3.ld")
+        endif()
+
+    elseif(target STREQUAL "esp32s2")
+        # no SPIRAM workaround for esp32s2
         # no nano formatting function in ROM
 
-        list(APPEND scripts "esp32s2beta/ld/esp32s2beta.rom.newlib-funcs.ld"
-                            "esp32s2beta/ld/esp32s2beta.rom.spiflash.ld")
-    endif()
-    if(CONFIG_ESP32_REV_MIN_3)
-        list(APPEND scripts "esp32/ld/esp32.rom.eco3.ld")
+        list(APPEND scripts "esp32s2/ld/esp32s2.rom.newlib-funcs.ld"
+                            "esp32s2/ld/esp32s2.rom.spiflash.ld")
+
+        if(CONFIG_NEWLIB_NANO_FORMAT)
+            list(APPEND scripts "esp32s2/ld/esp32s2.rom.newlib-nano.ld")
+        endif()
     endif()
 
     target_linker_script(${COMPONENT_LIB} INTERFACE "${scripts}")

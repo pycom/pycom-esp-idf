@@ -19,11 +19,6 @@ CFLAGS += -I $(IDF_PATH)/components/$(IDF_TARGET)/include
 CFLAGS += -I $(IDF_PATH)/components/esp_rom/include
 CFLAGS += -I $(IDF_PATH)/components/esp_common/include
 CFLAGS += -I $(IDF_PATH)/components/xtensa/include -I $(IDF_PATH)/components/xtensa/$(IDF_TARGET)/include
-# Pycom addition include path
-CFLAGS += -I $(IDF_PATH)/components/freertos/include
-CFLAGS += -I $(IDF_PATH)/components/heap/include
-CFLAGS += -I $(IDF_PATH)/components/driver/include
-CFLAGS += -I $(IDF_PATH)/components/bootloader_support/include
 
 # The bootloader pseudo-component is also included in this build, for its Kconfig.projbuild to be included.
 #

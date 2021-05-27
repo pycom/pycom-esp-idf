@@ -37,6 +37,7 @@ class Websocket:
         self.socket.settimeout(10.0)
         self.send_q = queue.Queue()
         self.shutdown = Event()
+        self.conn = None
 
     def __enter__(self):
         try:
@@ -55,7 +56,8 @@ class Websocket:
         self.shutdown.set()
         self.server_thread.join()
         self.socket.close()
-        self.conn.close()
+        if self.conn:
+            self.conn.close()
 
     def run_server(self):
         self.conn, address = self.socket.accept()  # accept new connection
@@ -82,7 +84,7 @@ class Websocket:
                     return
 
             except socket.error as err:
-                print("Unable to establish a websocket connection: {}, {}".format(err))
+                print("Unable to establish a websocket connection: {}".format(err))
                 raise
 
     def handshake(self, data):
@@ -220,7 +222,7 @@ def test_examples_protocol_websocket(env, extra_data):
     binary_file = os.path.join(dut1.app.binary_path, "websocket-example.bin")
     bin_size = os.path.getsize(binary_file)
     ttfw_idf.log_performance("websocket_bin_size", "{}KB".format(bin_size // 1024))
-    ttfw_idf.check_performance("websocket_bin_size", bin_size // 1024)
+    ttfw_idf.check_performance("websocket_bin_size", bin_size // 1024, dut1.TARGET)
 
     try:
         if "CONFIG_WEBSOCKET_URI_FROM_STDIN" in dut1.app.get_sdkconfig():

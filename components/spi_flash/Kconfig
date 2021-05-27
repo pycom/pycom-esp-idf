@@ -84,6 +84,22 @@ menu "SPI Flash driver"
             The implementation of SPI flash has been greatly changed in IDF v4.0.
             Enable this option to use the legacy implementation.
 
+    config SPI_FLASH_SHARE_SPI1_BUS
+        bool  "Support other devices attached to SPI1 bus"
+        default n
+        # The bus lock on SPI1 is meaningless when the legacy implementation is used, or the SPI
+        # driver does not support SPI1.
+        depends on !SPI_FLASH_USE_LEGACY_IMPL && !IDF_TARGET_ESP32S2
+        select FREERTOS_SUPPORT_STATIC_ALLOCATION
+        help
+            Each SPI bus needs a lock for arbitration among devices. This allows multiple
+            devices on a same bus, but may reduce the speed of esp_flash driver access to the
+            main flash chip.
+
+            If you only need to use esp_flash driver to access the main flash chip, disable
+            this option, and the lock will be bypassed on SPI1 bus. Otherwise if extra devices
+            are needed to attach to SPI1 bus, enable this option.
+
     config SPI_FLASH_BYPASS_BLOCK_ERASE
         bool "Bypass a block erase and always do sector erase"
         default n
@@ -114,6 +130,14 @@ menu "SPI Flash driver"
         help
             Defines how many ticks will be before returning to continue a erasing.
 
+    config SPI_FLASH_SIZE_OVERRIDE
+        bool "Override flash size in bootloader header by ESPTOOLPY_FLASHSIZE"
+        default n
+        help
+            SPI Flash driver uses the flash size configured in bootloader header by default.
+            Enable this option to override flash size with latest ESPTOOLPY_FLASHSIZE value from
+            the app header if the size in the bootloader header is incorrect.
+
     menu "Auto-detect flash chips"
 
         config SPI_FLASH_SUPPORT_ISSI_CHIP
@@ -121,6 +145,14 @@ menu "SPI Flash driver"
             default y
             help
                 Enable this to support auto detection of ISSI chips if chip vendor not directly
+                given by ``chip_drv`` member of the chip struct. This adds support for variant
+                chips, however will extend detecting time.
+
+        config SPI_FLASH_SUPPORT_MXIC_CHIP
+            bool "MXIC"
+            default y
+            help
+                Enable this to support auto detection of MXIC chips if chip vendor not directly
                 given by ``chip_drv`` member of the chip struct. This adds support for variant
                 chips, however will extend detecting time.
 
@@ -138,5 +170,14 @@ menu "SPI Flash driver"
                 60H.
 
     endmenu #auto detect flash chips
+
+    config SPI_FLASH_ENABLE_ENCRYPTED_READ_WRITE
+        bool "Enable encrypted partition read/write operations"
+        default y
+        help
+            This option enables flash read/write operations to encrypted partition/s. This option
+            is kept enabled irrespective of state of flash encryption feature. However, in case
+            application is not using flash encryption feature and is in need of some additional
+            memory from IRAM region (~1KB) then this config can be disabled.
 
 endmenu

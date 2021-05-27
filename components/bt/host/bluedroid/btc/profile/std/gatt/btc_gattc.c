@@ -613,6 +613,13 @@ static void btc_gattc_read_char_descr(btc_ble_gattc_args_t *arg)
     BTA_GATTC_ReadCharDescr(arg->read_descr.conn_id, arg->read_descr.handle, arg->read_descr.auth_req);
 }
 
+static void btc_gattc_read_by_type(btc_ble_gattc_args_t *arg)
+{
+    tBT_UUID uuid;
+    btc_to_bta_uuid(&uuid, &(arg->read_by_type.uuid));
+    BTA_GATTC_Read_by_type(arg->read_by_type.conn_id, arg->read_by_type.s_handle, arg->read_by_type.e_handle, &uuid, arg->read_by_type.auth_req);
+}
+
 static void btc_gattc_write_char(btc_ble_gattc_args_t *arg)
 {
     BTA_GATTC_WriteCharValue(arg->write_char.conn_id,
@@ -723,6 +730,9 @@ void btc_gattc_call_handler(btc_msg_t *msg)
         break;
     case BTC_GATTC_ACT_READ_CHAR_DESCR:
         btc_gattc_read_char_descr(arg);
+        break;
+    case BTC_GATTC_ACT_READ_BY_TYPE:
+        btc_gattc_read_by_type(arg);
         break;
     case BTC_GATTC_ACT_WRITE_CHAR:
         btc_gattc_write_char(arg);
@@ -999,6 +1009,18 @@ void btc_gattc_cb_handler(btc_msg_t *msg)
 
     // free the deep-copied data
     btc_gattc_free_req_data(msg);
+}
+
+void btc_gattc_congest_callback(tBTA_GATTC *param)
+{
+    esp_ble_gattc_cb_param_t esp_param = {0};
+    memset(&esp_param, 0, sizeof(esp_ble_gattc_cb_param_t));
+
+    uint8_t gattc_if = BTC_GATT_GET_GATT_IF(param->congest.conn_id);
+    esp_param.congest.conn_id = BTC_GATT_GET_CONN_ID(param->congest.conn_id);
+    esp_param.congest.congested = (param->congest.congested == TRUE) ? true : false;
+    btc_gattc_cb_to_app(ESP_GATTC_CONGEST_EVT, gattc_if, &esp_param);
+
 }
 
 #endif  ///GATTC_INCLUDED == TRUE

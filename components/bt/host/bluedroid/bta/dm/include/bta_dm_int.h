@@ -74,6 +74,10 @@ enum {
     BTA_DM_PM_BTM_STATUS_EVT,
     BTA_DM_PM_TIMER_EVT,
 #endif /* #if (BTA_DM_PM_INCLUDED == TRUE) */
+#if (BTA_DM_QOS_INCLUDED == TRUE)
+    /* Quality of Service set events */
+    BTA_DM_API_QOS_SET_EVT,
+#endif /* #if (BTA_DM_QOS_INCLUDED == TRUE) */
 #if (SMP_INCLUDED == TRUE)
     /* simple pairing events */
     BTA_DM_API_CONFIRM_EVT,
@@ -161,7 +165,7 @@ enum {
     BTA_DM_API_BLE_SET_CHANNELS_EVT,
     BTA_DM_API_UPDATE_WHITE_LIST_EVT,
     BTA_DM_API_BLE_READ_ADV_TX_POWER_EVT,
-    BTA_DM_API_BLE_READ_RSSI_EVT,
+    BTA_DM_API_READ_RSSI_EVT,
 #if BLE_INCLUDED == TRUE
     BTA_DM_API_UPDATE_DUPLICATE_EXCEPTIONAL_LIST_EVT,
 #endif
@@ -432,6 +436,7 @@ typedef struct {
     UINT8           new_role;
     BD_ADDR         bd_addr;
     UINT8           hci_status;
+    BOOLEAN         sc_downgrade;
 #if BLE_INCLUDED == TRUE
     UINT16          handle;
 #endif
@@ -458,6 +463,16 @@ typedef struct {
 } tBTA_DM_PM_TIMER;
 #endif /* #if (BTA_DM_PM_INCLUDED == TRUE) */
 
+#if (BTA_DM_QOS_INCLUDED == TRUE)
+/* data type for BTA_DM_API_QOS_SET_EVT */
+typedef struct {
+    BT_HDR          hdr;
+    BD_ADDR         bd_addr;
+    UINT32          t_poll;
+    tBTM_CMPL_CB    *p_cb;
+} tBTA_DM_API_QOS_SET;
+#endif /* #if (BTA_DM_QOS_INCLUDED == TRUE) */
+
 /* data type for BTA_DM_API_ADD_DEVICE_EVT */
 typedef struct {
     BT_HDR              hdr;
@@ -473,6 +488,7 @@ typedef struct {
     BD_NAME             bd_name;
     UINT8               features[BTA_FEATURE_BYTES_PER_PAGE * (BTA_EXT_FEATURES_PAGE_MAX + 1)];
     UINT8               pin_length;
+    UINT8               sc_support;
 } tBTA_DM_API_ADD_DEVICE;
 
 /* data type for BTA_DM_API_REMOVE_ACL_EVT */
@@ -842,8 +858,8 @@ typedef union {
     tBTA_DM_API_BLE_SET_CHANNELS  ble_set_channels;
     tBTA_DM_API_UPDATE_WHITE_LIST white_list;
     tBTA_DM_API_READ_ADV_TX_POWER read_tx_power;
-    tBTA_DM_API_READ_RSSI rssi;
 #endif  ///BLE_INCLUDED == TRUE
+    tBTA_DM_API_READ_RSSI rssi;
 
     tBTA_DM_API_SET_VISIBILITY set_visibility;
 
@@ -884,6 +900,11 @@ typedef union {
 
     tBTA_DM_PM_TIMER pm_timer;
 #endif /* #if (BTA_DM_PM_INCLUDED == TRUE) */
+
+#if (BTA_DM_QOS_INCLUDED == TRUE)
+    /* Quality of Service set events */
+    tBTA_DM_API_QOS_SET qos_set;
+#endif /* #if (BTA_DM_QOS_INCLUDED == TRUE) */
 
     tBTA_DM_API_DI_DISC     di_disc;
 
@@ -1099,7 +1120,7 @@ typedef struct {
 
 
     tBTA_DM_ENCRYPT_CBACK      *p_encrypt_cback;
-    TIMER_LIST_ENT              switch_delay_timer;
+    TIMER_LIST_ENT              switch_delay_timer[BTA_DM_NUM_PEER_DEVICE];
 
 } tBTA_DM_CB;
 
@@ -1302,7 +1323,7 @@ extern void bta_dm_read_rmt_name(tBTA_DM_MSG *p_data);
 extern void bta_dm_ble_set_channels (tBTA_DM_MSG *p_data);
 extern void bta_dm_update_white_list(tBTA_DM_MSG *p_data);
 extern void bta_dm_ble_read_adv_tx_power(tBTA_DM_MSG *p_data);
-extern void bta_dm_ble_read_rssi(tBTA_DM_MSG *p_data);
+extern void bta_dm_read_rssi(tBTA_DM_MSG *p_data);
 extern void bta_dm_set_visibility (tBTA_DM_MSG *p_data);
 
 extern void bta_dm_set_scan_config(tBTA_DM_MSG *p_data);
@@ -1387,6 +1408,10 @@ extern void bta_dm_pm_active(BD_ADDR peer_addr);
 extern void bta_dm_pm_btm_status(tBTA_DM_MSG *p_data);
 extern void bta_dm_pm_timer(tBTA_DM_MSG *p_data);
 #endif /* #if (BTA_DM_PM_INCLUDED == TRUE) */
+
+#if (BTA_DM_QOS_INCLUDED == TRUE)
+extern void bta_dm_set_qos(tBTA_DM_MSG *p_data);
+#endif /* #if (BTA_DM_QOS_INCLUDED == TRUE) */
 
 extern UINT8 bta_dm_get_av_count(void);
 extern void bta_dm_search_start (tBTA_DM_MSG *p_data);

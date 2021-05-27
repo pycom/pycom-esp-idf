@@ -1,7 +1,7 @@
 ESP32 ULP coprocessor instruction set
 =====================================
 
-This document provides details about the instructions used by ESP32 ULP coprocessor assembler.
+This document provides details about the instructions used by {IDF_TARGET_NAME} ULP coprocessor assembler.
 
 ULP coprocessor has 4 16-bit general purpose registers, labeled R0, R1, R2, R3. It also has an 8-bit counter register (stage_cnt) which can be used to implement loops. Stage count regiter is accessed using special instructions.
 
@@ -13,7 +13,7 @@ The instruction syntax is case insensitive. Upper and lower case letters can be 
 
 Note about addressing
 ---------------------
-ESP32 ULP coprocessor's JUMP, ST, LD instructions which take register as an argument (jump address, store/load base address) expect the argument to be expressed in 32-bit words.
+{IDF_TARGET_NAME} ULP coprocessor's JUMP, ST, LD instructions which take register as an argument (jump address, store/load base address) expect the argument to be expressed in 32-bit words.
 
 Consider the following example program::
 
@@ -940,4 +940,9 @@ WRITE_RTC_FIELD(rtc_reg, field, value)
 
     /* Set RTC_CNTL_ULP_CP_SLP_TIMER_EN field of RTC_CNTL_STATE0_REG to 0 */
     WRITE_RTC_FIELD(RTC_CNTL_STATE0_REG, RTC_CNTL_ULP_CP_SLP_TIMER_EN, 0)
+
+
+
+
+
 

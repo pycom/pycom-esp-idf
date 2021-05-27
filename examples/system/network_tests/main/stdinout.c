@@ -22,6 +22,7 @@
 // Internal functions declaration referenced in io object
 //
 static esp_err_t netsuite_io_transmit(void *h, void *buffer, size_t len);
+static esp_err_t netsuite_io_transmit_wrap(void *h, void *buffer, size_t len, void *netstack_buf);
 static esp_err_t netsuite_io_attach(esp_netif_t * esp_netif, void * args);
 
 /**
@@ -31,6 +32,7 @@ static esp_err_t netsuite_io_attach(esp_netif_t * esp_netif, void * args);
 const esp_netif_driver_ifconfig_t c_driver_ifconfig = {
         .driver_free_rx_buffer = NULL,
         .transmit = netsuite_io_transmit,
+        .transmit_wrap = netsuite_io_transmit_wrap,
         .handle = "netsuite-io-object" // this IO object is a singleton, its handle uses as a name
 };
 
@@ -62,6 +64,19 @@ static esp_err_t netsuite_io_transmit(void *h, void *buffer, size_t len)
     }
     printf("]\n");
     return ESP_OK;
+}
+
+/**
+ * @brief Transmit wrapper that is typically used for buffer handling and optimization.
+ * Here just wraps the netsuite_io_transmit().
+ *
+ * @note The netstack_buf could be a ref-counted network stack buffer and might be used
+ * by the lower layers directly if an additional handling is practical.
+ * See docs on `esp_wifi_internal_tx_by_ref()` in components/esp_wifi/include/esp_private/wifi.h
+ */
+static esp_err_t netsuite_io_transmit_wrap(void *h, void *buffer, size_t len, void *netstack_buf)
+{
+    return netsuite_io_transmit(h, buffer, len);
 }
 
 /**
@@ -133,9 +148,9 @@ void * netsuite_io_new(void)
                                           256, 0, 0, NULL, 0) );
     /* Tell VFS to use UART driver */
     esp_vfs_dev_uart_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
-    esp_vfs_dev_uart_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+    esp_vfs_dev_uart_port_set_rx_line_endings(CONFIG_ESP_CONSOLE_UART_NUM, ESP_LINE_ENDINGS_CR);
     /* Move the caret to the beginning of the next line on '\n' */
-    esp_vfs_dev_uart_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+    esp_vfs_dev_uart_port_set_tx_line_endings(CONFIG_ESP_CONSOLE_UART_NUM, ESP_LINE_ENDINGS_CRLF);
     linenoiseSetDumbMode(1);
     return (void *)&s_driver_base;
 }

@@ -52,6 +52,16 @@ tL2C_LCB *l2cu_allocate_lcb (BD_ADDR p_bd_addr, BOOLEAN is_bonding, tBT_TRANSPOR
     int         xx;
     tL2C_LCB    *p_lcb = &l2cb.lcb_pool[0];
 
+#if (CLASSIC_BT_INCLUDED == TRUE)
+            /* Check if peer device's and our BD_ADDR is same or not. It
+               should be different to avoid 'Impersonation in the Pin Pairing
+               Protocol' (CVE-2020-26555) vulnerability. */
+            if (memcmp((uint8_t *)p_bd_addr, (uint8_t *)&controller_get_interface()->get_address()->address, sizeof (BD_ADDR)) == 0) {
+                L2CAP_TRACE_ERROR ("%s connection rejected due to same BD ADDR", __func__);
+                return (NULL);
+            }
+#endif
+
     for (xx = 0; xx < MAX_L2CAP_LINKS; xx++, p_lcb++) {
         if (!p_lcb->in_use) {
             btu_free_timer(&p_lcb->timer_entry);
@@ -2314,7 +2324,7 @@ UINT8 l2cu_get_num_hi_priority (void)
 ** Description      This function initiates an acl connection via HCI
 **                  If switch required to create connection it is already done.
 **
-** Returns          TRUE if successful, FALSE if gki get buffer fails.
+** Returns          TRUE if successful, FALSE if osi get buffer fails.
 **
 *******************************************************************************/
 
@@ -3493,13 +3503,12 @@ BT_HDR *l2cu_get_next_buffer_to_send (tL2C_LCB *p_lcb)
                     L2CAP_TRACE_ERROR("l2cu_get_buffer_to_send: No data to be sent");
                     return (NULL);
                 }
+                l2cu_check_channel_congestion (p_ccb);
+                l2cu_set_acl_hci_header (p_buf, p_ccb);
                 /* send tx complete */
                 if (l2cb.fixed_reg[xx].pL2CA_FixedTxComplete_Cb) {
                     (*l2cb.fixed_reg[xx].pL2CA_FixedTxComplete_Cb)(p_ccb->local_cid, 1);
                 }
-
-                l2cu_check_channel_congestion (p_ccb);
-                l2cu_set_acl_hci_header (p_buf, p_ccb);
                 return (p_buf);
             }
         }

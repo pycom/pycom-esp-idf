@@ -17,7 +17,7 @@
 #include <sys/param.h>
 #include "esp_attr.h"
 #include "esp_sleep.h"
-#include "esp_private/esp_timer_impl.h"
+#include "esp_private/esp_timer_private.h"
 #include "esp_log.h"
 #include "esp32/clk.h"
 #include "esp_newlib.h"
@@ -29,8 +29,8 @@
 #include "soc/rtc.h"
 #include "soc/spi_periph.h"
 #include "soc/dport_reg.h"
-#include "soc/rtc_wdt.h"
 #include "soc/soc_memory_layout.h"
+#include "hal/wdt_hal.h"
 #include "driver/rtc_io.h"
 #include "driver/uart.h"
 #include "freertos/FreeRTOS.h"
@@ -84,8 +84,8 @@ static sleep_config_t s_config = {
 static bool s_light_sleep_wakeup = false;
 
 /* Updating RTC_MEMORY_CRC_REG register via set_rtc_memory_crc()
-   is not thread-safe. */
-static _lock_t lock_rtc_memory_crc;
+   is not thread-safe, so we need to disable interrupts before going to deep sleep. */
+static portMUX_TYPE spinlock_rtc_deep_sleep = portMUX_INITIALIZER_UNLOCKED;
 
 static const char* TAG = "sleep";
 
@@ -99,16 +99,6 @@ static void timer_wakeup_prepare(void);
 */
 esp_deep_sleep_wake_stub_fn_t esp_get_deep_sleep_wake_stub(void)
 {
-    _lock_acquire(&lock_rtc_memory_crc);
-    uint32_t stored_crc = REG_READ(RTC_MEMORY_CRC_REG);
-    set_rtc_memory_crc();
-    uint32_t calc_crc = REG_READ(RTC_MEMORY_CRC_REG);
-    REG_WRITE(RTC_MEMORY_CRC_REG, stored_crc);
-    _lock_release(&lock_rtc_memory_crc);
-
-    if(stored_crc != calc_crc) {
-        return NULL;
-    }
     esp_deep_sleep_wake_stub_fn_t stub_ptr = (esp_deep_sleep_wake_stub_fn_t) REG_READ(RTC_ENTRY_ADDR_REG);
     if (!esp_ptr_executable(stub_ptr)) {
         return NULL;
@@ -118,10 +108,7 @@ esp_deep_sleep_wake_stub_fn_t esp_get_deep_sleep_wake_stub(void)
 
 void esp_set_deep_sleep_wake_stub(esp_deep_sleep_wake_stub_fn_t new_stub)
 {
-    _lock_acquire(&lock_rtc_memory_crc);
     REG_WRITE(RTC_ENTRY_ADDR_REG, (uint32_t)new_stub);
-    set_rtc_memory_crc();
-    _lock_release(&lock_rtc_memory_crc);
 }
 
 void RTC_IRAM_ATTR esp_default_wake_deep_sleep(void) {
@@ -174,12 +161,16 @@ static void IRAM_ATTR resume_uarts(void)
     }
 }
 
+inline static uint32_t IRAM_ATTR call_rtc_sleep_start(uint32_t reject_triggers);
+
 static uint32_t IRAM_ATTR esp_sleep_start(uint32_t pd_flags)
 {
     // Stop UART output so that output is not lost due to APB frequency change.
     // For light sleep, suspend UART output — it will resume after wakeup.
     // For deep sleep, wait for the contents of UART FIFO to be sent.
-    if (pd_flags & RTC_SLEEP_PD_DIG) {
+    bool deep_sleep = pd_flags & RTC_SLEEP_PD_DIG;
+
+    if (deep_sleep) {
         flush_uarts();
     } else {
         suspend_uarts();
@@ -211,7 +202,27 @@ static uint32_t IRAM_ATTR esp_sleep_start(uint32_t pd_flags)
         s_config.sleep_duration > 0) {
         timer_wakeup_prepare();
     }
-    uint32_t result = rtc_sleep_start(s_config.wakeup_triggers, 0);
+
+    uint32_t result;
+    if (deep_sleep) {
+        /* Disable interrupts in case another task writes to RTC memory while we
+         * calculate RTC memory CRC
+         */
+        portENTER_CRITICAL(&spinlock_rtc_deep_sleep);
+
+#if !CONFIG_ESP32_ALLOW_RTC_FAST_MEM_AS_HEAP
+        /* If not possible stack is in RTC FAST memory, use the ROM function to calculate the CRC and save ~140 bytes IRAM */
+        set_rtc_memory_crc();
+        result = call_rtc_sleep_start(0);
+#else
+        /* Otherwise, need to call the dedicated soc function for this */
+        result = rtc_deep_sleep_start(s_config.wakeup_triggers, 0);
+#endif
+
+        portEXIT_CRITICAL(&spinlock_rtc_deep_sleep);
+    } else {
+        result = call_rtc_sleep_start(0);
+    }
 
     // Restore CPU frequency
     rtc_clk_cpu_freq_set_config(&cpu_freq_config);
@@ -220,6 +231,15 @@ static uint32_t IRAM_ATTR esp_sleep_start(uint32_t pd_flags)
     resume_uarts();
 
     return result;
+}
+
+inline static uint32_t IRAM_ATTR call_rtc_sleep_start(uint32_t reject_triggers)
+{
+#ifdef CONFIG_IDF_TARGET_ESP32
+        return rtc_sleep_start(s_config.wakeup_triggers, reject_triggers);
+#else
+        return rtc_sleep_start(s_config.wakeup_triggers, reject_triggers, 1);
+#endif
 }
 
 void IRAM_ATTR esp_deep_sleep_start(void)
@@ -281,11 +301,11 @@ esp_err_t esp_light_sleep_start(void)
 {
     static portMUX_TYPE light_sleep_lock = portMUX_INITIALIZER_UNLOCKED;
     portENTER_CRITICAL(&light_sleep_lock);
-    /* We will be calling esp_timer_impl_advance inside DPORT access critical
+    /* We will be calling esp_timer_private_advance inside DPORT access critical
      * section. Make sure the code on the other CPU is not holding esp_timer
      * lock, otherwise there will be deadlock.
      */
-    esp_timer_impl_lock();
+    esp_timer_private_lock();
     s_config.rtc_ticks_at_sleep_start = rtc_time_get();
     uint64_t frc_time_at_start = esp_timer_get_time();
     DPORT_STALL_OTHER_CPU_START();
@@ -315,16 +335,15 @@ esp_err_t esp_light_sleep_start(void)
     rtc_vddsdio_config_t vddsdio_config = rtc_vddsdio_get_config();
 
     // Safety net: enable WDT in case exit from light sleep fails
-    bool wdt_was_enabled = rtc_wdt_is_on(); // If WDT was enabled in the user code, then do not change it here.
+    wdt_hal_context_t rtc_wdt_ctx = {.inst = WDT_RWDT, .rwdt_dev = &RTCCNTL};
+    bool wdt_was_enabled = wdt_hal_is_enabled(&rtc_wdt_ctx);    // If WDT was enabled in the user code, then do not change it here.
     if (!wdt_was_enabled) {
-        rtc_wdt_protect_off();
-        rtc_wdt_disable();
-        rtc_wdt_set_length_of_reset_signal(RTC_WDT_SYS_RESET_SIG, RTC_WDT_LENGTH_3_2us);
-        rtc_wdt_set_length_of_reset_signal(RTC_WDT_CPU_RESET_SIG, RTC_WDT_LENGTH_3_2us);
-        rtc_wdt_set_stage(RTC_WDT_STAGE0, RTC_WDT_STAGE_ACTION_RESET_RTC);
-        rtc_wdt_set_time(RTC_WDT_STAGE0, 1000);
-        rtc_wdt_enable();
-        rtc_wdt_protect_on();
+        wdt_hal_init(&rtc_wdt_ctx, WDT_RWDT, 0, false);
+        uint32_t stage_timeout_ticks = (uint32_t)(1000ULL * rtc_clk_slow_freq_get_hz() / 1000ULL);
+        wdt_hal_write_protect_disable(&rtc_wdt_ctx);
+        wdt_hal_config_stage(&rtc_wdt_ctx, WDT_STAGE0, stage_timeout_ticks, WDT_STAGE_ACTION_RESET_RTC);
+        wdt_hal_enable(&rtc_wdt_ctx);
+        wdt_hal_write_protect_enable(&rtc_wdt_ctx);
     }
 
     // Enter sleep, then wait for flash to be ready on wakeup
@@ -347,14 +366,16 @@ esp_err_t esp_light_sleep_start(void)
      * monotonic.
      */
     if (time_diff > 0) {
-        esp_timer_impl_advance(time_diff);
+        esp_timer_private_advance(time_diff);
     }
     esp_set_time_from_rtc();
 
-    esp_timer_impl_unlock();
+    esp_timer_private_unlock();
     DPORT_STALL_OTHER_CPU_END();
     if (!wdt_was_enabled) {
-        rtc_wdt_disable();
+        wdt_hal_write_protect_disable(&rtc_wdt_ctx);
+        wdt_hal_disable(&rtc_wdt_ctx);
+        wdt_hal_write_protect_enable(&rtc_wdt_ctx);
     }
     portEXIT_CRITICAL(&light_sleep_lock);
     return err;

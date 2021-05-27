@@ -51,9 +51,31 @@ esp_err_t spi_flash_hal_configure_host_io_mode(
     esp_flash_io_mode_t io_mode)
 {
     spi_dev_t *dev = get_spi_dev(host);
+    int host_id = spi_flash_ll_hw_get_id(dev);
 
-    if (!SOC_SPI_PERIPH_SUPPORT_MULTILINE_MODE(dev) && io_mode > SPI_FLASH_FASTRD) {
+    if (!SOC_SPI_PERIPH_SUPPORT_MULTILINE_MODE(host_id) && io_mode > SPI_FLASH_FASTRD) {
         return ESP_ERR_NOT_SUPPORTED;
+    }
+    if (addr_bitlen > 24 && SOC_SPI_PERIPH_SUPPORT_CONTROL_DUMMY_OUTPUT(host_id)) {
+        /*
+         * The extra address bits (24-addr_bitlen) are used to control the M7-M0 bits right after
+         * the address field, to avoid the flash going into continuous read mode.
+         *
+         * On ESP32-S2 the MEMSPI (that SUPPORT_CONTROL_DUMMY_OUTPUT), the least significant
+         * addr_bitlen bits of the address will be used, instead of the MSBs. The driver is
+         * required to set the address according to the extra address bits.
+         *
+         * To reduce the time consuming for the read() function to calculate the shift of address,
+         * the addr_bitlen is kept to 24 bits. And the CONTROL_DUMMY_OUTPUT feature is used to
+         * control those bits instead.
+         */
+
+        //This block is only reached when SPI_FLASH_QIO or SPI_FLASH_DIO
+        assert(io_mode == SPI_FLASH_DIO || io_mode == SPI_FLASH_QIO);
+        int line_width = (io_mode == SPI_FLASH_DIO? 2: 4);
+        dummy_cyclelen_base += (addr_bitlen - 24) / line_width;
+        addr_bitlen = 24;
+        spi_flash_ll_set_dummy_out(dev, 1, 1);
     }
 
     spi_flash_ll_set_command8(dev, command);
@@ -78,8 +100,7 @@ esp_err_t spi_flash_hal_common_command(spi_flash_host_driver_t *host, spi_flash_
         spi_flash_ll_set_dummy(dev, 0);
     }
 
-    spi_flash_ll_set_address(dev, (trans->address & ADDRESS_MASK_24BIT) << 8);
-
+    spi_flash_ll_set_usr_address(dev, (trans->address & ADDRESS_MASK_24BIT), spi_flash_ll_get_addr_bitlen(dev));
     spi_flash_ll_set_mosi_bitlen(dev, trans->mosi_len * 8);
     spi_flash_ll_set_buffer_data(dev, trans->mosi_data, trans->mosi_len);
 
@@ -93,7 +114,8 @@ esp_err_t spi_flash_hal_common_command(spi_flash_host_driver_t *host, spi_flash_
 esp_err_t spi_flash_hal_read(spi_flash_host_driver_t *host, void *buffer, uint32_t address, uint32_t read_len)
 {
     spi_dev_t *dev = get_spi_dev(host);
-    spi_flash_ll_set_address(dev, address << 8);
+    int bitlen = spi_flash_ll_get_addr_bitlen(dev);
+    spi_flash_ll_set_usr_address(dev, address << (bitlen - 24), bitlen);
     spi_flash_ll_set_miso_bitlen(dev, read_len * 8);
     spi_flash_ll_user_start(dev);
     host->poll_cmd_done(host);

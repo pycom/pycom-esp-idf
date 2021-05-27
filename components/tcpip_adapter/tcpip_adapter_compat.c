@@ -58,7 +58,7 @@ static void wifi_create_and_start_ap(void *esp_netif, esp_event_base_t base, int
         esp_netif_t *ap_netif = esp_netif_new(&cfg);
 
         esp_netif_attach_wifi_ap(ap_netif);
-        esp_wifi_set_default_wifi_sta_handlers();
+        esp_wifi_set_default_wifi_ap_handlers();
         s_esp_netifs[TCPIP_ADAPTER_IF_AP] = ap_netif;
     }
 }
@@ -178,7 +178,12 @@ esp_err_t tcpip_adapter_set_default_wifi_handlers(void)
 
 esp_err_t tcpip_adapter_clear_default_wifi_handlers(void)
 {
-    return _esp_wifi_clear_default_wifi_handlers();
+    if (s_tcpip_adapter_compat) {
+        // Clear default handlers only if tcpip-adapter mode used
+        return _esp_wifi_clear_default_wifi_handlers();
+    }
+    // No action if tcpip-adapter compatibility enabled, but interfaces created/configured with esp-netif
+    return ESP_OK;
 }
 
 tcpip_adapter_if_t tcpip_adapter_if_from_esp_netif(esp_netif_t *esp_netif)

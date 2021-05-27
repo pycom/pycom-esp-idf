@@ -1,7 +1,7 @@
 """
 Command line tool to assign unit tests to CI test jobs.
 """
-
+import os
 import re
 import argparse
 
@@ -24,7 +24,7 @@ class Group(CIAssignTest.Group):
     CI_JOB_MATCH_KEYS = ["test environment"]
     DUT_CLS_NAME = {
         "esp32": "ESP32DUT",
-        "esp32s2beta": "ESP32S2DUT",
+        "esp32s2": "ESP32S2DUT",
         "esp8266": "ESP8266DUT",
     }
 
@@ -46,7 +46,7 @@ class Group(CIAssignTest.Group):
             for key in self.filters:
                 if self._get_case_attr(case, key) != self.filters[key]:
                     if key == "tags":
-                        if self._get_case_attr(case, key).issubset(self.filters[key]):
+                        if set(self._get_case_attr(case, key)).issubset(set(self.filters[key])):
                             continue
                     break
             else:
@@ -127,7 +127,7 @@ class Group(CIAssignTest.Group):
                     "name": test_function,
                     "extra_data": self._create_extra_data(test_cases, test_function),
                     "overwrite": overwrite,
-                } for test_function, test_cases in case_by_test_function.iteritems() if test_cases
+                } for test_function, test_cases in case_by_test_function.items() if test_cases
             ],
         }
         return output_data
@@ -139,21 +139,39 @@ class UnitTestAssignTest(CIAssignTest.AssignTest):
     def __init__(self, test_case_path, ci_config_file):
         CIAssignTest.AssignTest.__init__(self, test_case_path, ci_config_file, case_group=Group)
 
-    def _search_cases(self, test_case_path, case_filter=None):
+    def _search_cases(self, test_case_path, case_filter=None, test_case_file_pattern=None):
         """
         For unit test case, we don't search for test functions.
         The unit test cases is stored in a yaml file which is created in job build-idf-test.
         """
 
-        try:
-            with open(test_case_path, "r") as f:
-                raw_data = yaml.load(f, Loader=Loader)
-            test_cases = raw_data["test cases"]
-            for case in test_cases:
-                case["tags"] = set(case["tags"])
-        except IOError:
+        def find_by_suffix(suffix, path):
+            res = []
+            for root, _, files in os.walk(path):
+                for file in files:
+                    if file.endswith(suffix):
+                        res.append(os.path.join(root, file))
+            return res
+
+        def get_test_cases_from_yml(yml_file):
+            try:
+                with open(yml_file) as fr:
+                    raw_data = yaml.load(fr, Loader=Loader)
+                test_cases = raw_data['test cases']
+            except (IOError, KeyError):
+                return []
+            else:
+                return test_cases
+
+        test_cases = []
+        if os.path.isdir(test_case_path):
+            for yml_file in find_by_suffix('.yml', test_case_path):
+                test_cases.extend(get_test_cases_from_yml(yml_file))
+        elif os.path.isfile(test_case_path):
+            test_cases.extend(get_test_cases_from_yml(test_case_path))
+        else:
             print("Test case path is invalid. Should only happen when use @bot to skip unit test.")
-            test_cases = []
+
         # filter keys are lower case. Do map lower case keys with original keys.
         try:
             key_mapping = {x.lower(): x for x in test_cases[0].keys()}

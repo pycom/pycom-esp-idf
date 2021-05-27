@@ -765,6 +765,7 @@ typedef struct {
     FLOW_SPEC flow;
     UINT16 handle;
     UINT8 status;
+    BD_ADDR     rem_bda;
 } tBTM_QOS_SETUP_CMPL;
 
 
@@ -844,14 +845,15 @@ typedef UINT16 tBTM_BL_EVENT_MASK;
 
 /* the data type associated with BTM_BL_CONN_EVT */
 typedef struct {
-    tBTM_BL_EVENT   event;      /* The event reported. */
-    BD_ADDR_PTR     p_bda;      /* The address of the newly connected device */
-    DEV_CLASS_PTR   p_dc;       /* The device class */
-    BD_NAME_PTR     p_bdn;      /* The device name */
-    UINT8          *p_features; /* pointer to the remote device's features page[0] (supported features page) */
+    tBTM_BL_EVENT   event;          /* The event reported. */
+    BD_ADDR_PTR     p_bda;          /* The address of the newly connected device */
+    DEV_CLASS_PTR   p_dc;           /* The device class */
+    BD_NAME_PTR     p_bdn;          /* The device name */
+    UINT8          *p_features;     /* pointer to the remote device's features page[0] (supported features page) */
+    BOOLEAN         sc_downgrade;   /* Secure connection downgrade state. */
 #if BLE_INCLUDED == TRUE
-    UINT16          handle;     /* connection handle */
-    tBT_TRANSPORT   transport; /* link is LE or not */
+    UINT16          handle;         /* connection handle */
+    tBT_TRANSPORT   transport;      /* link is LE or not */
 #endif
 } tBTM_BL_CONN_DATA;
 
@@ -1372,7 +1374,7 @@ typedef UINT8 (tBTM_PIN_CALLBACK) (BD_ADDR bd_addr, DEV_CLASS dev_class,
 */
 typedef UINT8 (tBTM_LINK_KEY_CALLBACK) (BD_ADDR bd_addr, DEV_CLASS dev_class,
                                         tBTM_BD_NAME bd_name, UINT8 *key,
-                                        UINT8 key_type);
+                                        UINT8 key_type, BOOLEAN sc_support);
 
 
 /* Remote Name Resolved.  Parameters are
@@ -1449,6 +1451,7 @@ typedef UINT8 tBTM_IO_CAP;
 #define BTM_BLE_RESPONDER_KEY_SIZE 15
 #define BTM_BLE_MAX_KEY_SIZE       16
 #define BTM_BLE_MIN_KEY_SIZE       7
+#define BTM_BLE_APPL_ENC_KEY_SIZE  7
 
 typedef UINT8 tBTM_AUTH_REQ;
 
@@ -3426,7 +3429,8 @@ UINT8 BTM_SecClrService (UINT8 service_id);
 BOOLEAN BTM_SecAddDevice (BD_ADDR bd_addr, DEV_CLASS dev_class,
                           BD_NAME bd_name, UINT8 *features,
                           UINT32 trusted_mask[], LINK_KEY link_key,
-                          UINT8 key_type, tBTM_IO_CAP io_cap, UINT8 pin_length);
+                          UINT8 key_type, tBTM_IO_CAP io_cap, UINT8 pin_length,
+                          UINT8 sc_support);
 
 
 /*******************************************************************************

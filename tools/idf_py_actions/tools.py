@@ -1,3 +1,4 @@
+import click
 import os
 import re
 import subprocess
@@ -63,21 +64,42 @@ def idf_version():
     return version
 
 
-def run_tool(tool_name, args, cwd):
+def run_tool(tool_name, args, cwd, env=dict()):
     def quote_arg(arg):
         " Quote 'arg' if necessary "
         if " " in arg and not (arg.startswith('"') or arg.startswith("'")):
             return "'" + arg + "'"
         return arg
 
+    args = [str(arg) for arg in args]
     display_args = " ".join(quote_arg(arg) for arg in args)
     print("Running %s in directory %s" % (tool_name, quote_arg(cwd)))
     print('Executing "%s"...' % str(display_args))
+
+    env_copy = dict(os.environ)
+    env_copy.update(env)
+
+    if sys.version_info[0] < 3:
+        # The subprocess lib cannot accept environment variables as "unicode". Convert to str.
+        # This encoding step is required only in Python 2.
+        for (key, val) in env_copy.items():
+            if not isinstance(val, str):
+                env_copy[key] = val.encode(sys.getfilesystemencoding() or 'utf-8')
+
     try:
         # Note: we explicitly pass in os.environ here, as we may have set IDF_PATH there during startup
-        subprocess.check_call(args, env=os.environ, cwd=cwd)
+        subprocess.check_call(args, env=env_copy, cwd=cwd)
     except subprocess.CalledProcessError as e:
         raise FatalError("%s failed with exit code %d" % (tool_name, e.returncode))
+
+
+def run_target(target_name, args, env=dict()):
+    generator_cmd = GENERATORS[args.generator]["command"]
+
+    if args.verbose:
+        generator_cmd += [GENERATORS[args.generator]["verbose_flag"]]
+
+    run_tool(generator_cmd[0], generator_cmd + [target_name], args.build_dir, env)
 
 
 def _strip_quotes(value, regexp=re.compile(r"^\"(.*)\"$|^'(.*)'$|^(.*)$")):
@@ -178,7 +200,7 @@ def ensure_build_directory(args, prog_name, always_run_cmake=False):
                 "-DPYTHON_DEPS_CHECKED=1",
                 "-DESP_PLATFORM=1",
             ]
-            if not args.no_warnings:
+            if args.cmake_warn_uninitialized:
                 cmake_args += ["--warn-uninitialized"]
 
             if args.define_cache_entry:
@@ -249,6 +271,13 @@ def get_sdkconfig_value(sdkconfig_file, key):
     return value
 
 
+def is_target_supported(project_path, supported_targets):
+    """
+    Returns True if the active target is supported, or False otherwise.
+    """
+    return get_sdkconfig_value(os.path.join(project_path, "sdkconfig"), 'CONFIG_IDF_TARGET') in supported_targets
+
+
 def _guess_or_check_idf_target(args, prog_name, cache):
     """
     If CMakeCache.txt doesn't exist, and IDF_TARGET is not set in the environment, guess the value from
@@ -294,3 +323,25 @@ def _guess_or_check_idf_target(args, prog_name, cache):
                          "To keep the setting in sdkconfig ({t_conf}) and re-generate CMakeCache.txt, run '{prog} fullclean'. "
                          "To re-generate sdkconfig for '{t_cache}' target, run '{prog} set-target {t_cache}'."
                          .format(t_conf=idf_target_from_sdkconfig, t_cache=idf_target_from_cache, prog=prog_name))
+
+
+class TargetChoice(click.Choice):
+    """
+    A version of click.Choice with two special features:
+    - ignores hyphens
+    - not case sensitive
+    """
+    def __init__(self, choices):
+        super(TargetChoice, self).__init__(choices, case_sensitive=False)
+
+    def convert(self, value, param, ctx):
+        def normalize(str):
+            return str.lower().replace("-", "")
+
+        saved_token_normalize_func = ctx.token_normalize_func
+        ctx.token_normalize_func = normalize
+
+        try:
+            return super(TargetChoice, self).convert(value, param, ctx)
+        finally:
+            ctx.token_normalize_func = saved_token_normalize_func

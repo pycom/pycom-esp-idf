@@ -69,5 +69,5 @@ https://dl.espressif.com/dl/esp32_win32_msys2_environment_and_esp2020r2_toolchai
     windows-setup-scratch
 
 
-.. _MSYS2: https://msys2.github.io/
+.. _MSYS2: https://www.msys2.org/
 

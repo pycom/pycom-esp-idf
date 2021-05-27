@@ -63,7 +63,7 @@ static UINT8 bta_dm_authorize_cback (BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NA
 #if (CLASSIC_BT_INCLUDED == TRUE)
 static UINT8 bta_dm_pin_cback (BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NAME bd_name, BOOLEAN min_16_digit);
 #endif /// CLASSIC_BT_INCLUDED == TRUE
-static UINT8 bta_dm_new_link_key_cback(BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NAME bd_name, LINK_KEY key, UINT8 key_type);
+static UINT8 bta_dm_new_link_key_cback(BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NAME bd_name, LINK_KEY key, UINT8 key_type, BOOLEAN sc_support);
 static UINT8 bta_dm_authentication_complete_cback(BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NAME bd_name, int result);
 #endif  ///SMP_INCLUDED == TRUE
 static void bta_dm_local_name_cback(BD_ADDR bd_addr);
@@ -831,15 +831,13 @@ void bta_dm_ble_read_adv_tx_power(tBTA_DM_MSG *p_data)
 #endif  ///BLE_INCLUDED == TRUE
 }
 
-void bta_dm_ble_read_rssi(tBTA_DM_MSG *p_data)
+void bta_dm_read_rssi(tBTA_DM_MSG *p_data)
 {
-#if (BLE_INCLUDED == TRUE)
     if (p_data->rssi.read_rssi_cb != NULL) {
         BTM_ReadRSSI(p_data->rssi.remote_addr, p_data->rssi.transport, p_data->rssi.read_rssi_cb);
     } else {
         APPL_TRACE_ERROR("%s(), the callback function can't be NULL.", __func__);
     }
-#endif  ///BLE_INCLUDED == TRUE
 }
 
 /*******************************************************************************
@@ -990,11 +988,14 @@ void bta_dm_remove_device(tBTA_DM_MSG *p_data)
         /* Take the link down first, and mark the device for removal when disconnected */
         for (int i = 0; i < bta_dm_cb.device_list.count; i++) {
             if (!bdcmp(bta_dm_cb.device_list.peer_device[i].peer_bdaddr, p_dev->bd_addr)
-                && bta_dm_cb.device_list.peer_device[i].transport == transport) {
+#if BLE_INCLUDED == TRUE
+                && bta_dm_cb.device_list.peer_device[i].transport == transport
+#endif
+            ) {
+
                 bta_dm_cb.device_list.peer_device[i].conn_state = BTA_DM_UNPAIRING;
-                btm_remove_acl( p_dev->bd_addr, bta_dm_cb.device_list.peer_device[i].transport);
-                APPL_TRACE_DEBUG("%s:transport = %d", __func__,
-                                 bta_dm_cb.device_list.peer_device[i].transport);
+                btm_remove_acl( p_dev->bd_addr, transport);
+                APPL_TRACE_DEBUG("%s:transport = %d", __func__, transport);
                 break;
             }
         }
@@ -1056,7 +1057,7 @@ void bta_dm_add_device (tBTA_DM_MSG *p_data)
 
     if (!BTM_SecAddDevice (p_dev->bd_addr, p_dc, p_dev->bd_name, p_dev->features,
                            trusted_services_mask, p_lc, p_dev->key_type, p_dev->io_cap,
-                           p_dev->pin_length)) {
+                           p_dev->pin_length, p_dev->sc_support)) {
         APPL_TRACE_ERROR ("BTA_DM: Error adding device %08x%04x",
                           (p_dev->bd_addr[0] << 24) + (p_dev->bd_addr[1] << 16) + (p_dev->bd_addr[2] << 8) + p_dev->bd_addr[3],
                           (p_dev->bd_addr[4] << 8) + p_dev->bd_addr[5]);
@@ -2981,7 +2982,8 @@ static UINT8 bta_dm_pin_cback (BD_ADDR bd_addr, DEV_CLASS dev_class, BD_NAME bd_
 **
 *******************************************************************************/
 static UINT8  bta_dm_new_link_key_cback(BD_ADDR bd_addr, DEV_CLASS dev_class,
-                                        BD_NAME bd_name, LINK_KEY key, UINT8 key_type)
+                                        BD_NAME bd_name, LINK_KEY key, UINT8 key_type,
+                                        BOOLEAN sc_support)
 {
     tBTA_DM_SEC sec_event;
     tBTA_DM_AUTH_CMPL *p_auth_cmpl;
@@ -3003,6 +3005,7 @@ static UINT8  bta_dm_new_link_key_cback(BD_ADDR bd_addr, DEV_CLASS dev_class,
         p_auth_cmpl->key_present = TRUE;
         p_auth_cmpl->key_type = key_type;
         p_auth_cmpl->success = TRUE;
+        p_auth_cmpl->sc_support = sc_support;
 
         memcpy(p_auth_cmpl->key, key, LINK_KEY_LEN);
         sec_event.auth_cmpl.fail_reason = HCI_SUCCESS;
@@ -3280,6 +3283,7 @@ static void bta_dm_bl_change_cback (tBTM_BL_EVENT_DATA *p_data)
 
         switch (p_msg->event) {
         case BTM_BL_CONN_EVT:
+            p_msg->sc_downgrade = p_data->conn.sc_downgrade;
             p_msg->is_new = TRUE;
             bdcpy(p_msg->bd_addr, p_data->conn.p_bda);
 #if BLE_INCLUDED == TRUE
@@ -3506,6 +3510,7 @@ void bta_dm_acl_change(tBTA_DM_MSG *p_data)
         APPL_TRACE_DEBUG("%s info: 0x%x", __func__, bta_dm_cb.device_list.peer_device[i].info);
 
         if (bta_dm_cb.p_sec_cback) {
+            conn.link_up.sc_downgrade = p_data->acl_change.sc_downgrade;
             bta_dm_cb.p_sec_cback(BTA_DM_LINK_UP_EVT, (tBTA_DM_SEC *)&conn);
         }
     } else {
@@ -3815,9 +3820,9 @@ static void bta_dm_adjust_roles(BOOLEAN delay_role_switch)
                         BTM_SwitchRole (bta_dm_cb.device_list.peer_device[i].peer_bdaddr,
                                         HCI_ROLE_MASTER, NULL);
                     } else {
-                        bta_dm_cb.switch_delay_timer.p_cback =
+                        bta_dm_cb.switch_delay_timer[i].p_cback =
                             (TIMER_CBACK *)&bta_dm_delay_role_switch_cback;
-                        bta_sys_start_timer(&bta_dm_cb.switch_delay_timer, 0, 500);
+                        bta_sys_start_timer(&bta_dm_cb.switch_delay_timer[i], 0, 500);
                     }
                 }
 

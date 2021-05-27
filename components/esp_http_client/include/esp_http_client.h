@@ -110,6 +110,7 @@ typedef struct {
     const char                  *cert_pem;           /*!< SSL server certification, PEM format as string, if the client requires to verify server */
     const char                  *client_cert_pem;    /*!< SSL client certification, PEM format as string, if the server requires to verify client */
     const char                  *client_key_pem;     /*!< SSL client key, PEM format as string, if the server requires to verify client */
+    const char                  *user_agent;         /*!< The User Agent string to send with HTTP requests */
     esp_http_client_method_t    method;                   /*!< HTTP Method */
     int                         timeout_ms;               /*!< Network timeout in milliseconds */
     bool                        disable_auto_redirect;    /*!< Disable HTTP automatic redirects */
@@ -122,13 +123,21 @@ typedef struct {
     bool                        is_async;                 /*!< Set asynchronous mode, only supported with HTTPS for now */
     bool                        use_global_ca_store;      /*!< Use a global ca_store for all the connections in which this bool is set. */
     bool                        skip_cert_common_name_check;    /*!< Skip any validation of server certificate CN field */
+    bool                        keep_alive_enable;   /*!< Enable keep-alive timeout */
+    int                         keep_alive_idle;     /*!< Keep-alive idle time. Default is 5 (second) */
+    int                         keep_alive_interval; /*!< Keep-alive interval time. Default is 5 (second) */
+    int                         keep_alive_count;    /*!< Keep-alive packet retry send count. Default is 3 counts */
 } esp_http_client_config_t;
 
 /**
  * Enum for the HTTP status codes.
  */
 typedef enum {
+    /* 2xx - Success */
+    HttpStatus_Ok                = 200,
+
     /* 3xx - Redirection */
+    HttpStatus_MultipleChoices   = 300,
     HttpStatus_MovedPermanently  = 301,
     HttpStatus_Found             = 302,
     HttpStatus_TemporaryRedirect = 307,
@@ -496,6 +505,34 @@ void esp_http_client_add_auth(esp_http_client_handle_t client);
  *     - false
  */
 bool esp_http_client_is_complete_data_received(esp_http_client_handle_t client);
+
+/**
+ * @brief      Helper API to read larger data chunks
+ *             This is a helper API which internally calls `esp_http_client_read` multiple times till the end of data is reached or till the buffer gets full.
+ *
+ * @param[in]  client   The esp_http_client handle
+ * @param      buffer   The buffer
+ * @param[in]  len      The buffer length
+ *
+ * @return
+ *     - Length of data was read
+ */
+
+int esp_http_client_read_response(esp_http_client_handle_t client, char *buffer, int len);
+
+/**
+ * @brief          Get URL from client
+ *
+ * @param[in]      client   The esp_http_client handle
+ * @param[inout]   url      The buffer to store URL
+ * @param[in]      len      The buffer length
+ *
+ * @return
+ *     - ESP_OK
+ *     - ESP_FAIL
+ */
+
+esp_err_t esp_http_client_get_url(esp_http_client_handle_t client, char *url, const int len);
 
 #ifdef __cplusplus
 }

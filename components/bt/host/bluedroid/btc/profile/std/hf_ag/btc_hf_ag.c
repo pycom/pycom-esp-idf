@@ -873,6 +873,22 @@ update_call_states:
     return status;
 }
 
+bt_status_t btc_hf_ci_sco_data(void)
+{
+    bt_status_t status = BT_STATUS_SUCCESS;
+#if (BTM_SCO_HCI_INCLUDED == TRUE)
+    int idx = btc_hf_latest_connected_idx();
+    CHECK_HF_SLC_CONNECTED();
+
+    if (idx != BTC_HF_INVALID_IDX) {
+        BTA_AgCiData(hf_local_param[idx].btc_hf_cb.handle);
+        return status;
+    }
+    status = BT_STATUS_FAIL;
+#endif /*#if (BTM_SCO_HCI_INCLUDED == TRUE ) */
+    return status;
+}
+
 /************************************************************************************
 **  Memory malloc and release
 ************************************************************************************/
@@ -901,6 +917,10 @@ void btc_hf_arg_deep_copy(btc_msg_t *msg, void *p_dest, void *p_src)
 
         case BTC_HF_COPS_RESPONSE_EVT:
         {
+            if (src->cops_rep.name == NULL) {
+                break;
+            }
+
             dst->cops_rep.name = (char *)osi_malloc(strlen(src->cops_rep.name)+1);
             if(dst->cops_rep.name) {
                 memcpy(dst->cops_rep.name, src->cops_rep.name, strlen(src->cops_rep.name)+1);
@@ -914,6 +934,10 @@ void btc_hf_arg_deep_copy(btc_msg_t *msg, void *p_dest, void *p_src)
 
         case BTC_HF_CLCC_RESPONSE_EVT:
         {
+            if (src->clcc_rep.number == NULL) {
+                break;
+            }
+
             dst->clcc_rep.number = (char *)osi_malloc(strlen(src->clcc_rep.number)+1);
             if(dst->clcc_rep.number) {
                 memcpy(dst->clcc_rep.number, src->clcc_rep.number, strlen(src->clcc_rep.number)+1);
@@ -927,6 +951,10 @@ void btc_hf_arg_deep_copy(btc_msg_t *msg, void *p_dest, void *p_src)
 
         case BTC_HF_CNUM_RESPONSE_EVT:
         {
+            if (src->cnum_rep.number == NULL) {
+                break;
+            }
+
             dst->cnum_rep.number = (char *)osi_malloc(strlen(src->cnum_rep.number)+1);
             if(dst->cnum_rep.number) {
                 memcpy(dst->cnum_rep.number, src->cnum_rep.number, strlen(src->cnum_rep.number)+1);
@@ -943,6 +971,10 @@ void btc_hf_arg_deep_copy(btc_msg_t *msg, void *p_dest, void *p_src)
         case BTC_HF_OUT_CALL_EVT:
         case BTC_HF_END_CALL_EVT:
         {
+            if (src->phone.number == NULL) {
+                break;
+            }
+
             dst->phone.number = (char *)osi_malloc(strlen(src->phone.number)+1);
             if(dst->phone.number) {
                 memcpy(dst->phone.number, src->phone.number, strlen(src->phone.number)+1);

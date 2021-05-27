@@ -37,8 +37,12 @@ from collections import Counter, OrderedDict
 from importlib import import_module
 from pkgutil import iter_modules
 
-from idf_py_actions.errors import FatalError
-from idf_py_actions.tools import (executable_exists, idf_version, merge_action_lists, realpath)
+# pyc files remain in the filesystem when switching between branches which might raise errors for incompatible
+# idf.py extentions. Therefore, pyc file generation is turned off:
+sys.dont_write_bytecode = True
+
+from idf_py_actions.errors import FatalError  # noqa: E402
+from idf_py_actions.tools import (executable_exists, idf_version, merge_action_lists, realpath)  # noqa: E402
 
 # Use this Python interpreter for any subprocesses we launch
 PYTHON = sys.executable
@@ -77,6 +81,12 @@ def check_environment():
     else:
         print("Setting IDF_PATH environment variable: %s" % detected_idf_path)
         os.environ["IDF_PATH"] = detected_idf_path
+
+    # check Python version
+    if sys.version_info[0] < 3:
+        print("WARNING: Support for Python 2 is deprecated and will be removed in future versions.")
+    elif sys.version_info[0] == 3 and sys.version_info[1] < 6:
+        print("WARNING: Python 3 versions older than 3.6 are not supported.")
 
     # check Python dependencies
     checks_output.append("Checking Python dependencies...")
@@ -200,7 +210,7 @@ def init_cli(verbose_output=None):
             self.action_args = action_args
             self.aliases = aliases
 
-        def run(self, context, global_args, action_args=None):
+        def __call__(self, context, global_args, action_args=None):
             if action_args is None:
                 action_args = self.action_args
 
@@ -447,7 +457,7 @@ def init_cli(verbose_output=None):
         def _print_closing_message(self, args, actions):
             # print a closing message of some kind
             #
-            if "flash" in str(actions):
+            if "flash" in str(actions) or "dfu" in str(actions):
                 print("Done")
                 return
 
@@ -458,8 +468,6 @@ def init_cli(verbose_output=None):
             # Otherwise, if we built any binaries print a message about
             # how to flash them
             def print_flashing_message(title, key):
-                print("\n%s build complete. To flash, run this command:" % title)
-
                 with open(os.path.join(args.build_dir, "flasher_args.json")) as f:
                     flasher_args = json.load(f)
 
@@ -467,6 +475,10 @@ def init_cli(verbose_output=None):
                     return _safe_relpath(os.path.join(args.build_dir, f))
 
                 if key != "project":  # flashing a single item
+                    if key not in flasher_args:
+                        # This is the case for 'idf.py bootloader' if Secure Boot is on, need to follow manual flashing steps
+                        print("\n%s build complete." % title)
+                        return
                     cmd = ""
                     if (key == "bootloader"):  # bootloader needs --flash-mode, etc to be passed in
                         cmd = " ".join(flasher_args["write_flash_args"]) + " "
@@ -481,6 +493,8 @@ def init_cli(verbose_output=None):
                     )
                     for o, f in flash_items:
                         cmd += o + " " + flasher_path(f) + " "
+
+                print("\n%s build complete. To flash, run this command:" % title)
 
                 print(
                     "%s %s -p %s -b %s --before %s --after %s --chip %s %s write_flash %s" % (
@@ -611,7 +625,7 @@ def init_cli(verbose_output=None):
                         name_with_aliases += " (aliases: %s)" % ", ".join(task.aliases)
 
                     print("Executing action: %s" % name_with_aliases)
-                    task.run(ctx, global_args, task.action_args)
+                    task(ctx, global_args, task.action_args)
 
                 self._print_closing_message(global_args, tasks_to_run.keys())
 
@@ -635,10 +649,15 @@ def init_cli(verbose_output=None):
     all_actions = {}
     # Load extensions from components dir
     idf_py_extensions_path = os.path.join(os.environ["IDF_PATH"], "tools", "idf_py_actions")
-    extra_paths = os.environ.get("IDF_EXTRA_ACTIONS_PATH", "").split(';')
-    extension_dirs = [idf_py_extensions_path] + extra_paths
-    extensions = {}
+    extension_dirs = [realpath(idf_py_extensions_path)]
+    extra_paths = os.environ.get("IDF_EXTRA_ACTIONS_PATH")
+    if extra_paths is not None:
+        for path in extra_paths.split(';'):
+            path = realpath(path)
+            if path not in extension_dirs:
+                extension_dirs.append(path)
 
+    extensions = {}
     for directory in extension_dirs:
         if directory and not os.path.exists(directory):
             print('WARNING: Directroy with idf.py extensions doesn\'t exist:\n    %s' % directory)

@@ -8,7 +8,8 @@ COMPONENT_ADD_INCLUDEDIRS := \
 	include/apps/sntp \
 	lwip/src/include \
 	port/esp32/include \
-	port/esp32/include/arch
+	port/esp32/include/arch \
+	port/esp32/tcp_isn
 
 COMPONENT_SRCDIRS := \
 	apps/dhcpserver \
@@ -29,9 +30,18 @@ COMPONENT_SRCDIRS := \
 ifndef CONFIG_IDF_TARGET_ESP32
     COMPONENT_OBJEXCLUDE := port/esp32/netif/ethernetif.o
 endif
+ifndef CONFIG_VFS_SUPPORT_IO
+    COMPONENT_OBJEXCLUDE += port/esp32/vfs_lwip.o
+else
+    COMPONENT_OBJEXCLUDE += port/esp32/no_vfs_syscalls.o
+endif
 
 ifdef CONFIG_LWIP_PPP_SUPPORT
     COMPONENT_SRCDIRS += lwip/src/netif/ppp lwip/src/netif/ppp/polarssl
+endif
+
+ifdef CONFIG_LWIP_TCP_ISN_HOOK
+    COMPONENT_SRCDIRS += port/esp32/tcp_isn
 endif
 
 CFLAGS += -Wno-address  # lots of LWIP source files evaluate macros that check address of stack variables

@@ -120,9 +120,24 @@ function run_tests()
 
     print_status "Get the version of app from git describe. Project is not inside IDF and do not have a tag only a hash commit."
     idf.py reconfigure >> log.log || failure "Failed to build"
-    version="Project version: "
+    version="App \"app-template\" version: "
     version+=$(git describe --always --tags --dirty)
     grep "${version}" log.log || failure "Project version should have a hash commit"
+
+    print_status "Get the version of app from Kconfig option"
+    idf.py clean > /dev/null
+    rm -f sdkconfig.defaults
+    rm -f sdkconfig
+    echo "project_version_from_txt" > ${TESTDIR}/template/version.txt
+    echo "CONFIG_APP_PROJECT_VER_FROM_CONFIG=y" >> sdkconfig.defaults
+    echo 'CONFIG_APP_PROJECT_VER="project_version_from_Kconfig"' >> sdkconfig.defaults
+    idf.py build >> log.log || failure "Failed to build"
+    version="App \"app-template\" version: "
+    version+="project_version_from_Kconfig"
+    grep "${version}" log.log || failure "Project version should be from Kconfig"
+    rm -f sdkconfig.defaults
+    rm -f sdkconfig
+    rm -f ${TESTDIR}/template/version.txt
 
     print_status "Moving BUILD_DIR_BASE out of tree"
     clean_build_dir
@@ -205,7 +220,7 @@ function run_tests()
     # and therefore should rebuild
     assert_rebuilt esp-idf/newlib/CMakeFiles/${IDF_COMPONENT_PREFIX}_newlib.dir/syscall_table.c.obj
     assert_rebuilt esp-idf/nvs_flash/CMakeFiles/${IDF_COMPONENT_PREFIX}_nvs_flash.dir/src/nvs_api.cpp.obj
-    assert_rebuilt esp-idf/freertos/CMakeFiles/${IDF_COMPONENT_PREFIX}_freertos.dir/xtensa_vectors.S.obj
+    assert_rebuilt esp-idf/freertos/CMakeFiles/${IDF_COMPONENT_PREFIX}_freertos.dir/xtensa/xtensa_vectors.S.obj
     mv sdkconfig.bak sdkconfig
 
     print_status "Updating project CMakeLists.txt triggers full recompile"
@@ -220,7 +235,7 @@ function run_tests()
     # similar to previous test
     assert_rebuilt esp-idf/newlib/CMakeFiles/${IDF_COMPONENT_PREFIX}_newlib.dir/syscall_table.c.obj
     assert_rebuilt esp-idf/nvs_flash/CMakeFiles/${IDF_COMPONENT_PREFIX}_nvs_flash.dir/src/nvs_api.cpp.obj
-    assert_rebuilt esp-idf/freertos/CMakeFiles/${IDF_COMPONENT_PREFIX}_freertos.dir/xtensa_vectors.S.obj
+    assert_rebuilt esp-idf/freertos/CMakeFiles/${IDF_COMPONENT_PREFIX}_freertos.dir/xtensa/xtensa_vectors.S.obj
     mv sdkconfig.bak sdkconfig
 
     print_status "Can build with Ninja (no idf.py)"
@@ -305,8 +320,8 @@ function run_tests()
     rm sdkconfig
     rm sdkconfig.defaults
 
-    # the next tests use the esp32s2beta target
-    export other_target=esp32s2beta
+    # the next tests use the esp32s2 target
+    export other_target=esp32s2
 
     print_status "Can override IDF_TARGET from environment"
     clean_build_dir
@@ -335,6 +350,13 @@ function run_tests()
     clean_build_dir
     rm sdkconfig
     idf.py set-target ${other_target} || failure "Failed to set target via idf.py set-target"
+    grep "CONFIG_IDF_TARGET=\"${other_target}\"" sdkconfig || failure "Project not configured correctly using idf.py set-target"
+    grep "IDF_TARGET:STRING=${other_target}" build/CMakeCache.txt || failure "IDF_TARGET not set in CMakeCache.txt using idf.py set-target"
+
+    print_status "idf.py understands alternative target names"
+    clean_build_dir
+    rm sdkconfig
+    idf.py set-target ESP32-S2
     grep "CONFIG_IDF_TARGET=\"${other_target}\"" sdkconfig || failure "Project not configured correctly using idf.py set-target"
     grep "IDF_TARGET:STRING=${other_target}" build/CMakeCache.txt || failure "IDF_TARGET not set in CMakeCache.txt using idf.py set-target"
 
@@ -425,43 +447,61 @@ function run_tests()
     grep "CONFIG_PARTITION_TABLE_TWO_OTA=y" sdkconfig || failure "The define from sdkconfig should be into sdkconfig"
     rm sdkconfig sdkconfig.defaults sdkconfig.defaults.esp32
 
+    print_status "Test if it can build the example to run on host"
+    pushd $IDF_PATH/examples/build_system/cmake/idf_as_lib
+    (set -euo pipefail && source build.sh)
+    popd
+    rm -r $IDF_PATH/examples/build_system/cmake/idf_as_lib/build
+
     print_status "Building a project with CMake library imported and PSRAM workaround, all files compile with workaround"
     # Test for libraries compiled within ESP-IDF
-    rm -rf build
+    rm -r build sdkconfig
     echo "CONFIG_ESP32_SPIRAM_SUPPORT=y" >> sdkconfig.defaults
     echo "CONFIG_SPIRAM_CACHE_WORKAROUND=y" >> sdkconfig.defaults
     # note: we do 'reconfigure' here, as we just need to run cmake
     idf.py -C $IDF_PATH/examples/build_system/cmake/import_lib -B `pwd`/build -D SDKCONFIG_DEFAULTS="`pwd`/sdkconfig.defaults" reconfigure
     grep -q '"command"' build/compile_commands.json || failure "compile_commands.json missing or has no no 'commands' in it"
     (grep '"command"' build/compile_commands.json | grep -v mfix-esp32-psram-cache-issue) && failure "All commands in compile_commands.json should use PSRAM cache workaround"
-    rm -r sdkconfig.defaults build
-    # Test for external libraries in custom CMake projects with ESP-IDF components linked
-    mkdir build && touch build/sdkconfig
-    echo "CONFIG_ESP32_SPIRAM_SUPPORT=y" >> build/sdkconfig
-    echo "CONFIG_SPIRAM_CACHE_WORKAROUND=y" >> build/sdkconfig
+    rm -r build sdkconfig sdkconfig.defaults
+
+    print_status "Test for external libraries in custom CMake projects with ESP-IDF components linked"
+    mkdir build
+    IDF_AS_LIB=$IDF_PATH/examples/build_system/cmake/idf_as_lib
+    echo "CONFIG_ESP32_SPIRAM_SUPPORT=y" > $IDF_AS_LIB/sdkconfig
+    echo "CONFIG_SPIRAM_CACHE_WORKAROUND=y" >> $IDF_AS_LIB/sdkconfig
     # note: we just need to run cmake
-    (cd build && cmake $IDF_PATH/examples/build_system/cmake/idf_as_lib -DCMAKE_TOOLCHAIN_FILE=$IDF_PATH/tools/cmake/toolchain-esp32.cmake -DTARGET=esp32)
+    (cd build && cmake $IDF_AS_LIB -DCMAKE_TOOLCHAIN_FILE=$IDF_PATH/tools/cmake/toolchain-esp32.cmake -DTARGET=esp32)
     grep -q '"command"' build/compile_commands.json || failure "compile_commands.json missing or has no no 'commands' in it"
     (grep '"command"' build/compile_commands.json | grep -v mfix-esp32-psram-cache-issue) && failure "All commands in compile_commands.json should use PSRAM cache workaround"
-    rm -r build
-    #Test for various strategies
+
     for strat in MEMW NOPS DUPLDST; do
-        rm -r build sdkconfig.defaults sdkconfig sdkconfig.defaults.esp32
+        print_status "Test for external libraries in custom CMake projects with PSRAM strategy $strat"
+        rm -r build sdkconfig sdkconfig.defaults sdkconfig.defaults.esp32
         stratlc=`echo $strat | tr A-Z a-z`
-        mkdir build && touch build/sdkconfig
         echo "CONFIG_ESP32_SPIRAM_SUPPORT=y" > sdkconfig.defaults
         echo "CONFIG_SPIRAM_CACHE_WORKAROUND_STRATEGY_$strat=y"  >> sdkconfig.defaults
         echo "CONFIG_SPIRAM_CACHE_WORKAROUND=y" >> sdkconfig.defaults
         # note: we do 'reconfigure' here, as we just need to run cmake
         idf.py reconfigure
         grep -q '"command"' build/compile_commands.json || failure "compile_commands.json missing or has no no 'commands' in it"
-        (grep '"command"' build/compile_commands.json | grep -v mfix-esp32-psram-cache-strategy=$stratlc) && failure "All commands in compile_commands.json should use PSRAM cache workaround strategy $strat when selected"
+        (grep '"command"' build/compile_commands.json | grep -v mfix-esp32-psram-cache-strategy=$stratlc) && failure "All commands in compile_commands.json should use PSRAM cache workaround strategy"
         echo ${PWD}
         rm -r sdkconfig.defaults build
     done
 
+    print_status "Cleaning Python bytecode"
+    idf.py clean > /dev/null
+    idf.py fullclean > /dev/null
+    if [ "$(find $IDF_PATH -name "*.py[co]" | wc -l)" -eq 0 ]; then
+        failure "No Python bytecode in IDF!"
+    fi
+    idf.py python-clean
+    if [ "$(find $IDF_PATH -name "*.py[co]" | wc -l)" -gt 0 ]; then
+        failure "Python bytecode isn't working!"
+    fi
+
     print_status "Displays partition table when executing target partition_table"
-    idf.py partition_table | grep -E "# Espressif .+ Partition Table"
+    idf.py partition_table | grep -E "# ESP-IDF .+ Partition Table"
     rm -r build
 
     print_status "Make sure a full build never runs '/usr/bin/env python' or similar"
@@ -630,7 +670,7 @@ endmenu\n" >> ${IDF_PATH}/Kconfig
     clean_build_dir
     git branch test_build_system
     git worktree add ../esp-idf-template-test test_build_system
-    diff <(idf.py reconfigure | grep "Project version") <(cd ../esp-idf-template-test && idf.py reconfigure | grep "Project version") \
+    diff <(idf.py reconfigure | grep "App \"app-template\" version: ") <(cd ../esp-idf-template-test && idf.py reconfigure | grep "App \"app-template\" version: ") \
         || failure "Version on worktree should have been properly resolved"
     git worktree remove ../esp-idf-template-test
 
@@ -646,14 +686,74 @@ endmenu\n" >> ${IDF_PATH}/Kconfig
 
     print_status "Compiles with dependencies delivered by component manager"
     clean_build_dir
+    # Make sure that component manager is not installed
+    pip uninstall -y idf_component_manager
     printf "\n#include \"test_component.h\"\n" >> main/main.c
     printf "dependencies:\n  test_component:\n    path: test_component\n    git: ${COMPONENT_MANAGER_TEST_REPO}\n" >> idf_project.yml
     ! idf.py build || failure "Build should fail if dependencies are not installed"
-    pip install ${COMPONENT_MANAGER_REPO}
-    idf.py reconfigure build || failure "Build succeeds once requirements are installed"
+    pip install ${COMPONENT_MANAGER_REPO} || failure "Failed to install the component manager"
+    idf.py reconfigure build || failure "Build didn't succeed with required components installed by package manager"
     pip uninstall -y idf_component_manager
     rm idf_project.yml
     git checkout main/main.c
+
+    print_status "Build fails if partitions don't fit in flash"
+    sed -i.bak "s/CONFIG_ESPTOOLPY_FLASHSIZE.\+//" sdkconfig  # remove all flashsize config
+    echo "CONFIG_ESPTOOLPY_FLASHSIZE_1MB=y" >> sdkconfig     # introduce undersize flash
+    ( idf.py build 2>&1 | grep "does not fit in configured flash size 1MB" ) || failure "Build didn't fail with expected flash size failure message"
+    mv sdkconfig.bak sdkconfig
+
+    print_status "Flash size is correctly set in the bootloader image header"
+    # Build with the default 2MB setting
+    rm sdkconfig
+    idf.py bootloader || failure "Failed to build bootloader"
+    bin_header_match build/bootloader/bootloader.bin "0210"
+    # Change to 4MB
+    sleep 1 # delay here to make sure sdkconfig modification time is different
+    echo "CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y" > sdkconfig
+    idf.py bootloader || failure "Failed to build bootloader"
+    bin_header_match build/bootloader/bootloader.bin "0220"
+    # Change to QIO, bootloader should still be DIO (will change to QIO in 2nd stage bootloader)
+    sleep 1 # delay here to make sure sdkconfig modification time is different
+    echo "CONFIG_FLASHMODE_QIO=y" > sdkconfig
+    idf.py bootloader || failure "Failed to build bootloader"
+    bin_header_match build/bootloader/bootloader.bin "0210"
+    # Change to 80 MHz
+    sleep 1 # delay here to make sure sdkconfig modification time is different
+    echo "CONFIG_ESPTOOLPY_FLASHFREQ_80M=y" > sdkconfig
+    idf.py bootloader || failure "Failed to build bootloader"
+    bin_header_match build/bootloader/bootloader.bin "021f"
+    rm sdkconfig
+
+    print_status "DFU build works"
+    rm -f -r build sdkconfig
+    idf.py dfu &> tmp.log
+    grep "command \"dfu\" is not known to idf.py and is not a Ninja target" tmp.log || (tail -n 100 tmp.log ; failure "DFU build should fail for default chip target")
+    idf.py set-target esp32s2
+    idf.py dfu &> tmp.log
+    grep "build/dfu.bin\" has been written. You may proceed with DFU flashing." tmp.log || (tail -n 100 tmp.log ; failure "DFU build should succeed for esp32s2")
+    rm tmp.log
+    assert_built ${APP_BINS} ${BOOTLOADER_BINS} ${PARTITION_BIN} "dfu.bin"
+    rm -rf build sdkconfig
+
+    print_status "Loadable ELF build works"
+    echo "CONFIG_APP_BUILD_TYPE_ELF_RAM=y" > sdkconfig
+    idf.py reconfigure || failure "Couldn't configure for loadable ELF file"
+    test -f build/flasher_args.json && failure "flasher_args.json should not be generated in a loadable ELF build"
+    idf.py build || failure "Couldn't build a loadable ELF file"
+
+    print_status "Defaults set properly for unspecified idf_build_process args"
+    pushd $IDF_PATH/examples/build_system/cmake/idf_as_lib
+    cp CMakeLists.txt CMakeLists.txt.bak
+    echo -e "\nidf_build_get_property(project_dir PROJECT_DIR)" >> CMakeLists.txt
+    echo -e "\nmessage(\"Project directory: \${project_dir}\")" >> CMakeLists.txt
+    mkdir build && cd build
+    cmake .. -DCMAKE_TOOLCHAIN_FILE=$IDF_PATH/tools/cmake/toolchain-esp32.cmake -DTARGET=esp32 &> log.txt
+    grep "Project directory: $IDF_PATH/examples/build_system/cmake/idf_as_lib" log.txt || failure "PROJECT_DIR default was not set"
+    cd ..
+    mv CMakeLists.txt.bak CMakeLists.txt
+    rm -rf build
+    popd
 
     print_status "All tests completed"
     if [ -n "${FAILURES}" ]; then
@@ -780,6 +880,18 @@ function clean_build_dir()
         PRESERVE_ROOT_ARG=--preserve-root
     fi
     rm -rf $PRESERVE_ROOT_ARG ${BUILD}/* ${BUILD}/.*
+}
+
+# check the bytes 3-4 of the binary image header. e.g.:
+#   bin_header_match app.bin 0210
+function bin_header_match()
+{
+    expected=$2
+    filename=$1
+    actual=$(xxd -s 2 -l 2 -ps $1)
+    if [ ! "$expected" = "$actual" ]; then
+        failure "Incorrect binary image header, expected $expected got $actual"
+    fi
 }
 
 cd ${TESTDIR}

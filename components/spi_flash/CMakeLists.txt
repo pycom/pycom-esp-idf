@@ -5,8 +5,6 @@ if(BOOTLOADER_BUILD)
         # ESP32 Bootloader needs SPIUnlock from this file, but doesn't
         # need other parts of this component
         set(srcs "esp32/spi_flash_rom_patch.c")
-    elseif (CONFIG_IDF_TARGET_ESP32S2BETA)
-        set(srcs "esp32s2beta/spi_flash_rom_patch.c")
     else()
         # but on other platforms no source files are needed for bootloader
         set(srcs)
@@ -25,9 +23,6 @@ else()
     if (CONFIG_IDF_TARGET_ESP32)
         list(APPEND srcs
             "esp32/spi_flash_rom_patch.c")
-    elseif (CONFIG_IDF_TARGET_ESP32S2BETA)
-        list(APPEND srcs 
-            "esp32s2beta/spi_flash_rom_patch.c")
     endif()
 
     # New implementation after IDF v4.0
@@ -35,6 +30,7 @@ else()
         "spi_flash_chip_drivers.c"
         "spi_flash_chip_generic.c"
         "spi_flash_chip_issi.c"
+        "spi_flash_chip_mxic.c"
         "spi_flash_chip_gd.c"
         "memspi_host_driver.c")
 
@@ -45,7 +41,7 @@ else()
         "spi_flash_os_func_noos.c")
 
     list(APPEND srcs ${cache_srcs})
-    set(priv_requires bootloader_support app_update soc)
+    set(priv_requires bootloader_support app_update soc esp_ipc)
 endif()
 
 idf_component_register(SRCS "${srcs}"

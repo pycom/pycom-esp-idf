@@ -19,12 +19,16 @@ import os
 import re
 import threading
 import traceback
-import Queue
 import subprocess
 
 from tiny_test_fw import Utility
 import ttfw_idf
 from ble import lib_ble_client
+
+try:
+    import Queue
+except ImportError:
+    import queue as Queue
 
 # When running on local machine execute the following before running this script
 # > make app bootloader
@@ -112,7 +116,7 @@ def test_example_app_ble_hr(env, extra_data):
     binary_file = os.path.join(dut.app.binary_path, "blehr.bin")
     bin_size = os.path.getsize(binary_file)
     ttfw_idf.log_performance("blehr_bin_size", "{}KB".format(bin_size // 1024))
-    ttfw_idf.check_performance("blehr_bin_size", bin_size // 1024)
+    ttfw_idf.check_performance("blehr_bin_size", bin_size // 1024, dut.TARGET)
 
     # Upload binary and start testing
     Utility.console_log("Starting blehr simple example test app")

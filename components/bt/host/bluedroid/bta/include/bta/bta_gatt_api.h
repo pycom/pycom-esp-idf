@@ -491,6 +491,8 @@ typedef tGATT_IF tBTA_GATTS_IF;
 #define BTA_GATT_PERM_WRITE_ENC_MITM    GATT_PERM_WRITE_ENC_MITM    /* bit 6 -  0x0040 */
 #define BTA_GATT_PERM_WRITE_SIGNED      GATT_PERM_WRITE_SIGNED      /* bit 7 -  0x0080 */
 #define BTA_GATT_PERM_WRITE_SIGNED_MITM GATT_PERM_WRITE_SIGNED_MITM /* bit 8 -  0x0100 */
+#define BTA_GATT_PERM_READ_AUTHORIZATION GATT_PERM_READ_AUTHORIZATION /* bit 9 - 0x0200 */
+#define BTA_GATT_PERM_WRITE_AUTHORIZATION GATT_PERM_WRITE_AUTHORIZATION /* bit 10 - 0x0400 */
 typedef UINT16 tBTA_GATT_PERM;
 typedef tGATT_ATTR_VAL tBTA_GATT_ATTR_VAL;
 typedef tGATTS_ATTR_CONTROL tBTA_GATTS_ATTR_CONTROL;
@@ -938,6 +940,22 @@ void BTA_GATTC_ReadCharacteristic(UINT16 conn_id, UINT16 handle, tBTA_GATT_AUTH_
 
 /*******************************************************************************
 **
+** Function         BTA_GATTC_Read_by_type
+**
+** Description      This function is called to read a attribute value by uuid
+**
+** Parameters       conn_id - connection ID.
+**                  s_handle - start handle.
+**                  e_handle - end hanle
+**                  uuid - The attribute UUID.
+**
+** Returns          None
+**
+*******************************************************************************/
+void BTA_GATTC_Read_by_type(UINT16 conn_id, UINT16 s_handle,UINT16 e_handle, tBT_UUID *uuid, tBTA_GATT_AUTH_REQ auth_req);
+
+/*******************************************************************************
+**
 ** Function         BTA_GATTC_ReadCharDescr
 **
 ** Description      This function is called to read a descriptor value.
@@ -1254,7 +1272,7 @@ extern void BTA_GATTS_AppDeregister(tBTA_GATTS_IF server_if);
 ** Function         BTA_GATTS_CreateService
 **
 ** Description      Create a service. When service creation is done, a callback
-**                  event BTA_GATTS_CREATE_SRVC_EVT is called to report status
+**                  event BTA_GATTS_CREATE_EVT is called to report status
 **                  and service ID to the profile. The service ID obtained in
 **                  the callback function needs to be used when adding included
 **                  service and characteristics/descriptors into the service.

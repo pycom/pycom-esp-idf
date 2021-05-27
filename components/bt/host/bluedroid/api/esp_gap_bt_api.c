@@ -246,7 +246,7 @@ esp_err_t esp_bt_gap_remove_bond_device(esp_bd_addr_t bd_addr)
 int esp_bt_gap_get_bond_device_num(void)
 {
     if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
-        return ESP_FAIL;
+        return ESP_ERR_INVALID_STATE;
     }
     return btc_storage_get_num_bt_bond_devices();
 }
@@ -254,7 +254,6 @@ int esp_bt_gap_get_bond_device_num(void)
 esp_err_t esp_bt_gap_get_bond_device_list(int *dev_num, esp_bd_addr_t *dev_list)
 {
     int ret;
-    int dev_num_total;
 
     if (dev_num == NULL || dev_list == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -264,12 +263,7 @@ esp_err_t esp_bt_gap_get_bond_device_list(int *dev_num, esp_bd_addr_t *dev_list)
         return ESP_ERR_INVALID_STATE;
     }
 
-    dev_num_total = btc_storage_get_num_bt_bond_devices();
-    if (*dev_num > dev_num_total) {
-        *dev_num = dev_num_total;
-    }
-
-    ret = btc_storage_get_bonded_bt_devices_list((bt_bdaddr_t *)dev_list, *dev_num);
+    ret = btc_storage_get_bonded_bt_devices_list((bt_bdaddr_t *)dev_list, dev_num);
 
     return (ret == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
 }
@@ -416,4 +410,21 @@ esp_err_t esp_bt_gap_read_remote_name(esp_bd_addr_t remote_bda)
     return (btc_transfer_context(&msg, &arg, sizeof(btc_gap_bt_args_t), NULL) == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
 }
 
+esp_err_t esp_bt_gap_set_qos(esp_bd_addr_t remote_bda, uint32_t t_poll)
+{
+    btc_msg_t msg;
+    btc_gap_bt_args_t arg;
+
+    if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    msg.sig = BTC_SIG_API_CALL;
+    msg.pid = BTC_PID_GAP_BT;
+    msg.act = BTC_GAP_BT_ACT_SET_QOS;
+
+    memcpy(&arg.set_qos.bda, remote_bda, sizeof(bt_bdaddr_t));
+    arg.set_qos.t_poll = t_poll;
+    return (btc_transfer_context(&msg, &arg, sizeof(btc_gap_bt_args_t), NULL) == BT_STATUS_SUCCESS ? ESP_OK : ESP_FAIL);
+}
 #endif /* #if BTC_GAP_BT_INCLUDED == TRUE */

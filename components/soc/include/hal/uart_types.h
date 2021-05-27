@@ -84,6 +84,7 @@ typedef enum {
  * @brief UART signal bit map
  */
 typedef enum {
+    UART_SIGNAL_INV_DISABLE  =  0,            /*!< Disable UART signal inverse*/
     UART_SIGNAL_IRDA_TX_INV  = (0x1 << 0),    /*!< inverse the UART irda_tx signal*/
     UART_SIGNAL_IRDA_RX_INV  = (0x1 << 1),    /*!< inverse the UART irda_rx signal*/
     UART_SIGNAL_RXD_INV      = (0x1 << 2),    /*!< inverse the UART rxd signal*/
@@ -136,7 +137,7 @@ typedef struct {
     uint8_t rx_flow_ctrl_thresh;        /*!< UART HW RTS threshold*/
     union {
         uart_sclk_t source_clk;         /*!< UART source clock selection */
-        bool use_ref_tick  __attribute__((deprecated));
+        bool use_ref_tick  __attribute__((deprecated)); /*!< Deprecated method to select ref tick clock source, set source_clk field instead */
     };
 } uart_config_t;
 

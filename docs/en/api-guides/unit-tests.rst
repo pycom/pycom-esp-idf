@@ -1,5 +1,5 @@
-Unit Testing in ESP32
-=============================
+Unit Testing in {IDF_TARGET_NAME}
+=================================
 :link_to_translation:`zh_CN:[中文]`
 
 ESP-IDF comes with a unit test application that is based on the Unity - unit test framework. Unit tests are integrated in the ESP-IDF repository and are placed in the ``test`` subdirectories of each component respectively.
@@ -25,7 +25,7 @@ Tests are added in a function in the C file as follows:
 The first argument is a descriptive name for the test, the second argument is an identifier in square brackets.
 Identifiers are used to group related test, or tests with specific properties.
 
-.. note:: 
+.. note::
     There is no need to add a main function with ``UNITY_BEGIN()`` and ``​UNITY_END()`` in each test case. ``unity_platform.c`` will run ``UNITY_BEGIN()`` autonomously, and run the test cases, then call ``​UNITY_END()``.
 
 The ``test`` subdirectory should contain a :ref:`component CMakeLists.txt <component-directories>`, since they are themselves, components. ESP-IDF uses the ``unity`` test framework and should be specified as a requirement for the component. Normally, components :ref:`should list their sources manually <cmake-file-globbing>`; for component tests however, this requirement is relaxed and the use of the ``SRC_DIRS`` argument in ``idf_component_register`` is advised.
@@ -98,7 +98,7 @@ Once the signal is sent from DUT2, you need to press "Enter" on DUT1, then DUT1 
 Multi-stage Test Cases
 -----------------------
 
-The normal test cases are expected to finish without reset (or only need to check if reset happens). Sometimes we expect to run some specific tests after certain kinds of reset. 
+The normal test cases are expected to finish without reset (or only need to check if reset happens). Sometimes we expect to run some specific tests after certain kinds of reset.
 For example, we expect to test if the reset reason is correct after a wakeup from deep sleep. We need to create a deep-sleep reset first and then check the reset reason.
 To support this, we can define multi-stage test cases, to group a set of test functions::
 
@@ -114,10 +114,74 @@ To support this, we can define multi-stage test cases, to group a set of test fu
         TEST_ASSERT(reason == DEEPSLEEP_RESET);
     }
 
-    TEST_CASE_MULTIPLE_STAGES("reset reason check for deepsleep", "[esp32]", trigger_deepsleep, check_deepsleep_reset_reason);
+    TEST_CASE_MULTIPLE_STAGES("reset reason check for deepsleep", "[{IDF_TARGET_PATH_NAME}]", trigger_deepsleep, check_deepsleep_reset_reason);
 
 Multi-stage test cases present a group of test functions to users. It needs user interactions (select cases and select different stages) to run the case.
 
+
+Tests For Different Targets
+---------------------------
+
+Some tests (especially those related to hardware) cannot run on all targets. Below is a guide how
+to make your unit tests run on only specified targets.
+
+1. Wrap your test code by ``!(TEMPORARY_)DISABLED_FOR_TARGETS()`` macros and place them either in
+   the original test file, or sepeprate the code into files grouped by functions, but make sure all
+   these files will be processed by the compiler. E.g.: ::
+
+      #if !TEMPORARY_DISABLED_FOR_TARGETS(ESP32, ESP8266)
+      TEST_CASE("a test that is not ready for esp32 and esp8266 yet", "[]")
+      {
+      }
+      #endif //!TEMPORARY_DISABLED_FOR_TARGETS(ESP32, ESP8266)
+
+   Once you need one of the tests to be compiled on a specified target, just modify the targets
+   in the disabled list. It's more encouraged to use some general conception that can be
+   described in ``soc_caps.h`` to control the disabling of tests. If this is done but some of the
+   tests are not ready yet, use both of them (and remove ``!(TEMPORARY_)DISABLED_FOR_TARGETS()``
+   later). E.g.: ::
+
+      #if SOC_SDIO_SLAVE_SUPPORTED
+      #if !TEMPORARY_DISABLED_FOR_TARGETS(ESP64)
+      TEST_CASE("a sdio slave tests that is not ready for esp64 yet", "[sdio_slave]")
+      {
+          //available for esp32 now, and will be available for esp64 in the future
+      }
+      #endif //!TEMPORARY_DISABLED_FOR_TARGETS(ESP64)
+      #endif //SOC_SDIO_SLAVE_SUPPORTED
+
+2. For test code that you are 100% for sure that will not be supported (e.g. no peripheral at
+   all), use ``DISABLED_FOR_TARGETS``; for test code that should be disabled temporarily, or due to
+   lack of runners, etc., use ``TEMPORARY_DISABLED_FOR_TARGETS``.
+
+Some old ways of disabling unit tests for targets, that have obvious disadvantages, are deprecated:
+
+- DON'T put the test code under ``test/target`` folder and use CMakeLists.txt to choose one of the
+  target folder. This is prevented because test code is more likely to be reused than the
+  implementations. If you put something into ``test/esp32`` just to avoid building it on esp32s2,
+  it's hard to make the code tidy if you want to enable the test again on esp32s3.
+
+- DON'T use ``CONFIG_IDF_TARGET_xxx`` macros to disable the test items any more. This makes it
+  harder to track disabled tests and enable them again. Also, a black-list style ``#if !disabled``
+  is preferred to white-list style ``#if CONFIG_IDF_TARGET_xxx``, since you will not silently
+  disable cases when new targets are added in the future. But for test implementations, it's
+  allowed to use ``#if CONFIG_IDF_TARGET_xxx`` to pick one of the implementation code.
+
+  - Test item: some items that will be performed on some targets, but skipped on other
+    targets. E.g.
+
+    There are three test items SD 1-bit, SD 4-bit and SDSPI. For ESP32-S2, which doesn't have
+    SD host, among the tests only SDSPI is enabled on ESP32-S2.
+
+  - Test implementation: some code will always happen, but in different ways. E.g.
+
+    There is no SDIO PKT_LEN register on ESP8266. If you want to get the length from the slave
+    as a step in the test process, you can have different implementation code protected by
+    ``#if CONFIG_IDF_TARGET_`` reading in different ways.
+
+    But please avoid using ``#else`` macro. When new target is added, the test case will fail at
+    building stage, so that the maintainer will be aware of this, and choose one of the
+    implementations explicitly.
 
 Building Unit Test App
 ----------------------
@@ -130,19 +194,19 @@ Change into ``tools/unit-test-app`` directory to configure and build it:
 * ``idf.py menuconfig`` - configure unit test app.
 
 * ``idf.py -T all build`` - build unit test app with tests for each component having tests in the ``test`` subdirectory.
-* ``idf.py -T xxx build`` - build unit test app with tests for specific components. 
-* ``idf.py -T all -E xxxbuild`` - build unit test app with all unit tests, except for unit tests of some components. (For instance: ``idf.py -T all -E ulp mbedtls build`` - build all unit tests exludes ``ulp`` and ``mbedtls`` components).
+* ``idf.py -T "xxx yyy" build`` - build unit test app with tests for some space-separated specific components (For instance: ``idf.py -T heap build`` - build unit tests only for ``heap`` component directory).
+* ``idf.py -T all -E "xxx yyy" build`` - build unit test app with all unit tests, except for unit tests of some components (For instance: ``idf.py -T all -E "ulp mbedtls" build`` - build all unit tests exludes ``ulp`` and ``mbedtls`` components).
 
 When the build finishes, it will print instructions for flashing the chip. You can simply run ``idf.py flash`` to flash all build output.
 
-You can also run ``idf.py -T all flash`` or ``idf.py -T xxx flash`` to build and flash. Everything needed will be rebuilt automatically before flashing. 
+You can also run ``idf.py -T all flash`` or ``idf.py -T xxx flash`` to build and flash. Everything needed will be rebuilt automatically before flashing.
 
 Use menuconfig to set the serial port for flashing.
 
 Running Unit Tests
 ------------------
 
-After flashing reset the ESP32 and it will boot the unit test app.
+After flashing reset the {IDF_TARGET_NAME} and it will boot the unit test app.
 
 When unit test app is idle, press "Enter" will make it print test menu with all available tests::
 
@@ -168,7 +232,7 @@ When unit test app is idle, press "Enter" will make it print test menu with all 
     (17)    "SPI Master no response when switch from host1 (HSPI) to host2 (VSPI)" [spi]
     (18)    "SPI Master DMA test, TX and RX in different regions" [spi]
     (19)    "SPI Master DMA test: length, start, not aligned" [spi]
-    (20)    "reset reason check for deepsleep" [esp32][test_env=UT_T2_1][multi_stage]
+    (20)    "reset reason check for deepsleep" [{IDF_TARGET_PATH_NAME}][test_env=UT_T2_1][multi_stage]
             (1)     "trigger_deepsleep"
             (2)     "check_deepsleep_reset_reason"
 
@@ -176,7 +240,7 @@ The normal case will print the case name and description. Master-slave cases wil
 
 Test cases can be run by inputting one of the following:
 
-- Test case name in quotation marks to run a single test case 
+- Test case name in quotation marks to run a single test case
 
 - Test case index to run a single test case
 
@@ -223,8 +287,8 @@ between runs and between different builds. A technique for eliminating for some 
 variability is to place code and data in instruction or data RAM (IRAM/DRAM), respectively. The CPU can access IRAM and DRAM directly, eliminating the cache out of the equation.
 However, this might not always be viable as the size of IRAM and DRAM is limited.
 
-The cache compensated timer is an alternative to placing the code/data to be benchmarked in IRAM/DRAM. This timer uses the processor's internal event counters in order to determine the amount 
-of time spent on waiting for code/data in case of a cache miss, then subtract that from the recorded wall time. 
+The cache compensated timer is an alternative to placing the code/data to be benchmarked in IRAM/DRAM. This timer uses the processor's internal event counters in order to determine the amount
+of time spent on waiting for code/data in case of a cache miss, then subtract that from the recorded wall time.
 
   .. code-block:: c
 

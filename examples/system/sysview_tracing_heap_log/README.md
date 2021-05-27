@@ -40,6 +40,7 @@ To run the example and collect trace data:
     ```
     xtensa-esp32-elf-gdb -x gdbinit build/sysview_tracing_heap_log.elf
     ```
+
 2. When program stops at `heap_trace_stop`  quit GDB.
 
 3. Open trace data file in SystemView tool.

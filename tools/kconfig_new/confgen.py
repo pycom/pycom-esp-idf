@@ -7,7 +7,7 @@
 # Used internally by the ESP-IDF build system. But designed to be
 # non-IDF-specific.
 #
-# Copyright 2018 Espressif Systems (Shanghai) PTE LTD
+# Copyright 2018-2020 Espressif Systems (Shanghai) PTE LTD
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -112,10 +112,19 @@ class DeprecatedOptions(object):
                         print('{}:{} {} was replaced with {}'.format(sdkconfig_in, line_num, depr_opt, new_opt))
                 f_out.write(line)
 
-    def append_doc(self, config, path_output):
+    def append_doc(self, config, visibility, path_output):
 
         def option_was_written(opt):
-            return any(gen_kconfig_doc.node_should_write(node) for node in config.syms[opt].nodes)
+            # named choices were written if any of the symbols in the choice were visible
+            if new_opt in config.named_choices:
+                syms = config.named_choices[new_opt].syms
+                for s in syms:
+                    if any(visibility.visible(node) for node in s.nodes):
+                        return True
+                return False
+            else:
+                # otherwise if any of the nodes associated with the option was visible
+                return any(visibility.visible(node) for node in config.syms[opt].nodes)
 
         if len(self.r_dic) > 0:
             with open(path_output, 'a') as f_o:
@@ -123,7 +132,7 @@ class DeprecatedOptions(object):
                 f_o.write('.. _configuration-deprecated-options:\n\n{}\n{}\n\n'.format(header, '-' * len(header)))
                 for dep_opt in sorted(self.r_dic):
                     new_opt = self.r_dic[dep_opt]
-                    if new_opt not in config.syms or (config.syms[new_opt].choice is None and option_was_written(new_opt)):
+                    if option_was_written(new_opt) and (new_opt not in config.syms or config.syms[new_opt].choice is None):
                         # everything except config for a choice (no link reference for those in the docs)
                         f_o.write('- {}{} (:ref:`{}{}`)\n'.format(config.config_prefix, dep_opt,
                                                                   config.config_prefix, new_opt))
@@ -585,8 +594,15 @@ def write_json_menus(deprecated_options, config, filename):
 
 
 def write_docs(deprecated_options, config, filename):
-    gen_kconfig_doc.write_docs(config, filename)
-    deprecated_options.append_doc(config, filename)
+    try:
+        target = os.environ['IDF_TARGET']
+    except KeyError:
+        print('IDF_TARGET environment variable must be defined!')
+        sys.exit(1)
+
+    visibility = gen_kconfig_doc.ConfigTargetVisibility(config, target)
+    gen_kconfig_doc.write_docs(config, visibility, filename)
+    deprecated_options.append_doc(config, visibility, filename)
 
 
 def update_if_changed(source, destination):

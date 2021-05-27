@@ -45,6 +45,7 @@ COMPONENT_PRIV_INCLUDEDIRS +=   host/bluedroid/bta/include                   \
                                 host/bluedroid/btc/profile/std/gatt/include  \
                                 host/bluedroid/btc/profile/std/gap/include   \
                                 host/bluedroid/btc/profile/std/a2dp/include  \
+                                host/bluedroid/btc/profile/std/hid/include   \
                                 host/bluedroid/btc/profile/std/include       \
                                 host/bluedroid/btc/include                   \
                                 host/bluedroid/btif/include                  \
@@ -96,6 +97,7 @@ COMPONENT_SRCDIRS +=    host/bluedroid/bta/dm                      \
                         host/bluedroid/btc/profile/std/spp         \
                         host/bluedroid/btc/profile/std/hf_ag       \
                         host/bluedroid/btc/profile/std/hf_client   \
+                        host/bluedroid/btc/profile/std/hid         \
                         host/bluedroid/btc/profile                 \
                         host/bluedroid/stack/btm                   \
                         host/bluedroid/stack/btu                   \
@@ -137,6 +139,7 @@ endif
 
 ifdef CONFIG_BLE_MESH
 COMPONENT_ADD_INCLUDEDIRS += esp_ble_mesh/mesh_common/include           \
+                             esp_ble_mesh/mesh_common/tinycrypt/include \
                              esp_ble_mesh/mesh_core                     \
                              esp_ble_mesh/mesh_core/include             \
                              esp_ble_mesh/mesh_core/storage             \
@@ -149,9 +152,11 @@ COMPONENT_ADD_INCLUDEDIRS += esp_ble_mesh/mesh_common/include           \
                              esp_ble_mesh/api
 
 COMPONENT_SRCDIRS += esp_ble_mesh/mesh_common               \
+                     esp_ble_mesh/mesh_common/tinycrypt/src \
                      esp_ble_mesh/mesh_core                 \
                      esp_ble_mesh/mesh_core/storage         \
                      esp_ble_mesh/btc                       \
+                     esp_ble_mesh/mesh_models/common        \
                      esp_ble_mesh/mesh_models/client        \
                      esp_ble_mesh/mesh_models/server        \
                      esp_ble_mesh/api/core                  \

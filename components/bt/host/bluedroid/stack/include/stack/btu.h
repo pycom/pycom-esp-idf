@@ -164,6 +164,9 @@ typedef void (*tBTU_EVENT_CALLBACK)(BT_HDR *p_hdr);
 #define BTU_TTYPE_UCD_TO                            108
 #define BTU_TTYPE_BLE_SCAN                          109
 
+/* BTU internal timer for QOS */
+#define BTU_TTYPE_BTM_QOS                           110
+
 /* BTU Task Signal */
 typedef enum {
     SIG_BTU_START_UP = 0,
@@ -289,6 +292,8 @@ void btu_task_shut_down(void);
 UINT16 BTU_BleAclPktSize(void);
 
 bool btu_task_post(uint32_t sig, void *param, uint32_t timeout);
+
+int get_btu_work_queue_size(void);
 
 /*
 #ifdef __cplusplus

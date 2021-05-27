@@ -40,6 +40,15 @@
 #define dac_hal_power_down(channel) dac_ll_power_down(channel)
 
 /**
+ * Enable/disable the synchronization operation function of ADC1 and DAC.
+ *
+ * @note  If enabled(default), ADC RTC controller sampling will cause the DAC channel output voltage.
+ *
+ * @param enable Enable or disable adc and dac synchronization function.
+ */
+#define  dac_hal_rtc_sync_by_adc(enable) dac_ll_rtc_sync_by_adc(enable)
+
+/**
  * Output voltage with value (8 bit).
  *
  * @param channel DAC channel num.
@@ -66,11 +75,6 @@
 void dac_hal_cw_generator_config(dac_cw_config_t *cw);
 
 /**
- * Enable DAC output data from DMA.
+ * Enable/disable DAC output data from DMA.
  */
-#define dac_hal_dma_enable() dac_ll_dma_enable()
-
-/**
- * Disable DAC output data from DMA.
- */
-#define dac_hal_dma_disable() dac_ll_dma_disable()
+#define dac_hal_digi_enable_dma(enable) dac_ll_digi_enable_dma(enable)

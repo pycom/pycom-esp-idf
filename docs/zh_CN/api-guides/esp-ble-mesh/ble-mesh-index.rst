@@ -212,17 +212,17 @@ Step 5. 运行网络
 ESP-BLE-MESH 示例
 ===================
 
-* :example:`ESP-BLE-MESH 节点 <bluetooth/esp_ble_mesh/ble_mesh_node/tutorial/Ble_Mesh_Node_Example_Walkthrough.md>` - 展示了将 ESP-BLE-MESH 作为拥有 Configuration Server model 和 Generic OnOff Server model 的节点设备的用法。然后，ESP-BLE-MESH Provisioner 可以配网设备，控制表示开/关状态的 RGB 灯，示例请见 :example:`example code <bluetooth/esp_ble_mesh/ble_mesh_node>`。
+* :example_file:`ESP-BLE-MESH 节点 <bluetooth/esp_ble_mesh/ble_mesh_node/onoff_server/tutorial/BLE_Mesh_Node_OnOff_Server_Example_Walkthrough.md>` - 展示了将 ESP-BLE-MESH 作为拥有 Configuration Server model 和 Generic OnOff Server model 的节点设备的用法。然后，ESP-BLE-MESH Provisioner 可以配网设备，控制表示开/关状态的 RGB 灯，示例请见 :example:`example code <bluetooth/esp_ble_mesh/ble_mesh_node/onoff_server>`。
 
-* :example:`ESP-BLE-MESH 客户端模型 <bluetooth/esp_ble_mesh/ble_mesh_client_model/tutorial/ble_mesh_client_model.md>` - 展示了 Generic OnOff Client model 如何在节点内工作。节点拥有 Configuration Server model、Generic OnOff Server model 和 Generic OnOff Client model，示例请见：:example:`example code <bluetooth/esp_ble_mesh/ble_mesh_client_model>`。
+* :example_file:`ESP-BLE-MESH 客户端模型 <bluetooth/esp_ble_mesh/ble_mesh_node/onoff_client/tutorial/BLE_Mesh_Node_OnOff_Client_Example_Walkthrough.md>` - 展示了 Generic OnOff Client model 如何在节点内工作。节点拥有 Configuration Server model、Generic OnOff Server model 和 Generic OnOff Client model，示例请见：:example:`example code <bluetooth/esp_ble_mesh/ble_mesh_node/onoff_client>`。
 
-* :example:`ESP-BLE-MESH Provisioner <bluetooth/esp_ble_mesh/ble_mesh_provisioner/tutorial/Ble_Mesh_Provisioner_Example_Walkthrough.md>` - 展示了设备如何充当 ESP-BLE-MESH Provisioner 以配网设备。Provisioner 拥有 Configuration Server model、Configuration Client model 和 Generic OnOff Client model，示例请见 :example:`example code <bluetooth/esp_ble_mesh/ble_mesh_provisioner>`。
+* :example_file:`ESP-BLE-MESH Provisioner <bluetooth/esp_ble_mesh/ble_mesh_provisioner/tutorial/BLE_Mesh_Provisioner_Example_Walkthrough.md>` - 展示了设备如何充当 ESP-BLE-MESH Provisioner 以配网设备。Provisioner 拥有 Configuration Server model、Configuration Client model 和 Generic OnOff Client model，示例请见 :example:`example code <bluetooth/esp_ble_mesh/ble_mesh_provisioner>`。
 
-* ESP-BLE-MESH 快速配网 - :example:`Client <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_client/tutorial/BLE_Mesh_Fast_Prov_Client_Example_Walkthrough.md>` 和 :example_file`Server <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_server/tutorial/BLE_Mesh_Fast_Prov_Server_Example_Walkthrough.md>` - 该示例用于演示快速配网。配网 100 个设备费时不超过 60 秒，示例请见：:example:`example client code <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_client>` 和 :example:`example server code <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_server>`。
+* ESP-BLE-MESH 快速配网 - :example_file:`Client <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_client/tutorial/BLE_Mesh_Fast_Prov_Client_Example_Walkthrough.md>` 和 :example_file`Server <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_server/tutorial/BLE_Mesh_Fast_Prov_Server_Example_Walkthrough.md>` - 该示例用于演示快速配网。配网 100 个设备费时不超过 60 秒，示例请见：:example:`example client code <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_client>` 和 :example:`example server code <bluetooth/esp_ble_mesh/ble_mesh_fast_provision/fast_prov_server>`。
 
-* :example:`Wi-Fi 和 ESP-BLE-MESH 共存 <bluetooth/esp_ble_mesh/ble_mesh_wifi_coexist/tutorial/ble_mesh_wifi_coexist.md>` - 该示例用于演示 Wi-Fi 和 ESP-BLE-MESH 共存的功能。简而言之，用户可在运行 ESP-BLE-MESH 时使用 Wi-Fi，示例请见 :example:`example code <bluetooth/esp_ble_mesh/ble_mesh_wifi_coexist>`。
+* :example_file:`Wi-Fi 和 ESP-BLE-MESH 共存 <bluetooth/esp_ble_mesh/ble_mesh_wifi_coexist/tutorial/BLE_Mesh_WiFi_Coexist_Example_Walkthrough.md>` - 该示例用于演示 Wi-Fi 和 ESP-BLE-MESH 共存的功能。简而言之，用户可在运行 ESP-BLE-MESH 时使用 Wi-Fi，示例请见 :example:`example code <bluetooth/esp_ble_mesh/ble_mesh_wifi_coexist>`。
 
-* ESP-BLE-MESH 节点控制台 - 该演示实现 ESP-BLE-MESH 节点的基本功能。在演示中，Provisioner 可以扫描、验证节点，节点可以回复 Provisioner 的获取/设置消息，示例请见：:example:`example node code <bluetooth/esp_ble_mesh/ble_mesh_console/ble_mesh_node>` 和 :example:`example provisioner code <bluetooth/esp_ble_mesh/ble_mesh_console/ble_mesh_provisioner>`。
+* ESP-BLE-MESH 节点控制台 - 该演示实现 ESP-BLE-MESH 节点的基本功能。在演示中，node and Provisioner 可以扫描、验证节点，节点可以回复 Provisioner 的获取/设置消息，示例请见：:example:`example node code <bluetooth/esp_ble_mesh/ble_mesh_console>`。
 
 .. _esp-ble-mesh-demo-videos:
 
@@ -264,12 +264,12 @@ ESP-BLE-MESH 常见问题手册
 
 - `BLE Mesh Profile Specification <https://www.bluetooth.org/docman/handlers/downloaddoc.ashx?doc_id=457092>`_
 - `BLE Mesh Model Specification <https://www.bluetooth.org/docman/handlers/downloaddoc.ashx?doc_id=457091>`_
-- `An Intro to Bluetooth Mesh Part 1 <http://blog.bluetooth.com/an-intro-to-bluetooth-mesh-part1>`_ / `Part 2 <http://blog.bluetooth.com/an-intro-to-bluetooth-mesh-part2>`__
-- `The Fundamental Concepts of Bluetooth Mesh Networking, Part 1 <http://blog.bluetooth.com/the-fundamental-concepts-of-bluetooth-mesh-networking-part-1>`_ / `Part 2 <http://blog.bluetooth.com/the-fundamental-concepts-of-bluetooth-mesh-networking-part-2>`__
-- `Bluetooth Mesh Networking: Friendship <http://blog.bluetooth.com/bluetooth-mesh-networking-series-friendship>`_
-- `Management of Devices in a Bluetooth Mesh Network <http://blog.bluetooth.com/management-of-devices-bluetooth-mesh-network>`_
-- `Bluetooth Mesh Security Overview <http://blog.bluetooth.com/bluetooth-mesh-security-overview>`_
-- `Provisioning a Bluetooth Mesh Network Part 1 <http://blog.bluetooth.com/provisioning-a-bluetooth-mesh-network-part-1>`_ / `Part 2 <http://blog.bluetooth.com/provisioning-a-bluetooth-mesh-network-part-2>`__
+- `An Intro to Bluetooth Mesh Part 1 <https://blog.bluetooth.com/an-intro-to-bluetooth-mesh-part1>`_ / `Part 2 <https://blog.bluetooth.com/an-intro-to-bluetooth-mesh-part2>`__
+- `The Fundamental Concepts of Bluetooth Mesh Networking, Part 1 <https://blog.bluetooth.com/the-fundamental-concepts-of-bluetooth-mesh-networking-part-1>`_ / `Part 2 <https://blog.bluetooth.com/the-fundamental-concepts-of-bluetooth-mesh-networking-part-2>`__
+- `Bluetooth Mesh Networking: Friendship <https://blog.bluetooth.com/bluetooth-mesh-networking-series-friendship>`_
+- `Management of Devices in a Bluetooth Mesh Network <https://blog.bluetooth.com/management-of-devices-bluetooth-mesh-network>`_
+- `Bluetooth Mesh Security Overview <https://blog.bluetooth.com/bluetooth-mesh-security-overview>`_
+- `Provisioning a Bluetooth Mesh Network Part 1 <https://blog.bluetooth.com/provisioning-a-bluetooth-mesh-network-part-1>`_ / `Part 2 <https://blog.bluetooth.com/provisioning-a-bluetooth-mesh-network-part-2>`__
 
 
 .. _ESP32-DevKitC: https://www.espressif.com/en/products/hardware/esp32-devkitc/overview

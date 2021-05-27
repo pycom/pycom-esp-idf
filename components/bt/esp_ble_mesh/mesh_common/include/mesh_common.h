@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 
+#include "esp_attr.h"
 #include "esp_heap_caps.h"
 
 #include "mesh_byteorder.h"
@@ -34,14 +35,11 @@
 extern "C" {
 #endif
 
-#if CONFIG_BLE_MESH_ALLOC_FROM_PSRAM_FIRST
-#define bt_mesh_malloc(size)    heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
-#define bt_mesh_calloc(size)    heap_caps_calloc_prefer(1, size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
-#else
-#define bt_mesh_malloc(size)    malloc((size))
-#define bt_mesh_calloc(size)    calloc(1, (size))
-#endif /* CONFIG_BLE_MESH_ALLOC_FROM_PSRAM_FIRST */
-#define bt_mesh_free(p)         free((p))
+IRAM_ATTR void *bt_mesh_malloc(size_t size);
+
+IRAM_ATTR void *bt_mesh_calloc(size_t size);
+
+IRAM_ATTR void bt_mesh_free(void *ptr);
 
 /**
  * @brief This function allocates memory to store outgoing message.
@@ -50,7 +48,7 @@ extern "C" {
  *
  * @return NULL-fail, pointer of a net_buf_simple structure-success
  */
-struct net_buf_simple *bt_mesh_alloc_buf(u16_t size);
+struct net_buf_simple *bt_mesh_alloc_buf(uint16_t size);
 
 /**
  * @brief This function releases the memory allocated for the outgoing message.
@@ -73,7 +71,9 @@ void bt_mesh_free_buf(struct net_buf_simple *buf);
  *
  * @return 0 - Node, 1 - Provisioner
  */
-u8_t bt_mesh_get_device_role(struct bt_mesh_model *model, bool srv_send);
+uint8_t bt_mesh_get_device_role(struct bt_mesh_model *model, bool srv_send);
+
+int bt_mesh_rand(void *buf, size_t len);
 
 #ifdef __cplusplus
 }
