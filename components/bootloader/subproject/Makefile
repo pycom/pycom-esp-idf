@@ -24,6 +24,10 @@ CFLAGS += -I $(IDF_PATH)/components/freertos/include
 CFLAGS += -I $(IDF_PATH)/components/heap/include
 CFLAGS += -I $(IDF_PATH)/components/driver/include
 CFLAGS += -I $(IDF_PATH)/components/bootloader_support/include
+CFLAGS += -I $(IDF_PATH)/components/esp_system/include
+CFLAGS += -I $(IDF_PATH)/components/freertos/xtensa/include
+CFLAGS += -I $(IDF_PATH)/components/esp_timer/include
+
 
 # The bootloader pseudo-component is also included in this build, for its Kconfig.projbuild to be included.
 #
