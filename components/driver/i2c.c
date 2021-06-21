@@ -612,6 +612,7 @@ esp_err_t i2c_param_config(i2c_port_t i2c_num, const i2c_config_t* i2c_conf)
         //Default, we enable hardware filter
         i2c_hal_set_filter(&(i2c_context[i2c_num].hal), I2C_FILTER_CYC_NUM_DEF);
         i2c_hal_set_bus_timing(&(i2c_context[i2c_num].hal), i2c_conf->master.clk_speed, I2C_SCLK_APB);
+        i2c_hal_set_tout(&(i2c_context[i2c_num].hal), I2C_SLAVE_TIMEOUT_DEFAULT);
     }
     I2C_EXIT_CRITICAL(&(i2c_context[i2c_num].spinlock));
     return ESP_OK;
