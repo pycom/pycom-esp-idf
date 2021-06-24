@@ -5,64 +5,64 @@
 
 [submodule "components/asio/asio"]
 	path = components/asio/asio
-	url = git@github.com:espressif/asio.git
+	url = https://github.com/espressif/asio.git
 [submodule "components/bootloader/subproject/components/micro-ecc/micro-ecc"]
 	path = components/bootloader/subproject/components/micro-ecc/micro-ecc
-	url = git@github.com:kmackay/micro-ecc.git
+	url = https://github.com/kmackay/micro-ecc.git
 [submodule "components/bt/controller/lib"]
 	path = components/bt/controller/lib
-	url = git@github.com:espressif/esp32-bt-lib.git
+	url = https://github.com/espressif/esp32-bt-lib.git
 [submodule "components/bt/host/nimble/nimble"]
 	path = components/bt/host/nimble/nimble
-	url = git@github.com:espressif/esp-nimble.git
+	url = https://github.com/espressif/esp-nimble.git
 [submodule "components/cbor/tinycbor"]
 	path = components/cbor/tinycbor
-	url = git@github.com:intel/tinycbor.git
+	url = https://github.com/intel/tinycbor.git
 [submodule "components/coap/libcoap"]
 	path = components/coap/libcoap
-	url = git@github.com:obgm/libcoap.git
+	url = https://github.com/obgm/libcoap.git
 [submodule "components/esp_wifi/lib"]
 	path = components/esp_wifi/lib
-	url = git@github.com:espressif/esp32-wifi-lib.git
+	url = https://github.com/espressif/esp32-wifi-lib.git
 [submodule "components/esptool_py/esptool"]
 	path = components/esptool_py/esptool
-	url = git@github.com:espressif/esptool.git
+	url = https://github.com/espressif/esptool.git
 [submodule "components/expat/expat"]
 	path = components/expat/expat
-	url = git@github.com:libexpat/libexpat.git
+	url = https://github.com/libexpat/libexpat.git
 [submodule "components/json/cJSON"]
 	path = components/json/cJSON
-	url = git@github.com:DaveGamble/cJSON.git
+	url = https://github.com/DaveGamble/cJSON.git
 [submodule "components/libsodium/libsodium"]
 	path = components/libsodium/libsodium
-	url = git@github.com:jedisct1/libsodium.git
+	url = https://github.com/jedisct1/libsodium.git
 [submodule "components/lwip/lwip"]
 	path = components/lwip/lwip
-	url = git@github.com:espressif/esp-lwip.git
+	url = https://github.com/espressif/esp-lwip.git
 [submodule "components/mbedtls/mbedtls"]
 	path = components/mbedtls/mbedtls
-	url = git@github.com:espressif/mbedtls.git
+	url = https://github.com/espressif/mbedtls.git
 [submodule "components/mqtt/esp-mqtt"]
 	path = components/mqtt/esp-mqtt
-	url = git@github.com:espressif/esp-mqtt.git
+	url = https://github.com/espressif/esp-mqtt.git
 [submodule "components/nghttp/nghttp2"]
 	path = components/nghttp/nghttp2
-	url = git@github.com:nghttp2/nghttp2.git
+	url = https://github.com/nghttp2/nghttp2.git
 [submodule "components/protobuf-c/protobuf-c"]
 	path = components/protobuf-c/protobuf-c
-	url = git@github.com:protobuf-c/protobuf-c.git
+	url = https://github.com/protobuf-c/protobuf-c.git
 [submodule "components/spiffs/spiffs"]
 	path = components/spiffs/spiffs
-	url = git@github.com:pellepl/spiffs.git
+	url = https://github.com/pellepl/spiffs.git
 [submodule "components/tinyusb/tinyusb"]
 	path = components/tinyusb/tinyusb
-	url = git@github.com:espressif/tinyusb.git
+	url = https://github.com/espressif/tinyusb.git
 [submodule "components/unity/unity"]
 	path = components/unity/unity
-	url = git@github.com:ThrowTheSwitch/Unity.git
+	url = https://github.com/ThrowTheSwitch/Unity.git
 [submodule "examples/build_system/cmake/import_lib/main/lib/tinyxml2"]
 	path = examples/build_system/cmake/import_lib/main/lib/tinyxml2
-	url = git@github.com:leethomason/tinyxml2.git
+	url = https://github.com/leethomason/tinyxml2.git
 [submodule "examples/peripherals/secure_element/atecc608_ecdsa/components/esp-cryptoauthlib"]
 	path = examples/peripherals/secure_element/atecc608_ecdsa/components/esp-cryptoauthlib
-	url = git@github.com:espressif/esp-cryptoauthlib.git
+	url = https://github.com/espressif/esp-cryptoauthlib.git
