@@ -67,4 +67,4 @@
 	url = https://github.com/espressif/esp32-wifi-lib.git
 [submodule "components/coap/libcoap"]
 	path = components/coap/libcoap
-	url = https://github.com/zbgm/libcoap.git
+	url = https://github.com/obgm/libcoap.git
