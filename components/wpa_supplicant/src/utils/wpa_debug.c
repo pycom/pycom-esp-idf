@@ -87,7 +87,7 @@ void  wpa_debug_print_timestamp(void)
 
 void  wpa_hexdump(int level, const char *title, const u8 *buf, size_t len)
 {
-#ifdef DEBUG_PRINT 
+#ifdef DEBUG_PRINT
 	size_t i;
 	char output[50];
 

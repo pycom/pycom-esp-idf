@@ -88,8 +88,32 @@ set(srcs "port/os_xtensa.c"
     "src/wps/wps_registrar.c"
     "src/wps/wps_validate.c")
 
+set(COMPONENT_INCLUDEDIRS   
+    "."
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/sss/plugin/mbedtls"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/hostlib/hostLib/inc"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/hostlib/hostLib/platform/inc"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/hostlib/hostLib/libCommon/infra"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/hostlib/hostLib/libCommon/hostCrypto"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/hostlib/hostLib/libCommon/smCom"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/hostlib/hostLib/libCommon/smCom/T1oI2C"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/hostlib/hostLib/se05x_03_xx_xx"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/hostlib/hostLib/mbedtls/inc"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/hostlib/hostLib/tstUtil"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/hostlib/useCase/common"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/sss/inc"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/sss/ex/inc"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/sss/ex/src"
+    "${CMAKE_SOURCE_DIR}/plug-and-trust/sss/plugin/mbedtls"
+    "${CMAKE_SOURCE_DIR}"
+    )
+message("Component Include Dirs :")
+message( ${COMPONENT_INCLUDEDIRS} )    
+
+
+
 idf_component_register(SRCS "${srcs}"
-                    INCLUDE_DIRS include port/include include/esp_supplicant
+                    INCLUDE_DIRS include port/include include/esp_supplicant "${COMPONENT_INCLUDEDIRS}"
                     PRIV_INCLUDE_DIRS src
                     PRIV_REQUIRES mbedtls)
 
