@@ -39,8 +39,6 @@ static ex_sss_boot_ctx_t gex_sss_get_timestamp_boot_ctx;
 
 sss_status_t status;
 extern uint8_t signature[512] = {0};
-//extern uint8_t plain[512] = {0};
-//extern size_t plainLen=0;
 size_t signatureLen=0;
 sss_algorithm_t algorithm;
 sss_mode_t mode;
@@ -90,7 +88,7 @@ sss_status_t init_sss_open_session()
 	LOG_I("ex_sss_boot_isHelp ...");
     if (ex_sss_boot_isHelp(portName)) {
         memset(EX_SSS_BOOT_PCONTEXT, 0, sizeof(*EX_SSS_BOOT_PCONTEXT));
-        goto before_ex_sss_entry;    
+        goto before_ex_sss_entry;
     }
 
     status = ex_sss_boot_open(EX_SSS_BOOT_PCONTEXT, portName);
