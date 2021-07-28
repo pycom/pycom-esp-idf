@@ -44,6 +44,7 @@ extern "C" void _spi_flash_init(const char* chip_size, size_t block_size, size_t
     assert(size != 0);
 
     spiflash.init(size, block_size, sector_size, page_size, partitions_bin);
+    printf("%s size=%u/0x%x\n", __func__, size, size);
 
     g_rom_flashchip.chip_size = size;
     g_rom_flashchip.block_size = block_size;

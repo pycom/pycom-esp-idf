@@ -195,10 +195,11 @@ esp_err_t esp_flash_init_default_chip(void)
         ESP_EARLY_LOGE(TAG, "Detected size(%dk) smaller than the size in the binary image header(%dk). Probe failed.", default_chip.size/1024, g_rom_flashchip.chip_size/1024);
         return ESP_ERR_FLASH_SIZE_NOT_MATCH;
     } else if (default_chip.size > g_rom_flashchip.chip_size) {
-        ESP_EARLY_LOGW(TAG, "Detected size(%dk) larger than the size in the binary image header(%dk). Using the size in the binary image header.", default_chip.size/1024, g_rom_flashchip.chip_size/1024);
+        ESP_EARLY_LOGE(TAG, "Detected size(%dk) larger than the size in the binary image header(%dk). Using the size in the binary image header.", default_chip.size/1024, g_rom_flashchip.chip_size/1024);
         default_chip.size = g_rom_flashchip.chip_size;
     }
     default_chip.size = g_rom_flashchip.chip_size;
+    ESP_EARLY_LOGE(TAG, "size= %u/0x%x", default_chip.size, default_chip.size);
 
     esp_flash_default_chip = &default_chip;
     return ESP_OK;

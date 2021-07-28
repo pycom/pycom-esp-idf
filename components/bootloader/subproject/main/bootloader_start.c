@@ -39,6 +39,9 @@ static int selected_boot_partition(const bootloader_state_t *bs);
  */
 void __attribute__((noreturn)) call_start_cpu0()
 {
+ets_delay_us(200000);
+// esp_log_write(ESP_LOG_ERROR, "DX", "jojojo\n");
+    ESP_LOGE(TAG, "goede morgeN");
     // 1. Hardware initialization
     if (bootloader_init() != ESP_OK) {
         bootloader_reset();
@@ -50,6 +53,7 @@ void __attribute__((noreturn)) call_start_cpu0()
     if (boot_index == INVALID_INDEX) {
         bootloader_reset();
     }
+ets_delay_us(8000);
 
     // 3. Load the app image for booting
     bootloader_utility_load_boot_image(&bs, boot_index);
@@ -78,6 +82,7 @@ static int selected_boot_partition(const bootloader_state_t *bs)
     if (boot_index == INVALID_INDEX) {
         return boot_index; // Unrecoverable failure (not due to corrupt ota data or bad partition contents)
     }
+ets_delay_us(4000);
     if (rtc_get_reset_reason(0) != DEEPSLEEP_RESET) {
         // Factory firmware.
 #ifdef CONFIG_BOOTLOADER_FACTORY_RESET

@@ -24,6 +24,7 @@ esp_err_t esp_partition_table_verify(const esp_partition_info_t *partition_table
     int md5_found = 0;
     int num_parts;
     uint32_t chip_size = g_rom_flashchip.chip_size;
+    ESP_LOGE(TAG, "chip_size=%u/0x%x", chip_size, chip_size);
     *num_partitions = 0;
 
     for (num_parts = 0; num_parts < ESP_PARTITION_TABLE_MAX_ENTRIES; num_parts++) {
@@ -31,6 +32,7 @@ esp_err_t esp_partition_table_verify(const esp_partition_info_t *partition_table
 
         if (part->magic == ESP_PARTITION_MAGIC) {
             const esp_partition_pos_t *pos = &part->pos;
+            ESP_LOGE(TAG, "offset=%u/0x%x, size=%u/0x%x, o+s=%u/0x%x", pos->offset, pos->offset, pos->size, pos->size, (pos->offset+pos->size), (pos->offset+pos->size));
             if (pos->offset > chip_size || pos->offset + pos->size > chip_size) {
                 if (log_errors) {
                     ESP_LOGE(TAG, "partition %d invalid - offset 0x%x size 0x%x exceeds flash chip size 0x%x",

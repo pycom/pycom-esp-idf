@@ -123,6 +123,7 @@ bool bootloader_common_erase_part_type_data(const char *list_erase, bool ota_dat
     }
     ESP_LOGD(TAG, "mapped partition table 0x%x at 0x%x", ESP_PARTITION_TABLE_OFFSET, (intptr_t)partitions);
 
+    ESP_LOGE(TAG, "%s", __func__);
     err = esp_partition_table_verify(partitions, true, &num_partitions);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to verify partition table");
