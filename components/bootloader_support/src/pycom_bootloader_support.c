@@ -52,7 +52,14 @@ IRAM_ATTR bool pycom_ota_write_boot_info(boot_info_t *boot_info, uint32_t offset
 
     esp_err_t err = bootloader_flash_erase_sector(offset / FLASH_SECTOR_SIZE);
     if (err == ESP_OK) {
-        err = bootloader_flash_write(offset, boot_info, sizeof(boot_info_t), esp_flash_encryption_enabled());
+        if (esp_flash_encryption_enabled()) {
+            uint8_t buff[64] __attribute__((aligned (32)));
+            memcpy(buff, (void *)boot_info, sizeof(boot_info_t));
+            err = bootloader_flash_write(offset, boot_info, 64, esp_flash_encryption_enabled());
+        }
+        else{
+            err = bootloader_flash_write(offset, boot_info, sizeof(boot_info_t), esp_flash_encryption_enabled());
+        }
     }
 
     if (err != ESP_OK) {
@@ -65,5 +72,5 @@ IRAM_ATTR bool pycom_ota_write_boot_info(boot_info_t *boot_info, uint32_t offset
 
 uint32_t pycom_bootloader_common_ota_select_crc(const boot_info_t *s)
 {
-  return crc32_le(UINT32_MAX, (uint8_t*)&s->ActiveImg, sizeof(boot_info_t) - sizeof(s->crc));
+    return crc32_le(UINT32_MAX, (uint8_t*)&s->ActiveImg, sizeof(boot_info_t) - sizeof(s->crc));
 }
