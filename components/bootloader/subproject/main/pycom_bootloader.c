@@ -98,6 +98,9 @@ int pycom_bootloader_utility_get_selected_boot_partition(const bootloader_state_
 
         uint32_t ActiveImg = boot_info->ActiveImg;
         uint32_t safeboot = wait_for_safe_boot (boot_info, &ActiveImg);
+#else
+        uint32_t safeboot = 0;
+#endif
         if (safeboot > 0) {
             ESP_LOGI(TAG, "Safe boot requested!");
         }
@@ -114,8 +117,6 @@ int pycom_bootloader_utility_get_selected_boot_partition(const bootloader_state_
                 return ESP_FAIL;
             }
         }
-#endif
-
         // load the selected active image
         if(boot_info->ActiveImg == IMG_ACT_FACTORY) {
             return FACTORY_INDEX;
