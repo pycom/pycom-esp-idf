@@ -56,10 +56,6 @@ void esp_netif_list_unlock(void)
 {
     assert(s_list_lock);
     xSemaphoreGive(s_list_lock);
-    if (s_esp_netif_counter == 0) {
-        vQueueDelete(s_list_lock);
-        s_list_lock = NULL;
-    }
 }
 
 //
