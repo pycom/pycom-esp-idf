@@ -166,6 +166,26 @@ pm_mode_t esp_pm_impl_get_mode(esp_pm_lock_type_t type, int arg)
     }
 }
 
+void esp_pm_enter_light_sleep_mode(void)
+{
+    if( ! s_light_sleep_en ) {
+        portENTER_CRITICAL(&s_switch_lock);
+        s_light_sleep_en = true;
+        esp_pm_impl_switch_mode(PM_MODE_LIGHT_SLEEP, MODE_LOCK, 0);
+        portEXIT_CRITICAL(&s_switch_lock);
+    }
+}
+
+void esp_pm_leave_light_sleep_mode(void)
+{
+    if( s_light_sleep_en ) {
+        portENTER_CRITICAL(&s_switch_lock);
+        esp_pm_impl_switch_mode(PM_MODE_LIGHT_SLEEP, MODE_UNLOCK, 0);
+        s_light_sleep_en = false;
+        portEXIT_CRITICAL(&s_switch_lock);
+    }
+}
+
 esp_err_t esp_pm_configure(const void* vconfig)
 {
 #ifndef CONFIG_PM_ENABLE
