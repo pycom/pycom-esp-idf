@@ -282,6 +282,7 @@ PRIVILEGED_DATA static List_t xPendingReadyList[ portNUM_PROCESSORS ];						/*< 
 #endif
 
 /* Other file private variables. --------------------------------*/
+void(*print_ticks)(uint32_t xNextTaskUnblockTime, uint32_t xTickCount);
 PRIVILEGED_DATA static volatile UBaseType_t uxCurrentNumberOfTasks 	= ( UBaseType_t ) 0U;
 PRIVILEGED_DATA static volatile TickType_t xTickCount 				= ( TickType_t ) 0U;
 PRIVILEGED_DATA static volatile UBaseType_t uxTopReadyPriority 		= tskIDLE_PRIORITY;
@@ -2167,6 +2168,11 @@ void vTaskSuspendAll( void )
 
 #endif // portNUM_PROCESSORS > 1
 
+int __case_1__ = 0;
+int __case_2__ = 0;
+int __case_3__ = 0;
+int __case_4__ = 0;
+void(*reg_ret_val)(int core_id, uint32_t val);
 	static TickType_t prvGetExpectedIdleTime( void )
 	{
 	TickType_t xReturn;
@@ -2175,6 +2181,7 @@ void vTaskSuspendAll( void )
 		taskENTER_CRITICAL(&xTaskQueueMutex);
 		if( pxCurrentTCB[ xPortGetCoreID() ]->uxPriority > tskIDLE_PRIORITY )
 		{
+			++ __case_1__;
 			xReturn = 0;
 		}
 #if portNUM_PROCESSORS > 1
@@ -2185,6 +2192,7 @@ void vTaskSuspendAll( void )
 		 */
 		else if( xHaveReadyTasks() )
 		{
+			++ __case_2__;
 			xReturn = 0;
 		}
 #endif // portNUM_PROCESSORS > 1
@@ -2193,11 +2201,14 @@ void vTaskSuspendAll( void )
 			/* There are other idle priority tasks in the ready state.  If
 			time slicing is used then the very next tick interrupt must be
 			processed. */
+			++ __case_3__;
 			xReturn = 0;
 		}
 		else
 		{
+			++ __case_4__;
 			xReturn = xNextTaskUnblockTime - xTickCount;
+			if(reg_ret_val && xReturn > 10)reg_ret_val(xPortGetCoreID(), xReturn);
 		}
 		taskEXIT_CRITICAL(&xTaskQueueMutex);
 
@@ -2886,6 +2897,63 @@ void vTaskSwitchContext( void )
 }
 /*-----------------------------------------------------------*/
 
+void __test_freertos_lock(void){taskENTER_CRITICAL(&xTaskQueueMutex);}
+void __test_freertos_unlock(void){taskEXIT_CRITICAL(&xTaskQueueMutex);}
+static void __test_freertos_print_task_list(List_t* pList);
+int __printf(const char *fmt, ...);
+void __test_freertos_list_tasks(void)
+{
+	__test_freertos_lock();
+	TCB_t* p_tcb = pxCurrentTCB[0];
+	__printf("-- current runnint tasks:\n");
+	if(p_tcb)
+		__printf("[C0] %s\n",p_tcb->pcTaskName);
+	p_tcb = pxCurrentTCB[1];
+	if(p_tcb)
+		__printf("[C1] %s\n",p_tcb->pcTaskName);
+	
+	int i;
+	ListItem_t* pItem;
+
+	__printf("-- current tick: %lu , next unblock tick time: %lu\n",
+		xTickCount, xNextTaskUnblockTime);
+
+	__printf("-- ready task list:\n");
+	for(i = 0; i < 25; i++)
+	{
+		pItem = pxReadyTasksLists[i].xListEnd.pxNext;
+		__printf("  P%02d: ", i);
+		while((void*)pItem != (void*)&pxReadyTasksLists[i].xListEnd) {
+			p_tcb = pItem->pvOwner;
+			__printf("('%s',C%d) ", p_tcb->pcTaskName, p_tcb->xCoreID);
+			pItem = pItem->pxNext;
+		}
+		__printf("\n");
+	}
+
+	__printf("-- suspended task list:\n");
+	__test_freertos_print_task_list(&xSuspendedTaskList);
+
+	__printf("-- delayed task list:\n");
+	__test_freertos_print_task_list(pxDelayedTaskList);
+
+	__printf("-- overflow delayed task list:\n");
+	__test_freertos_print_task_list(pxOverflowDelayedTaskList);
+	__test_freertos_unlock();
+}
+static void __test_freertos_print_task_list(List_t* pList)
+{
+	TCB_t* p_tcb;
+	ListItem_t* pItem;
+	pItem = pList->xListEnd.pxNext;
+	while((void*)pItem != (void*)&pList->xListEnd) {
+		p_tcb = pItem->pvOwner;
+		__printf("    [C%d, P%02d] T[%10lu] '%s'\n",
+			p_tcb->xCoreID, (int)p_tcb->uxPriority, p_tcb->xGenericListItem.xItemValue, p_tcb->pcTaskName);
+		pItem = pItem->pxNext;
+	}
+}
+
 void vTaskPlaceOnEventList( List_t * const pxEventList, const TickType_t xTicksToWait )
 {
 TickType_t xTimeToWake;
@@ -3328,10 +3396,13 @@ void vTaskMissedYield( void )
  * void prvIdleTask( void *pvParameters );
  *
  */
+int __idle_task_started = 0;
+void(*print_idle_state)(int core_id, int state);
 static portTASK_FUNCTION( prvIdleTask, pvParameters )
 {
 	/* Stop warnings. */
 	( void ) pvParameters;
+	int core_id = __idle_task_started ++;
 
 	for( ;; )
 	{
@@ -3404,6 +3475,11 @@ static portTASK_FUNCTION( prvIdleTask, pvParameters )
 			scheduler suspended.  The result here is not necessarily
 			valid. */
 			xExpectedIdleTime = prvGetExpectedIdleTime();
+			if(print_idle_state){
+				print_idle_state(core_id, 100);
+				print_idle_state(core_id, xExpectedIdleTime);
+				print_idle_state(core_id, configEXPECTED_IDLE_TIME_BEFORE_SLEEP);
+			}
 
 			if( xExpectedIdleTime >= configEXPECTED_IDLE_TIME_BEFORE_SLEEP )
 			{

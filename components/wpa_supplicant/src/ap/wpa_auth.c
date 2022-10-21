@@ -1121,7 +1121,7 @@ int hostap_eapol_resend_process(void *timeout_ctx)
 void resend_eapol_handle(void *timeout_ctx)
 {
     wifi_ipc_config_t cfg;
-
+    extern char __which_callback; __which_callback = 'a'; 
     cfg.fn = hostap_eapol_resend_process;
     cfg.arg = timeout_ctx;
     cfg.arg_size = 0;

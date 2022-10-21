@@ -530,10 +530,75 @@ static inline void IRAM_ATTR other_core_should_skip_light_sleep(int core_id)
     s_skip_light_sleep[!core_id] = true;
 #endif
 }
+int __cp_a__ = 0;
+int __cp_b__ = 0;
+int __cp_c__ = 0;
+int __cp_d__ = 0;
+#define MAX_SLEPT_US_INTERVALS  50
+static uint32_t slept_us_intervals_array[MAX_SLEPT_US_INTERVALS] = {0};
+static uint32_t slept_us_intervals_index = 0;
+static uint32_t slept_us_intervals_counter = 0;
+static void register_selpt_us_interval(uint32_t us)
+{
+    if(slept_us_intervals_index >= MAX_SLEPT_US_INTERVALS) {
+        slept_us_intervals_index = 0;
+    }
+    slept_us_intervals_array[slept_us_intervals_index++] = us;
+    ++ slept_us_intervals_counter;
+}
+static void log_selpt_us_intervals(void*param,void(*print)(void*,const char* fmt, ...))
+{
+    int i;
+    int index = 0;
+    uint32_t us, ticks;
+    print(param, "-- Slept MicroSeconds Intervals\n");
+    if(slept_us_intervals_counter > MAX_SLEPT_US_INTERVALS) {
+        for(i = slept_us_intervals_index; i < MAX_SLEPT_US_INTERVALS; ++i){
+            us = slept_us_intervals_array[i];
+            ticks = us / (portTICK_PERIOD_MS * 1000LL);
+            print(param, "  [%2d][ticks: %4d] %d\n", index++, ticks, us);
+        }
+    }
+    for(i = 0; i < slept_us_intervals_index; ++i) {
+        us = slept_us_intervals_array[i];
+        ticks = us / (portTICK_PERIOD_MS * 1000LL);
+        print(param, "  [%2d][ticks: %4d] %d\n", index++, ticks, us);
+    }
+}
+void __pm_esp32_test(void*param,void(*print)(void*,const char* fmt, ...))
+{
+    print(param, "-- pm_esp32 logs\n");
 
+    print(param, "  ## Power Modes status variables\n");
+    print(param, "     s_mode: %d -- s_new_mode: %d -- s_is_switching: %d -- s_mode_mask: 0x%02x\n",
+        s_mode, s_new_mode, s_is_switching, s_mode_mask);
+    print(param, "     s_light_sleep_en = %d\n", s_light_sleep_en);
+    print(param, "     [PM_MODE_LIGHT_SLEEP:%d]('en-mask'=%d, 'lock-count'=%d)\n", PM_MODE_LIGHT_SLEEP,
+        (s_mode_mask & BIT(PM_MODE_LIGHT_SLEEP)) != 0, s_mode_lock_counts[PM_MODE_LIGHT_SLEEP]);
+    print(param, "     [    PM_MODE_APB_MIN:%d]('en-mask'=%d, 'lock-count'=%d)\n", PM_MODE_APB_MIN,
+        (s_mode_mask & BIT(PM_MODE_APB_MIN)) != 0, s_mode_lock_counts[PM_MODE_APB_MIN]);
+    print(param, "     [    PM_MODE_APB_MAX:%d]('en-mask'=%d, 'lock-count'=%d)\n", PM_MODE_APB_MAX,
+        (s_mode_mask & BIT(PM_MODE_APB_MAX)) != 0, s_mode_lock_counts[PM_MODE_APB_MAX]);
+    print(param, "     [    PM_MODE_CPU_MAX:%d]('en-mask'=%d, 'lock-count'=%d)\n", PM_MODE_CPU_MAX,
+        (s_mode_mask & BIT(PM_MODE_CPU_MAX)) != 0, s_mode_lock_counts[PM_MODE_CPU_MAX]);
+
+    print(param, "     s_cpu_freq_by_mode:\n");
+    print(param, "      => PM_MODE_LIGHT_SLEEP: %d\n", s_cpu_freq_by_mode[PM_MODE_LIGHT_SLEEP]);
+    print(param, "      => PM_MODE_APB_MIN:     %d\n", s_cpu_freq_by_mode[PM_MODE_APB_MIN]);
+    print(param, "      => PM_MODE_APB_MAX:     %d\n", s_cpu_freq_by_mode[PM_MODE_APB_MAX]);
+    print(param, "      => PM_MODE_CPU_MAX:     %d\n", s_cpu_freq_by_mode[PM_MODE_CPU_MAX]);
+
+    print(param, "  ## Light Sleep Core Skip conditions\n");
+    print(param, "   s_skip_light_sleep    [C0]: %d [C1]: %d\n",
+        s_skip_light_sleep[0], s_skip_light_sleep[1]);
+    print(param, "   s_skipped_light_sleep [C0]: %d [C1]: %d\n",
+        s_skipped_light_sleep[0], s_skipped_light_sleep[1]);
+    log_selpt_us_intervals(param, print);
+}
 void IRAM_ATTR vApplicationSleep( TickType_t xExpectedIdleTime )
 {
     portENTER_CRITICAL(&s_switch_lock);
+    ++__cp_a__;
     int core_id = xPortGetCoreID();
     if (!should_skip_light_sleep(core_id)) {
         /* Calculate how much we can sleep */
@@ -542,7 +607,9 @@ void IRAM_ATTR vApplicationSleep( TickType_t xExpectedIdleTime )
         int64_t time_until_next_alarm = next_esp_timer_alarm - now;
         int64_t wakeup_delay_us = portTICK_PERIOD_MS * 1000LL * xExpectedIdleTime;
         int64_t sleep_time_us = MIN(wakeup_delay_us, time_until_next_alarm);
+        ++ __cp_b__;
         if (sleep_time_us >= configEXPECTED_IDLE_TIME_BEFORE_SLEEP * portTICK_PERIOD_MS * 1000LL) {
+            ++ __cp_c__;
             esp_sleep_enable_timer_wakeup(sleep_time_us - LIGHT_SLEEP_EARLY_WAKEUP_US);
 #ifdef CONFIG_PM_TRACE
             /* to force tracing GPIOs to keep state */
@@ -553,6 +620,7 @@ void IRAM_ATTR vApplicationSleep( TickType_t xExpectedIdleTime )
             int64_t sleep_start = esp_timer_get_time();
             esp_light_sleep_start();
             int64_t slept_us = esp_timer_get_time() - sleep_start;
+            register_selpt_us_interval(slept_us);
             ESP_PM_TRACE_EXIT(SLEEP, core_id);
 
             uint32_t slept_ticks = slept_us / (portTICK_PERIOD_MS * 1000LL);
@@ -574,6 +642,7 @@ void IRAM_ATTR vApplicationSleep( TickType_t xExpectedIdleTime )
         }
     }
     portEXIT_CRITICAL(&s_switch_lock);
+    ++__cp_d__;
 }
 #endif //CONFIG_FREERTOS_USE_TICKLESS_IDLE
 

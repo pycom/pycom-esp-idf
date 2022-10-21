@@ -107,6 +107,7 @@ static void osi_thread_stop(osi_thread_t *thread)
 }
 
 //in linux, the stack_size, priority and core may not be set here, the code will be ignore the arguments
+int __printf(const char *fmt, ...);
 osi_thread_t *osi_thread_create(const char *name, size_t stack_size, int priority, osi_thread_core_t core, uint8_t work_queue_num)
 {
     int ret;
@@ -121,6 +122,7 @@ osi_thread_t *osi_thread_create(const char *name, size_t stack_size, int priorit
 
     thread = (osi_thread_t *)osi_malloc(sizeof(osi_thread_t));
     if (thread == NULL) {
+        __printf("-- alloc fail: thread\n");
         goto _err;
     }
 
@@ -128,33 +130,42 @@ osi_thread_t *osi_thread_create(const char *name, size_t stack_size, int priorit
     thread->work_queue_num = work_queue_num;
     thread->work_queues = (fixed_queue_t **)osi_malloc(sizeof(fixed_queue_t *) * work_queue_num);
     if (thread->work_queues == NULL) {
+        __printf("-- alloc fail: thread->work_queues\n");
         goto _err;
     }
 
     for (int i = 0; i < thread->work_queue_num; i++) {
         thread->work_queues[i] = fixed_queue_new(DEFAULT_WORK_QUEUE_CAPACITY);
         if (thread->work_queues[i] == NULL) {
+            __printf("-- fixed_queue_new [%d]\n", i);
             goto _err;
         }
     }
 
     ret = osi_sem_new(&thread->work_sem, 1, 0);
     if (ret != 0) {
+        __printf("-- osi_sem_new:  thread->work_sem\n");
         goto _err;
     }
 
     ret = osi_sem_new(&thread->stop_sem, 1, 0);
     if (ret != 0) {
+        __printf("-- osi_sem_new:  thread->stop_sem\n");
         goto _err;
     }
 
     start_arg.thread = thread;
     ret = osi_sem_new(&start_arg.start_sem, 1, 0);
     if (ret != 0) {
+        __printf("-- osi_sem_new:  start_arg.start_sem\n");
         goto _err;
     }
 
-    if (xTaskCreatePinnedToCore(osi_thread_run, name, stack_size, &start_arg, priority, &thread->thread_handle, core) != pdPASS) {
+    BaseType_t xReturn;
+    if ((xReturn = xTaskCreatePinnedToCore(osi_thread_run, name, stack_size, &start_arg, priority, &thread->thread_handle, core)) != pdPASS) {
+        __printf("-- xTaskCreatePinnedToCore:  osi_thread_run, err: %d\n", xReturn);
+        extern void __test_freertos_list_tasks(void);
+        __test_freertos_list_tasks();
         goto _err;
     }
 

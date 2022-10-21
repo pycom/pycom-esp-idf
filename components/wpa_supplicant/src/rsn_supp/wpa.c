@@ -2231,6 +2231,7 @@ wpa_sm_get_key(uint8_t *ifx, int *alg, u8 *addr, int *key_idx, u8 *key, size_t k
 
 void wpa_supplicant_clr_countermeasures(u16 *pisunicast)
 {
+    extern char __which_callback; __which_callback = 'g'; 
        struct wpa_sm *sm = &gWpaSm;
        (sm->install_ptk).mic_errors_seen=0;
     (sm->install_gtk).mic_errors_seen=0;
@@ -2243,6 +2244,7 @@ void wpa_supplicant_clr_countermeasures(u16 *pisunicast)
 */
 void wpa_supplicant_stop_countermeasures(u16 *pisunicast)
 {
+    extern char __which_callback; __which_callback = 'h'; 
        struct wpa_sm *sm = &gWpaSm;
 
        ets_timer_done(&(sm->cm_timer));

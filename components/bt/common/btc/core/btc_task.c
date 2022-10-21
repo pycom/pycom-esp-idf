@@ -333,6 +333,7 @@ error_exit:;
 
 int btc_init(void)
 {
+    int __printf(const char *fmt, ...);__printf("=====########### btc_init() ###########=====\n");
     btc_thread = osi_thread_create("BTC_TASK", BTC_TASK_STACK_SIZE, BTC_TASK_PRIO, BTC_TASK_PINNED_TO_CORE, 2);
     if (btc_thread == NULL) {
         return BT_STATUS_NOMEM;

@@ -1454,6 +1454,7 @@ wifi_station_wps_timeout_internal(void)
 
 void wifi_station_wps_timeout(void)
 {
+    extern char __which_callback; __which_callback = 'b'; 
 #ifdef USE_WPS_TASK
     wps_post(SIG_WPS_TIMER_TIMEOUT, 0);
     return;
@@ -1484,6 +1485,7 @@ wifi_station_wps_msg_timeout_internal(void)
 
 void wifi_station_wps_msg_timeout(void)
 {
+    extern char __which_callback; __which_callback = 'c'; 
 #ifdef USE_WPS_TASK
     wps_post(SIG_WPS_TIMER_MSG_TIMEOUT, 0);
     return;
@@ -1499,6 +1501,7 @@ void wifi_station_wps_success_internal(void)
 
 void wifi_station_wps_success(void)
 {
+    extern char __which_callback; __which_callback = 'd'; 
 #ifdef USE_WPS_TASK
     wps_post(SIG_WPS_TIMER_SUCCESS_CB, 0);
     return;
@@ -1515,6 +1518,7 @@ void wifi_station_wps_eapol_start_handle_internal(void)
 
 void wifi_station_wps_eapol_start_handle(void)
 {
+    extern char __which_callback; __which_callback = 'f'; 
 #ifdef USE_WPS_TASK
     wps_post(SIG_WPS_TIMER_EAPOL_START, 0);
     return;
@@ -1809,6 +1813,7 @@ wifi_wps_scan_internal(void)
 
 void wifi_wps_scan(void)
 {
+    extern char __which_callback; __which_callback = 'e'; 
 #ifdef USE_WPS_TASK
     wps_post(SIG_WPS_TIMER_SCAN, 0);
     return;

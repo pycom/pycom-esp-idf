@@ -382,7 +382,226 @@ static int32_t esp_event_post_wrapper(const char* event_base, int32_t event_id, 
         return (int32_t)esp_event_post(event_base, event_id, event_data, event_data_size, ticks_to_wait);
     }
 }
+#if 0 /* use of FreeRTOS Timers */
 
+typedef struct _esp_adapter_timer_st {
+    void (*pCallback)(void *);
+    void* args;
+    TimerHandle_t OsTimerHandle;
+    uint32_t  busy     :1;
+    uint32_t  periodic :1;
+    uint32_t  running  :1;
+    volatile uint32_t  state    :3;
+    uint32_t  period;
+} ESP_AdapterTimer_st;
+
+enum {
+    _state_running,
+    _state_stopped,
+    _state_exec_cb,
+};
+
+#define __ESP_ADAPTER_MAX_TIMERS        20
+static ESP_AdapterTimer_st __esp_adapter_timers_arr[__ESP_ADAPTER_MAX_TIMERS] = {0};
+#define __is_valid_timer_info(ptr)      \
+    ((uint32_t)(ptr) >= (uint32_t)__esp_adapter_timers_arr    \
+        && (uint32_t)(ptr) < (uint32_t)(__esp_adapter_timers_arr + __ESP_ADAPTER_MAX_TIMERS))
+
+typedef enum _esp_adapter_timers_errcode_et {
+    ESP_ADAPTER_TIMERS_ERRCODE__NO_AVAIL_STATIC_LOC             = (1 << 0),
+    ESP_ADAPTER_TIMERS_ERRCODE__NO_AVAIL_DYNAMIC_LOC            = (1 << 1),
+    ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_CREATION_FAILED        = (1 << 2),
+    ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_DELETE_FAILED          = (1 << 3),
+    ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_START_FAILED           = (1 << 4),
+    ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_STOP_FAILED            = (1 << 5),
+    ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_STOP_IN_CB_FAILED      = (1 << 6),
+    ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_CHANGE_PERIOD_FAILED   = (1 << 7),
+    ESP_ADAPTER_TIMERS_ERRCODE__CALLBACK_NOT_VALID_TIMER_INFO   = (1 << 8),
+    ESP_ADAPTER_TIMERS_ERRCODE__CALLBACK_OF_FREE_TIMER_INFO     = (1 << 9),
+    ESP_ADAPTER_TIMERS_ERRCODE__TRY_INIT_AN_INITIALISED_TIMER   = (1 << 10),
+    ESP_ADAPTER_TIMERS_ERRCODE__START_NON_INITIALISED_TIMER     = (1 << 11),
+    ESP_ADAPTER_TIMERS_ERRCODE__STOP_NON_INITIALISED_TIMER      = (1 << 12),
+    ESP_ADAPTER_TIMERS_ERRCODE__DELETE_NON_INITIALISED_TIMER    = (1 << 13),
+} ESP_AdapterTimersErrCode_et;
+
+static uint32_t __esp_adapter_timers_err_flags = 0;
+#define __esp_adapter_timers_raise_flag(flag) __esp_adapter_timers_err_flags |= flag;
+
+#define __store_timer_info(ptimer, pTimerInfo)  ((ETSTimer*)ptimer)->timer_arg = pTimerInfo
+#define __load_timer_info(ptimer, pTimerInfo)   pTimerInfo = ((ETSTimer*)ptimer)->timer_arg
+#define __is_initialized(ptimer) \
+    (__is_valid_timer_info(((ETSTimer*)ptimer)->timer_arg) && \
+    ((ESP_AdapterTimer_st*)(((ETSTimer*)ptimer)->timer_arg))->busy)
+
+static void __esp_adapter_timers_callbask( TimerHandle_t pxTimer )
+{
+    /* callback function from FreeRTOS */
+
+    ESP_AdapterTimer_st* pTimerInfo = pvTimerGetTimerID(pxTimer);
+
+    if( ! __is_valid_timer_info(pTimerInfo)) {
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__CALLBACK_NOT_VALID_TIMER_INFO);
+        return;
+    }
+
+    pTimerInfo->state = _state_exec_cb;
+
+    if( ! pTimerInfo->busy ){
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__CALLBACK_OF_FREE_TIMER_INFO);
+        return;
+    }
+
+    if( pTimerInfo->periodic == false ) {
+        if( pdPASS != xTimerStop(pTimerInfo->OsTimerHandle, 0)) {
+            __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_STOP_IN_CB_FAILED);
+            return;
+        }
+        pTimerInfo->running = 0;
+    }
+
+    pTimerInfo->pCallback (pTimerInfo->args);
+
+    pTimerInfo->state = pTimerInfo->periodic ? _state_running : _state_stopped;
+}
+static void timer_setfn_wrapper(void *ptimer, void *pfunction, void *parg)
+{
+    /* create the timer */
+
+    if( __is_initialized(ptimer) ) {
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__TRY_INIT_AN_INITIALISED_TIMER);
+        return;
+    }
+
+    int i = 0;
+    ESP_AdapterTimer_st* pTimerInfo = __esp_adapter_timers_arr;
+    while(i < __ESP_ADAPTER_MAX_TIMERS && pTimerInfo->busy)
+    {
+        ++i;
+        ++pTimerInfo;
+    }
+    if(i >= __ESP_ADAPTER_MAX_TIMERS)
+    {
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__NO_AVAIL_STATIC_LOC);
+        return;
+    }
+    pTimerInfo->busy = true;
+    pTimerInfo->pCallback = pfunction;
+    pTimerInfo->args = parg;
+    pTimerInfo->periodic = true;
+    pTimerInfo->state = _state_stopped;
+
+    pTimerInfo->OsTimerHandle = xTimerCreate( "WiFiDrvTmr",       // Just a text name, not used by the kernel.
+        10000,   // The timer period in ticks.
+        pdTRUE,        // The timers will auto-reload themselves when they expire.
+        pTimerInfo,  // Assign each timer a unique id equal to its array index.
+        __esp_adapter_timers_callbask // Each timer calls the same callback when it expires.
+    );
+
+    if(pTimerInfo->OsTimerHandle == NULL)
+    {
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_CREATION_FAILED);
+        return;
+    }
+
+    __store_timer_info(ptimer, pTimerInfo);
+}
+static void timer_done_wrapper(void *ptimer)
+{
+    /* delete the timer */
+
+    if( ! __is_initialized(ptimer) ) {
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__DELETE_NON_INITIALISED_TIMER);
+        return;
+    }
+
+    ESP_AdapterTimer_st* pTimerInfo;
+    __load_timer_info(ptimer, pTimerInfo);
+
+    if( pdPASS != xTimerDelete(pTimerInfo->OsTimerHandle, 0) ) {
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_DELETE_FAILED);
+        return;
+    }
+
+    memset(pTimerInfo, 0, sizeof(*pTimerInfo));
+    __store_timer_info(ptimer, NULL);
+}
+static void timer_arm_us_wrapper(void *timer, uint32_t us, bool repeat)
+{
+    /* start the timer */
+
+    if( !__is_initialized(timer) ) {
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__START_NON_INITIALISED_TIMER);
+        return;
+    }
+
+    ESP_AdapterTimer_st* pTimerInfo;
+    __load_timer_info(timer, pTimerInfo);
+    pTimerInfo->periodic = repeat;
+    pTimerInfo->period = us / 1000;
+    pTimerInfo->running = 1;
+    pTimerInfo->state = _state_running;
+
+    if( pdPASS != xTimerChangePeriod(pTimerInfo->OsTimerHandle, us / 1000 / portTICK_PERIOD_MS, 0) ) {
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_CHANGE_PERIOD_FAILED);
+        return;
+    }
+
+    if( pdPASS != xTimerStart(pTimerInfo->OsTimerHandle, 0) ) {
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_CHANGE_PERIOD_FAILED);
+        return;
+    }
+}
+static void  timer_arm_wrapper(void *timer, uint32_t tmout, bool repeat)
+{
+    /* set timer period in us */
+
+    timer_arm_us_wrapper(timer, tmout *1000, repeat);
+}
+static void  timer_disarm_wrapper(void *timer)
+{
+    /* stop the timer */
+
+    if( !__is_initialized(timer) ) {
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__STOP_NON_INITIALISED_TIMER);
+        return;
+    }
+
+    ESP_AdapterTimer_st* pTimerInfo;
+    __load_timer_info(timer, pTimerInfo);
+
+    if( pdPASS != xTimerStop(pTimerInfo->OsTimerHandle, 0) ) {
+        __esp_adapter_timers_raise_flag(ESP_ADAPTER_TIMERS_ERRCODE__OS_TIMER_STOP_FAILED);
+        return;
+    }
+
+    pTimerInfo->state = _state_stopped;
+    pTimerInfo->running = 0;
+}
+
+void __esp_adapter_timers_test(void*param,void(*print)(void*,const char* fmt, ...))
+{
+    int busy_timers_count = 0;
+    int i = 0;
+    ESP_AdapterTimer_st* pTimerInfo = __esp_adapter_timers_arr;
+
+    print(param, "-- ESP Adapter Timers Logs\n");
+    for(i=0; i < __ESP_ADAPTER_MAX_TIMERS; ++i, ++pTimerInfo) {
+        if(pTimerInfo->busy) {
+            ++ busy_timers_count;
+            print(param, "   [%2d] %5d ms ~~ %s ~~ %s\n", i, pTimerInfo->period,
+                pTimerInfo->state == _state_stopped ? "STOPPED"
+                    : pTimerInfo->state == _state_exec_cb ? "EXEC_CB" : "RUNNING",
+                pTimerInfo->periodic ? "Periodic":"Once");
+        }
+    }
+
+    print(param, "   == ERROR FLAGS :: %08X\n", __esp_adapter_timers_err_flags);
+}
+
+#else /* use of the ETS Timers */
+void __esp_adapter_timers_test(void*param,void(*print)(void*,const char* fmt, ...))
+{
+}
 static void IRAM_ATTR timer_arm_wrapper(void *timer, uint32_t tmout, bool repeat)
 {
     ets_timer_arm(timer, tmout, repeat);
@@ -392,22 +611,98 @@ static void IRAM_ATTR timer_disarm_wrapper(void *timer)
 {
     ets_timer_disarm(timer);
 }
-
+uint8_t __esp_adapter_done_timers_arr[30] = {0};
+int     __esp_adapter_done_timers_counter = 0;
 static void timer_done_wrapper(void *ptimer)
 {
     ets_timer_done(ptimer);
 }
 
+static void* __adapter_cbs[30]={ 0 };
+int __esp_adapter_timers_counter = 0;
+extern char __which_callback;
+#define __adabter_fun_cb(id) \
+    static void __adapter_fun_cb_##id(void *timer_arg){ \
+    __which_callback = 'A' + id;                        \
+    ((ETSTimerFunc*)__adapter_cbs[id])(timer_arg);      \
+    }
+__adabter_fun_cb(0)
+__adabter_fun_cb(1)
+__adabter_fun_cb(2)
+__adabter_fun_cb(3)
+__adabter_fun_cb(4)
+__adabter_fun_cb(5)
+__adabter_fun_cb(6)
+__adabter_fun_cb(7)
+__adabter_fun_cb(8)
+__adabter_fun_cb(9)
+__adabter_fun_cb(10)
+__adabter_fun_cb(11)
+__adabter_fun_cb(12)
+__adabter_fun_cb(13)
+__adabter_fun_cb(14)
+
+__adabter_fun_cb(15)
+
+__adabter_fun_cb(16)
+__adabter_fun_cb(17)
+__adabter_fun_cb(18)
+__adabter_fun_cb(19)
+__adabter_fun_cb(20)
+__adabter_fun_cb(21)
+__adabter_fun_cb(22)
+__adabter_fun_cb(23)
+__adabter_fun_cb(24)
+__adabter_fun_cb(25)
+__adabter_fun_cb(26)
+__adabter_fun_cb(27)
+__adabter_fun_cb(28)
+__adabter_fun_cb(29)
+static void* __adapter_pfunction[] = {
+    (void*)__adapter_fun_cb_0,
+    (void*)__adapter_fun_cb_1,
+    (void*)__adapter_fun_cb_2,
+    (void*)__adapter_fun_cb_3,
+    (void*)__adapter_fun_cb_4,
+    (void*)__adapter_fun_cb_5,
+    (void*)__adapter_fun_cb_6,
+    (void*)__adapter_fun_cb_7,
+    (void*)__adapter_fun_cb_8,
+    (void*)__adapter_fun_cb_9,
+    (void*)__adapter_fun_cb_10,
+    (void*)__adapter_fun_cb_11,
+    (void*)__adapter_fun_cb_12,
+    (void*)__adapter_fun_cb_13,
+    (void*)__adapter_fun_cb_14,
+    (void*)__adapter_fun_cb_15,
+    (void*)__adapter_fun_cb_16,
+    (void*)__adapter_fun_cb_17,
+    (void*)__adapter_fun_cb_18,
+    (void*)__adapter_fun_cb_19,
+    (void*)__adapter_fun_cb_20,
+    (void*)__adapter_fun_cb_21,
+    (void*)__adapter_fun_cb_22,
+    (void*)__adapter_fun_cb_23,
+    (void*)__adapter_fun_cb_24,
+    (void*)__adapter_fun_cb_25,
+    (void*)__adapter_fun_cb_26,
+    (void*)__adapter_fun_cb_27,
+    (void*)__adapter_fun_cb_28,
+    (void*)__adapter_fun_cb_29,
+};
+
 static void timer_setfn_wrapper(void *ptimer, void *pfunction, void *parg)
 {
     ets_timer_setfn(ptimer, pfunction, parg);
+    //__adapter_cbs[__esp_adapter_timers_counter] = pfunction;
+    //ets_timer_setfn(ptimer, __adapter_pfunction[__esp_adapter_timers_counter++], parg);
 }
 
 static void IRAM_ATTR timer_arm_us_wrapper(void *ptimer, uint32_t us, bool repeat)
 {
     ets_timer_arm_us(ptimer, us, repeat);
 }
-
+#endif
 static int get_time_wrapper(void *t)
 {
     return os_get_time(t);

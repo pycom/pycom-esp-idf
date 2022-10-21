@@ -51,8 +51,8 @@ struct esp_timer {
         uint32_t event_id;
     };
     void* arg;
-#if WITH_PROFILING
     const char* name;
+#if WITH_PROFILING
     size_t times_triggered;
     size_t times_armed;
     uint64_t total_callback_run_time;
@@ -113,8 +113,8 @@ esp_err_t esp_timer_create(const esp_timer_create_args_t* args,
     }
     result->callback = args->callback;
     result->arg = args->arg;
-#if WITH_PROFILING
     result->name = args->name;
+#if WITH_PROFILING
     timer_insert_inactive(result);
 #endif
     *out_handle = result;
@@ -271,17 +271,48 @@ static IRAM_ATTR void timer_list_unlock(void)
 {
     portEXIT_CRITICAL_SAFE(&s_timer_lock);
 }
-
+static volatile int __alarms_counter = 0;
+static volatile int __alarms_while_counter = 0;
+static volatile int __esp_timer_int_counts = 0;
+static volatile int __esp_timer_int_counts_errors = 0;
+static volatile int __alarm_is_set = 0;
+static volatile char __process_state = '0';
+char __which_callback = '0';
+void __test_esp_timer(void*param,void(*print)(void*,const char* fmt, ...))
+{
+    print(param, "----- esp_timer logs\n");
+    print(param, "  alarms counter = %d ~~~~ while iterations = %d ~~~ int counter = %d [errors: %d]"
+                 " ~~~ alarm set state = %d \n",
+        __alarms_counter, __alarms_while_counter,
+        __esp_timer_int_counts, __esp_timer_int_counts_errors, __alarm_is_set);
+    print(param, " ~~~ process alarm state @ %c\n", __process_state);
+    //print(param, " ~~~ callback            @ %c\n", __which_callback);
+    esp_timer_handle_t it;
+    print(param, " -- now = %d\n", esp_timer_impl_get_time());
+    LIST_FOREACH(it, &s_timers, list_entry) {
+        print(param, " -- timer [alarm: %10d] [period: %5d]",
+            it->alarm, it->period);
+        print(param, " ~~~ %s\n", it->name);
+    }
+}
 static void timer_process_alarm(esp_timer_dispatch_t dispatch_method)
 {
     /* unused, provision to allow running callbacks from ISR */
     (void) dispatch_method;
+    ++__alarms_counter;
+    __alarms_while_counter = 0;
+    __alarm_is_set = 0;
+    __process_state = 'A';
+    __which_callback = '0';
 
     timer_list_lock();
+    __process_state = 'B';
     uint64_t now = esp_timer_impl_get_time();
     esp_timer_handle_t it = LIST_FIRST(&s_timers);
     while (it != NULL &&
             it->alarm < now) {
+        __process_state = 'C';
+        ++__alarms_while_counter;
         LIST_REMOVE(it, list_entry);
         if (it->event_id == EVENT_ID_DELETE_TIMER) {
             free(it);
@@ -303,8 +334,11 @@ static void timer_process_alarm(esp_timer_dispatch_t dispatch_method)
         esp_timer_cb_t callback = it->callback;
         void* arg = it->arg;
         timer_list_unlock();
+        __process_state = 'D';
         (*callback)(arg);
+        __process_state = 'E';
         timer_list_lock();
+        __process_state = 'F';
         now = esp_timer_impl_get_time();
 #if WITH_PROFILING
         it->times_triggered++;
@@ -312,11 +346,17 @@ static void timer_process_alarm(esp_timer_dispatch_t dispatch_method)
 #endif
         it = LIST_FIRST(&s_timers);
     }
+    __process_state = 'G';
     esp_timer_handle_t first = LIST_FIRST(&s_timers);
     if (first) {
+        __alarm_is_set = 1;
+        __process_state = 'H';
         esp_timer_impl_set_alarm(first->alarm);
+        __alarm_is_set = 2;
+        __process_state = 'I';
     }
     timer_list_unlock();
+    __process_state = 'J';
 }
 
 static void timer_task(void* arg)
@@ -331,7 +371,9 @@ static void timer_task(void* arg)
 static void IRAM_ATTR timer_alarm_handler(void* arg)
 {
     int need_yield;
+    ++ __esp_timer_int_counts;
     if (xSemaphoreGiveFromISR(s_timer_semaphore, &need_yield) != pdPASS) {
+        ++__esp_timer_int_counts_errors;
         ESP_EARLY_LOGD(TAG, "timer queue overflow");
         return;
     }
