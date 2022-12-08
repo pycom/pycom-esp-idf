@@ -461,8 +461,8 @@ static esp_err_t esp_netif_lwip_add(esp_netif_t *esp_netif)
 void esp_netif_destroy(esp_netif_t *esp_netif)
 {
     if (esp_netif) {
-        esp_netif_remove_from_list(esp_netif);
         sys_arch_sem_wait(&api_lock_sem, 0);
+        esp_netif_remove_from_list(esp_netif);
         free(esp_netif->ip_info);
         free(esp_netif->ip_info_old);
         free(esp_netif->if_key);
