@@ -462,6 +462,7 @@ void esp_netif_destroy(esp_netif_t *esp_netif)
 {
     if (esp_netif) {
         esp_netif_remove_from_list(esp_netif);
+        sys_arch_sem_wait(&api_lock_sem, 0);
         free(esp_netif->ip_info);
         free(esp_netif->ip_info_old);
         free(esp_netif->if_key);
@@ -477,6 +478,7 @@ void esp_netif_destroy(esp_netif_t *esp_netif)
             s_last_default_esp_netif = NULL;
         }
         free(esp_netif);
+        sys_sem_signal(&api_lock_sem);
     }
 }
 
